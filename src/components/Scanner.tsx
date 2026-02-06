@@ -9,8 +9,18 @@ interface ScannerProps {
 }
 
 // Viewfinder dimensions as fractions of the video frame (must match CSS .viewfinder)
-const VIEWFINDER_WIDTH = 0.80;
-const VIEWFINDER_HEIGHT = 0.20;
+const VIEWFINDER_WIDTH = 0.90;
+const VIEWFINDER_HEIGHT = 0.25;
+
+// Adaptive video constraints: prefer high-res but let mobile pick what works
+const getVideoConstraints = () => {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    return {
+        facingMode: 'environment',
+        width: isMobile ? { ideal: 1280 } : { ideal: 1280 },
+        height: isMobile ? { ideal: 720 } : { ideal: 720 },
+    };
+};
 
 /**
  * Fix common OCR misreads in digit strings:
@@ -266,8 +276,9 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                 audio={false}
                 ref={webcamRef}
                 screenshotFormat="image/jpeg"
-                videoConstraints={{ width: 1280, height: 720, facingMode: 'environment' }}
-                style={{ width: '100%', height: 'auto', display: 'block' }}
+                videoConstraints={getVideoConstraints()}
+                style={{ width: '100%', height: 'auto', display: 'block', minHeight: '240px' }}
+                playsInline
             />
             <canvas ref={canvasRef} style={{ display: 'none' }} />
             <div className="viewfinder"></div>
@@ -275,9 +286,12 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
             <button
                 onClick={() => setShowDebug(!showDebug)}
                 style={{
-                    position: 'absolute', top: '1rem', right: '1rem', padding: '0.5rem',
+                    position: 'absolute', top: '0.75rem', right: '0.75rem', padding: '0.625rem',
                     borderRadius: '50%', background: showDebug ? 'var(--primary)' : 'rgba(0,0,0,0.5)',
-                    color: 'white', border: 'none', cursor: 'pointer', zIndex: 100
+                    color: 'white', border: 'none', cursor: 'pointer', zIndex: 100,
+                    WebkitTapHighlightColor: 'transparent',
+                    minWidth: '44px', minHeight: '44px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
             >
                 <Terminal size={16} />
@@ -285,11 +299,12 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
 
             {showDebug && (
                 <div style={{
-                    position: 'absolute', top: '3.5rem', right: '1rem', width: '260px',
+                    position: 'absolute', top: '3.5rem', right: '0.75rem',
+                    width: 'min(260px, calc(100% - 1.5rem))',
                     background: 'rgba(0,0,0,0.85)', padding: '0.75rem', borderRadius: '0.5rem',
-                    fontSize: '0.7rem', color: '#00ff00', fontFamily: 'monospace',
+                    fontSize: '0.65rem', color: '#00ff00', fontFamily: 'monospace',
                     pointerEvents: 'none', zIndex: 100, border: '1px solid #00ff00',
-                    maxHeight: '300px', overflowY: 'auto'
+                    maxHeight: '200px', overflowY: 'auto'
                 }}>
                     <div style={{ marginBottom: '0.5rem', borderBottom: '1px solid #00ff00', paddingBottom: '0.2rem', fontWeight: 'bold' }}>SCANNER LOGS</div>
                     {debugLogs.map((log, i) => (
@@ -299,25 +314,27 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
             )}
 
             <div style={{
-                position: 'absolute', bottom: 0, left: 0, right: 0, padding: '1.5rem',
+                position: 'absolute', bottom: 0, left: 0, right: 0,
+                padding: '1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px))',
                 background: 'linear-gradient(transparent, rgba(0,0,0,0.9))',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem'
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <p style={{ color: '#fff', fontSize: '0.875rem', fontWeight: 500 }}>{status}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textAlign: 'center' }}>
+                    <p style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500 }}>{status}</p>
                     {(isScanning || (autoScan && processing)) && <Loader2 size={16} className="animate-spin" style={{ color: 'var(--accent-blue)' }} />}
                 </div>
 
                 {!showManual ? (
-                    <div style={{ display: 'flex', gap: '1rem' }}>
+                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                         <button
                             onClick={capture}
                             disabled={processing || isScanning || autoScan}
                             className="glass"
                             style={{
-                                padding: '1rem 2rem', display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                padding: '0.875rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem',
                                 color: 'white', background: processing ? 'rgba(255,255,255,0.1)' : 'var(--primary)',
-                                fontSize: '1rem', fontWeight: 600, borderRadius: '9999px'
+                                fontSize: '0.9rem', fontWeight: 600, borderRadius: '9999px',
+                                minHeight: '48px', WebkitTapHighlightColor: 'transparent',
                             }}
                         >
                             {processing ? <Loader2 className="animate-spin" size={20} /> : <Camera size={20} />}
@@ -328,8 +345,11 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                             disabled={isScanning}
                             className="glass"
                             style={{
-                                padding: '1rem', color: 'white', borderRadius: '9999px',
+                                padding: '0.875rem', color: 'white', borderRadius: '9999px',
                                 background: autoScan ? 'var(--accent-blue)' : 'transparent',
+                                minWidth: '48px', minHeight: '48px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                WebkitTapHighlightColor: 'transparent',
                             }}
                             title={autoScan ? 'Stop auto-scan' : 'Start auto-scan'}
                         >
@@ -338,27 +358,43 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                         <button
                             onClick={() => setShowManual(true)}
                             className="glass"
-                            style={{ padding: '1rem', color: 'white', borderRadius: '9999px' }}
+                            style={{
+                                padding: '0.875rem', color: 'white', borderRadius: '9999px',
+                                minWidth: '48px', minHeight: '48px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                WebkitTapHighlightColor: 'transparent',
+                            }}
                             title="Manual ISBN entry"
                         >
                             <Edit3 size={20} />
                         </button>
                     </div>
                 ) : (
-                    <form onSubmit={handleManualSubmit} style={{ display: 'flex', gap: '0.5rem', width: '100%', maxWidth: '320px' }}>
+                    <form onSubmit={handleManualSubmit} style={{ display: 'flex', gap: '0.5rem', width: '100%', maxWidth: '340px' }}>
                         <input
-                            type="text" placeholder="Enter ISBN-10 or 13..." value={manualIsbn}
+                            type="text" inputMode="numeric" placeholder="Enter ISBN..." value={manualIsbn}
                             onChange={(e) => setManualIsbn(e.target.value)}
                             className="glass" autoFocus
-                            style={{ flex: 1, padding: '0.75rem 1rem', border: 'none', color: 'white', fontSize: '0.875rem' }}
+                            style={{
+                                flex: 1, padding: '0.75rem 1rem', border: 'none', color: 'white',
+                                fontSize: '1rem', minHeight: '48px',
+                            }}
                         />
                         <button
                             type="submit" disabled={manualIsbn.length < 5 || isScanning}
-                            className="glass" style={{ padding: '0.75rem', background: 'var(--accent-blue)', color: 'white', borderRadius: '0.5rem' }}
+                            className="glass" style={{
+                                padding: '0.75rem', background: 'var(--accent-blue)', color: 'white',
+                                borderRadius: '0.5rem', minWidth: '48px', minHeight: '48px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}
                         >
                             {isScanning ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
                         </button>
-                        <button type="button" onClick={() => setShowManual(false)} className="glass" style={{ padding: '0.75rem', color: 'var(--text-muted)' }}>
+                        <button type="button" onClick={() => setShowManual(false)} className="glass" style={{
+                            padding: '0.75rem', color: 'var(--text-muted)',
+                            minWidth: '48px', minHeight: '48px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
                             Close
                         </button>
                     </form>

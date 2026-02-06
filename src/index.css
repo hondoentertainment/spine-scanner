@@ -61,8 +61,8 @@ button:active {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 80%;
-  height: 20%;
+  width: 90%;
+  height: 25%;
   border: 2px solid var(--accent-blue);
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
   border-radius: 4px;
@@ -125,3 +125,44 @@ button:active {
 .status-reading { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
 .status-read { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
 .status-dnf { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+
+/* Mobile responsive */
+@media (max-width: 480px) {
+  .app-container {
+    padding: 1rem 0.75rem;
+  }
+
+  .scanner-container {
+    border-radius: 1rem;
+    max-width: 100%;
+  }
+
+  .book-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .book-card {
+    padding: 0.75rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .book-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+}
+
+/* Prevent iOS zoom on input focus */
+@supports (-webkit-touch-callout: none) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Safe area insets for notched phones */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .app-container {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+}
