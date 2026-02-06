@@ -1,83 +1,104 @@
 # Spine Scanner - Recommended Next Steps
 
-## 1. Testing
+Prioritized roadmap based on current project state. Items are ordered by impact and urgency.
 
-The project has zero test coverage. Adding tests would improve reliability and make future changes safer.
+---
 
-- **Unit tests** for utility functions (`importLogic.ts`, `goodreadsExport.ts`, `amazonLink.ts`) -- these are pure functions and easy to test
-- **Component tests** for `BookCard`, `LibraryList`, and `DataManagement` using React Testing Library
-- **Integration test** for the Google Books API lookup flow (`useBookLookup`)
-- **Setup**: Add Vitest (pairs naturally with Vite) and `@testing-library/react`
+## Priority 1: Foundation (do these first)
 
-## 2. ISBN Validation
+### 1. Add Testing Infrastructure
 
-Currently, ISBN inputs are only checked for length (10 or 13 digits). Add proper checksum validation:
+The project has **zero test coverage**, which makes every change risky.
 
-- **ISBN-10**: Weighted sum mod 11
-- **ISBN-13**: Alternating 1/3 weighted sum mod 10
-- Reject invalid checksums before making API calls to Google Books
+- **Setup**: Add Vitest + `@testing-library/react` + `jsdom` (pairs naturally with Vite)
+- **Unit tests first**: Pure utility functions are easy wins — `importLogic.ts` (CSV parsing, ISBN extraction), `goodreadsExport.ts`, `amazonLink.ts`
+- **Component tests**: `BookCard`, `LibraryList`, `DataManagement` with React Testing Library
+- **Integration test**: Google Books API lookup flow (`useBookLookup`) with mocked fetch
+- **CI gate**: Add a test step to `.github/workflows/deploy.yml` before the build step
 
-## 3. API Resilience
+### 2. ISBN Validation
 
-The Google Books API integration has no rate limiting or error recovery:
+Currently only checks string length (10 or 13 digits). Invalid ISBNs waste API calls and confuse users.
 
-- Add request debouncing/throttling to prevent rapid duplicate lookups
-- Cache API responses (in-memory or localStorage) to avoid redundant network calls
-- Add retry logic with exponential backoff for transient failures
-- Consider a fallback data source (Open Library API) when Google Books returns no results
+- **ISBN-10**: Weighted sum mod 11 checksum
+- **ISBN-13**: Alternating 1/3 weighted sum mod 10 checksum
+- Reject invalid checksums before calling Google Books API
+- Show clear error message to the user on invalid input
+- This is a small, self-contained change that pairs well with writing tests
 
-## 4. Offline Support
+### 3. Error Handling & Resilience
 
-Since the app uses localStorage for persistence, it's a good candidate for offline-first:
+Several failure modes are unhandled:
 
-- Add a service worker for caching static assets
-- Queue book lookups when offline and resolve when connectivity returns
-- Use Vite's PWA plugin (`vite-plugin-pwa`) for easy setup
+- **API errors**: Google Books lookups have no retry logic, rate limiting, or meaningful error messages
+- **No error boundaries**: A component crash takes down the whole app
+- **Request debouncing**: Rapid duplicate lookups can fire simultaneously
+- Add a fallback data source (Open Library API) when Google Books returns no results
+- Cache API responses in localStorage to avoid redundant network calls
 
-## 5. Improved OCR Accuracy
+---
 
-The current OCR pipeline does basic grayscale + contrast preprocessing:
+## Priority 2: User Experience Improvements
 
-- Add image sharpening and binarization (adaptive threshold) before OCR
-- Crop to the viewfinder region instead of processing the full frame
-- Try multiple orientations (rotate 90/180/270) since book spines are vertical
-- Consider using a barcode scanning library (e.g., `@AKCreations/zxing-js` or `quagga2`) for barcode detection alongside OCR text extraction
+### 4. Library Organization
 
-## 6. README & Documentation
+The library view is flat with search only — common tasks like filtering are missing:
 
-The README is still the Vite boilerplate. Replace it with:
+- Sort by title, author, date added, or page count
+- Filter by reading status (to-read, reading, read, dnf)
+- Reading statistics dashboard (total books, pages read, status breakdown)
+- Tagging/shelving system for custom categorization
 
-- Project description and screenshots/demo GIF
-- Setup and development instructions
+### 5. Improved OCR Accuracy
+
+The OCR pipeline uses basic grayscale + contrast preprocessing:
+
+- Add image sharpening and adaptive threshold binarization before OCR
+- Crop to the viewfinder region instead of processing the full camera frame
+- Consider adding a barcode scanning library (`quagga2` or `zxing-js`) alongside OCR — barcodes are more reliable than text recognition
+- The multi-rotation approach (0°, 90°, 270°) already exists and is a good foundation
+
+### 6. Data Export Enhancements
+
+Only Goodreads CSV export is currently supported:
+
+- **JSON export/import** for full-fidelity backup and restore (most impactful addition)
+- Support LibraryThing and StoryGraph CSV formats
+- Add individual book sharing (copy a single book's details)
+
+---
+
+## Priority 3: Polish & Production Readiness
+
+### 7. Documentation
+
+The README is still Vite boilerplate:
+
+- Project description with screenshots or demo GIF
+- Setup and development instructions (`npm install && npm run dev`)
 - Feature overview
-- Deployment guide (GitHub Pages is already configured)
+- Deployment guide (GitHub Pages workflow is already configured)
 
-## 7. Accessibility
+### 8. Accessibility
 
 - Add ARIA labels to icon-only buttons (scanner capture, debug toggle, manual input)
-- Ensure keyboard navigation works through the library and data management views
+- Ensure keyboard navigation works through all views
 - Add visible focus indicators beyond browser defaults
 - Test with a screen reader
 
-## 8. Data Export Enhancements
+### 9. Offline / PWA Support
 
-Currently only Goodreads CSV export is supported:
+The app already uses localStorage for persistence, making it a good PWA candidate:
 
-- Add JSON export for full-fidelity backup/restore
-- Add import from JSON to complement the export
-- Support LibraryThing and StoryGraph CSV formats
-- Add individual book export (share a single book entry)
+- Add a service worker for caching static assets (`vite-plugin-pwa`)
+- Queue book lookups when offline, resolve when connectivity returns
+- Add install prompt for "Add to Home Screen"
 
-## 9. Library Organization
+### 10. Cleanup
 
-- Add sorting options (by title, author, date added, page count)
-- Add filtering by reading status (to-read, reading, read, dnf)
-- Add tagging/shelving system for custom categorization
-- Add reading statistics (total books, pages read, status breakdown)
+Minor items that improve code quality:
 
-## 10. Amazon Affiliate Link
-
-The `amazonLink.ts` utility uses a placeholder affiliate tag (`tag=your-tag-20`). Either:
-
-- Replace with a real affiliate tag if monetization is intended
-- Remove the affiliate tag parameter entirely
+- Remove leftover `console.log` statements (especially in `Scanner.tsx` and `App.tsx`)
+- Replace the placeholder Amazon affiliate tag (`tag=your-tag-20`) or remove it
+- Remove unused `App.css` (styles are in `index.css` and inline)
+- Consider extracting inline styles to CSS modules or a utility-class library
