@@ -77,7 +77,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                 let foundIsbn = null;
 
                 if (matches) {
-                    for (let m of matches) {
+                    for (const m of matches) {
                         const clean = m.replace(/[^0-9X]/g, '');
                         if (clean.length === 10 || clean.length === 13) {
                             foundIsbn = clean;
@@ -96,8 +96,8 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                     setShowManual(true);
                 }
             }
-        } catch (err: any) {
-            addLog(`Error: ${err.message}`);
+        } catch (err: unknown) {
+            addLog(`Error: ${err instanceof Error ? err.message : String(err)}`);
             setStatus('Scan failed.');
         } finally {
             setProcessing(false);

@@ -36,7 +36,7 @@ export const parseCSV = (csv: string): Partial<BookEntry>[] => {
             isbn: values[isbnIdx] || '',
             title: values[headers.findIndex(h => h.toLowerCase() === 'title')] || '',
             author: values[headers.findIndex(h => h.toLowerCase() === 'author')] || '',
-            status: (values[headers.findIndex(h => h.toLowerCase() === 'bookshelves')] as any) || 'read',
+            status: (values[headers.findIndex(h => h.toLowerCase() === 'bookshelves')] as BookEntry['status']) || 'read',
             notes: values[headers.findIndex(h => h.toLowerCase() === 'my review')] || '',
         };
     }).filter(b => b.isbn && b.isbn.length >= 10);
