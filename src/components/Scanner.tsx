@@ -2,6 +2,7 @@ import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import Tesseract from 'tesseract.js';
 import { Camera, Loader2, Edit3, Check, Terminal, Play, Square } from 'lucide-react';
+import { validateISBN } from '../utils/isbnValidation.ts';
 
 interface ScannerProps {
     onScan: (isbn: string) => void;
@@ -261,12 +262,13 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const cleanIsbn = manualIsbn.replace(/[^0-9X]/g, '');
-        if (cleanIsbn.length === 10 || cleanIsbn.length === 13) {
+        const validation = validateISBN(cleanIsbn);
+        if (validation.valid) {
             onScan(cleanIsbn);
             setManualIsbn('');
             setShowManual(false);
         } else {
-            alert('Please enter a 10 or 13 digit ISBN.');
+            alert(validation.error || 'Invalid ISBN');
         }
     };
 
