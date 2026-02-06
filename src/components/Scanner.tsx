@@ -2,6 +2,7 @@ import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import Tesseract from 'tesseract.js';
 import { Camera, Loader2, Edit3, Check, Terminal, Play, Square } from 'lucide-react';
+import { isValidIsbn } from '../utils/isbnValidation.ts';
 
 interface ScannerProps {
     onScan: (isbn: string) => void;
@@ -65,14 +66,18 @@ const extractIsbn = (text: string): string | null => {
         }
     }
 
+    // Filter to candidates with valid checksums first, fall back to unchecked
+    const valid = candidates.filter(c => isValidIsbn(c));
+    const pool = valid.length > 0 ? valid : candidates;
+
     // Prefer ISBN-13 starting with 978/979, then any ISBN-13, then ISBN-10
-    const isbn13_978 = candidates.find(c => c.length === 13 && (c.startsWith('978') || c.startsWith('979')));
+    const isbn13_978 = pool.find(c => c.length === 13 && (c.startsWith('978') || c.startsWith('979')));
     if (isbn13_978) return isbn13_978;
 
-    const isbn13 = candidates.find(c => c.length === 13);
+    const isbn13 = pool.find(c => c.length === 13);
     if (isbn13) return isbn13;
 
-    const isbn10 = candidates.find(c => c.length === 10);
+    const isbn10 = pool.find(c => c.length === 10);
     if (isbn10) return isbn10;
 
     return null;
@@ -261,13 +266,17 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const cleanIsbn = manualIsbn.replace(/[^0-9X]/g, '');
-        if (cleanIsbn.length === 10 || cleanIsbn.length === 13) {
-            onScan(cleanIsbn);
-            setManualIsbn('');
-            setShowManual(false);
-        } else {
+        if (cleanIsbn.length !== 10 && cleanIsbn.length !== 13) {
             alert('Please enter a 10 or 13 digit ISBN.');
+            return;
         }
+        if (!isValidIsbn(cleanIsbn)) {
+            alert('Invalid ISBN checksum. Please double-check the number.');
+            return;
+        }
+        onScan(cleanIsbn);
+        setManualIsbn('');
+        setShowManual(false);
     };
 
     return (
