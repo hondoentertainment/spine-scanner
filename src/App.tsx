@@ -7,6 +7,7 @@ import { useBookStore } from './store/useBookStore.ts';
 import type { BookEntry } from './types.ts';
 import { BookOpen, Library, Scan, AlertCircle, CheckCircle, Database } from 'lucide-react';
 import { generateAmazonLink } from './utils/amazonLink.ts';
+import { isValidIsbn } from './utils/isbnValidation.ts';
 
 function App() {
   const [view, setView] = useState<'scan' | 'library' | 'data'>('scan');
@@ -16,6 +17,12 @@ function App() {
 
   const handleScan = async (isbn: string) => {
     console.log(`[App] Received scan for ISBN: ${isbn}`);
+    if (!isValidIsbn(isbn)) {
+      console.log(`[App] Invalid ISBN checksum: ${isbn}`);
+      alert('Invalid ISBN checksum. Please try again.');
+      return;
+    }
+
     if (books.find(b => b.isbn === isbn)) {
       console.log(`[App] ISBN ${isbn} already exists in library.`);
       alert('This book is already in your library!');

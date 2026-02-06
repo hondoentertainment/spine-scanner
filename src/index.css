@@ -46,6 +46,11 @@ button:active {
   transform: scale(0.95);
 }
 
+button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
 .scanner-container {
   position: relative;
   width: 100%;

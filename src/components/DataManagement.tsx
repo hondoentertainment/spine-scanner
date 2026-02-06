@@ -4,6 +4,7 @@ import { useBookLookup } from '../hooks/useBookLookup.ts';
 import { parseCSV, extractISBNs } from '../utils/importLogic.ts';
 import type { ImportResult } from '../utils/importLogic.ts';
 import { exportToGoodreadsCSV } from '../utils/goodreadsExport.ts';
+import { exportToJSON, importFromJSON, exportToLibraryThingTSV, exportToStoryGraphCSV } from '../utils/exportFormats.ts';
 import {
     Download,
     Upload,
@@ -20,6 +21,8 @@ interface DataManagementProps {
     onClose?: () => void;
 }
 
+type ExportFormat = 'json' | 'goodreads' | 'librarything' | 'storygraph';
+
 const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
     const { books, addBook, removeBook } = useBookStore();
     const { lookupByIsbn } = useBookLookup();
@@ -30,6 +33,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
     const [url, setUrl] = useState('');
     const [webImportStep, setWebImportStep] = useState<'idle' | 'fetching' | 'confirm'>('idle');
     const [foundIsbns, setFoundIsbns] = useState<string[]>([]);
+    const [exportFormat, setExportFormat] = useState<ExportFormat>('json');
 
     const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -41,15 +45,35 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
         const reader = new FileReader();
         reader.onload = async (event) => {
             const text = event.target?.result as string;
-            let entries: Partial<BookEntry>[] = [];
 
+            // Try JSON import first
+            if (file.name.endsWith('.json')) {
+                try {
+                    const jsonBooks = importFromJSON(text);
+                    const res: ImportResult = { added: 0, duplicates: 0, errors: [] };
+                    for (const book of jsonBooks) {
+                        if (books.find(b => b.isbn === book.isbn)) {
+                            res.duplicates++;
+                        } else {
+                            addBook({ ...book, id: crypto.randomUUID() });
+                            res.added++;
+                        }
+                    }
+                    setResult(res);
+                    setImporting(false);
+                    return;
+                } catch {
+                    // Fall through to CSV/text parsing
+                }
+            }
+
+            let entries: Partial<BookEntry>[] = [];
             if (file.name.endsWith('.csv') || text.includes(',')) {
                 entries = parseCSV(text);
             } else {
                 const isbns = extractISBNs(text);
                 entries = isbns.map((isbn: string) => ({ isbn }));
             }
-
             await processEntries(entries);
         };
         reader.readAsText(file);
@@ -59,15 +83,11 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
         if (!url) return;
         setWebImportStep('fetching');
         try {
-            // In a real app, this would need a proxy to avoid CORS
-            // For this demo, we'll simulate finding some ISBNs if the URL is "amazon.com"
-            // or similar, otherwise we just try a fetch (which will likely fail CORS)
             const res = await fetch(url).catch(() => null);
             let text = '';
             if (res) {
                 text = await res.text();
             } else {
-                // FALLBACK for demo: if URL contains popular sites, simulate
                 if (url.includes('amazon') || url.includes('goodreads')) {
                     text = 'ISBN: 9780141036144, 9780544003415';
                 }
@@ -119,14 +139,32 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
         setWebImportStep('idle');
     };
 
-    const handleExport = () => {
-        const csvContent = exportToGoodreadsCSV(books);
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const downloadFile = (content: string, filename: string, mime: string) => {
+        const blob = new Blob([content], { type: `${mime};charset=utf-8;` });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `spinescanner_export_${new Date().toISOString().split('T')[0]}.csv`;
+        link.download = filename;
         link.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleExport = () => {
+        const date = new Date().toISOString().split('T')[0];
+        switch (exportFormat) {
+            case 'json':
+                downloadFile(exportToJSON(books), `spinescanner_${date}.json`, 'application/json');
+                break;
+            case 'goodreads':
+                downloadFile(exportToGoodreadsCSV(books), `spinescanner_goodreads_${date}.csv`, 'text/csv');
+                break;
+            case 'librarything':
+                downloadFile(exportToLibraryThingTSV(books), `spinescanner_librarything_${date}.tsv`, 'text/tab-separated-values');
+                break;
+            case 'storygraph':
+                downloadFile(exportToStoryGraphCSV(books), `spinescanner_storygraph_${date}.csv`, 'text/csv');
+                break;
+        }
     };
 
     const removeAllBooks = () => {
@@ -139,33 +177,58 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
         <div className="glass" style={{ padding: '2rem', maxWidth: '600px', margin: '2rem auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <h2 style={{ fontSize: '1.5rem', fontWeight: 800 }}>Manage Library Data</h2>
-                {onClose && <button onClick={onClose} style={{ background: 'none', color: 'var(--text-muted)' }}><X /></button>}
+                {onClose && <button onClick={onClose} aria-label="Close data management" style={{ background: 'none', color: 'var(--text-muted)' }}><X /></button>}
             </div>
 
             <section style={{ marginBottom: '2rem' }}>
                 <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Download size={20} className="text-blue-400" /> Export Experience
+                    <Download size={20} style={{ color: 'var(--accent-blue)' }} /> Export Library
                 </h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-                    Back up your entire collection to a Goodreads-compatible CSV file.
+                    Back up your collection. JSON preserves all data; CSV formats are for importing into other services.
                 </p>
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                    {([
+                        ['json', 'JSON (Full Backup)'],
+                        ['goodreads', 'Goodreads CSV'],
+                        ['librarything', 'LibraryThing TSV'],
+                        ['storygraph', 'StoryGraph CSV'],
+                    ] as [ExportFormat, string][]).map(([fmt, label]) => (
+                        <button
+                            key={fmt}
+                            onClick={() => setExportFormat(fmt)}
+                            className="glass"
+                            style={{
+                                padding: '0.5rem 0.75rem',
+                                fontSize: '0.8rem',
+                                fontWeight: 600,
+                                color: exportFormat === fmt ? 'var(--accent-blue)' : 'var(--text-muted)',
+                                background: exportFormat === fmt ? 'rgba(56, 189, 248, 0.1)' : undefined,
+                                borderRadius: '9999px',
+                            }}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
                 <button onClick={handleExport} className="glass" style={{ width: '100%', padding: '1rem', background: 'var(--primary)', color: 'white', fontWeight: 600 }}>
-                    Export All Library Data (.csv)
+                    Export ({exportFormat.toUpperCase()})
                 </button>
             </section>
 
             <section style={{ marginBottom: '2rem', borderTop: '1px solid var(--glass-border)', paddingTop: '2rem' }}>
                 <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Upload size={20} className="text-purple-400" /> Import from File
+                    <Upload size={20} style={{ color: '#a855f7' }} /> Import from File
                 </h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-                    Upload a .csv or .txt file. ISBN is the only required field.
+                    Upload a .json, .csv, or .txt file. JSON import restores full backups. CSV/TXT requires ISBN column.
                 </p>
                 <div style={{ position: 'relative' }}>
                     <input
                         type="file"
-                        accept=".csv,.txt"
+                        accept=".csv,.txt,.json,.tsv"
                         onChange={handleFileImport}
+                        aria-label="Import books from file"
                         style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
                         disabled={importing}
                     />
@@ -177,7 +240,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
 
             <section style={{ marginBottom: '2rem', borderTop: '1px solid var(--glass-border)', paddingTop: '2rem' }}>
                 <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Globe size={20} className="text-emerald-400" /> Import from Web
+                    <Globe size={20} style={{ color: '#22c55e' }} /> Import from Web
                 </h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
                     Fetch books from a public webpage (e.g. Amazon Wishlist).
@@ -189,6 +252,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                         value={url}
                         onChange={(e) => setUrl(e.target.value)}
                         className="glass"
+                        aria-label="URL to import books from"
                         style={{ flex: 1, padding: '0.75rem', color: 'white' }}
                     />
                     <button
@@ -221,9 +285,9 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                         <CheckCircle size={18} /> Import Summary
                     </div>
                     <ul style={{ fontSize: '0.85rem', color: 'var(--text-muted)', listStyle: 'none' }}>
-                        <li>✅ Books added: {result.added}</li>
-                        <li>🔄 Duplicates skipped: {result.duplicates}</li>
-                        {result.errors.length > 0 && <li style={{ color: '#f87171' }}>❌ Errors: {result.errors.length}</li>}
+                        <li>Books added: {result.added}</li>
+                        <li>Duplicates skipped: {result.duplicates}</li>
+                        {result.errors.length > 0 && <li style={{ color: '#f87171' }}>Errors: {result.errors.length}</li>}
                     </ul>
                 </div>
             )}

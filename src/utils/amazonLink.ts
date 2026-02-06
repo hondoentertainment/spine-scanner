@@ -1,3 +1,3 @@
 export const generateAmazonLink = (isbn: string) => {
-    return `https://www.amazon.com/s?k=${isbn}&tag=your-tag-20`;
+    return `https://www.amazon.com/s?k=${isbn}`;
 };

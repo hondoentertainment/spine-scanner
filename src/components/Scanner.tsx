@@ -1,7 +1,11 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import Tesseract from 'tesseract.js';
+import { BrowserMultiFormatReader } from '@zxing/browser';
 import { Camera, Loader2, Edit3, Check, Terminal, Play, Square } from 'lucide-react';
+import { isValidIsbn } from '../utils/isbnValidation.ts';
+
+const barcodeReader = new BrowserMultiFormatReader();
 
 interface ScannerProps {
     onScan: (isbn: string) => void;
@@ -65,14 +69,18 @@ const extractIsbn = (text: string): string | null => {
         }
     }
 
+    // Filter to candidates with valid checksums first, fall back to unchecked
+    const valid = candidates.filter(c => isValidIsbn(c));
+    const pool = valid.length > 0 ? valid : candidates;
+
     // Prefer ISBN-13 starting with 978/979, then any ISBN-13, then ISBN-10
-    const isbn13_978 = candidates.find(c => c.length === 13 && (c.startsWith('978') || c.startsWith('979')));
+    const isbn13_978 = pool.find(c => c.length === 13 && (c.startsWith('978') || c.startsWith('979')));
     if (isbn13_978) return isbn13_978;
 
-    const isbn13 = candidates.find(c => c.length === 13);
+    const isbn13 = pool.find(c => c.length === 13);
     if (isbn13) return isbn13;
 
-    const isbn10 = candidates.find(c => c.length === 10);
+    const isbn10 = pool.find(c => c.length === 10);
     if (isbn10) return isbn10;
 
     return null;
@@ -197,10 +205,26 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                 img.src = imageSrc;
             });
 
+            // Try barcode detection first (much faster than OCR)
+            addLog('Trying barcode scan...');
+            let isbn: string | null = null;
+            try {
+                const result = await barcodeReader.decodeFromImageElement(img);
+                const text = result.getText().replace(/[^0-9X]/g, '');
+                if (text.length === 13 || text.length === 10) {
+                    addLog(`Barcode detected: ${text}`);
+                    isbn = text;
+                }
+            } catch {
+                addLog('No barcode found, falling back to OCR');
+            }
+
             // Try horizontal (normal orientation) first
-            addLog('Trying horizontal scan...');
-            const horizontalImg = preprocessImage(img, canvas, 0);
-            let isbn = await runOcrOnImage(horizontalImg, 'horiz');
+            if (!isbn) {
+                addLog('Trying horizontal scan...');
+                const horizontalImg = preprocessImage(img, canvas, 0);
+                isbn = await runOcrOnImage(horizontalImg, 'horiz');
+            }
 
             // If no result, try rotated 90° (for vertical book spines)
             if (!isbn) {
@@ -261,13 +285,17 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const cleanIsbn = manualIsbn.replace(/[^0-9X]/g, '');
-        if (cleanIsbn.length === 10 || cleanIsbn.length === 13) {
-            onScan(cleanIsbn);
-            setManualIsbn('');
-            setShowManual(false);
-        } else {
+        if (cleanIsbn.length !== 10 && cleanIsbn.length !== 13) {
             alert('Please enter a 10 or 13 digit ISBN.');
+            return;
         }
+        if (!isValidIsbn(cleanIsbn)) {
+            alert('Invalid ISBN checksum. Please double-check the number.');
+            return;
+        }
+        onScan(cleanIsbn);
+        setManualIsbn('');
+        setShowManual(false);
     };
 
     return (
@@ -285,6 +313,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
 
             <button
                 onClick={() => setShowDebug(!showDebug)}
+                aria-label={showDebug ? 'Hide debug logs' : 'Show debug logs'}
                 style={{
                     position: 'absolute', top: '0.75rem', right: '0.75rem', padding: '0.625rem',
                     borderRadius: '50%', background: showDebug ? 'var(--primary)' : 'rgba(0,0,0,0.5)',
@@ -329,6 +358,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                         <button
                             onClick={capture}
                             disabled={processing || isScanning || autoScan}
+                            aria-label={processing ? 'Scanning in progress' : 'Capture and scan'}
                             className="glass"
                             style={{
                                 padding: '0.875rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem',
@@ -343,6 +373,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                         <button
                             onClick={() => setAutoScan(prev => !prev)}
                             disabled={isScanning}
+                            aria-label={autoScan ? 'Stop auto-scan' : 'Start auto-scan'}
                             className="glass"
                             style={{
                                 padding: '0.875rem', color: 'white', borderRadius: '9999px',
@@ -357,6 +388,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                         </button>
                         <button
                             onClick={() => setShowManual(true)}
+                            aria-label="Manual ISBN entry"
                             className="glass"
                             style={{
                                 padding: '0.875rem', color: 'white', borderRadius: '9999px',
@@ -374,6 +406,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                         <input
                             type="text" inputMode="numeric" placeholder="Enter ISBN..." value={manualIsbn}
                             onChange={(e) => setManualIsbn(e.target.value)}
+                            aria-label="Enter ISBN manually"
                             className="glass" autoFocus
                             style={{
                                 flex: 1, padding: '0.75rem 1rem', border: 'none', color: 'white',
@@ -382,6 +415,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                         />
                         <button
                             type="submit" disabled={manualIsbn.length < 5 || isScanning}
+                            aria-label="Submit ISBN"
                             className="glass" style={{
                                 padding: '0.75rem', background: 'var(--accent-blue)', color: 'white',
                                 borderRadius: '0.5rem', minWidth: '48px', minHeight: '48px',
