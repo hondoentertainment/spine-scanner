@@ -8,9 +8,9 @@ describe('generateAmazonLink', () => {
     expect(link).toContain('amazon.com');
   });
 
-  it('includes the affiliate tag', () => {
+  it('does not include an affiliate tag', () => {
     const link = generateAmazonLink('9780141036144');
-    expect(link).toContain('tag=');
+    expect(link).not.toContain('tag=');
   });
 
   it('returns a valid URL', () => {

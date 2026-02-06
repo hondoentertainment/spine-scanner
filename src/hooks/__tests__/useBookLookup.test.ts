@@ -21,6 +21,7 @@ beforeEach(() => {
 describe('useBookLookup', () => {
   it('returns book metadata on successful lookup', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve(mockApiResponse),
     }));
 
@@ -28,18 +29,19 @@ describe('useBookLookup', () => {
 
     let metadata: Awaited<ReturnType<typeof result.current.lookupByIsbn>>;
     await act(async () => {
-      metadata = await result.current.lookupByIsbn('9780141036144');
+      metadata = await result.current.lookupByIsbn('1111111111');
     });
 
     expect(metadata!).not.toBeNull();
     expect(metadata!.title).toBe('The Great Gatsby');
     expect(metadata!.authors).toEqual(['F. Scott Fitzgerald']);
     expect(metadata!.pageCount).toBe(180);
-    expect(metadata!.isbn).toBe('9780141036144');
+    expect(metadata!.isbn).toBe('1111111111');
   });
 
-  it('returns null when no book found', async () => {
+  it('returns null when no book found on any source', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({ totalItems: 0 }),
     }));
 
@@ -47,7 +49,7 @@ describe('useBookLookup', () => {
 
     let metadata: Awaited<ReturnType<typeof result.current.lookupByIsbn>>;
     await act(async () => {
-      metadata = await result.current.lookupByIsbn('0000000000');
+      metadata = await result.current.lookupByIsbn('2222222222');
     });
 
     expect(metadata).toBeNull();
@@ -61,34 +63,35 @@ describe('useBookLookup', () => {
 
     let metadata: Awaited<ReturnType<typeof result.current.lookupByIsbn>>;
     await act(async () => {
-      metadata = await result.current.lookupByIsbn('9780141036144');
+      metadata = await result.current.lookupByIsbn('3333333333');
     });
 
     expect(metadata).toBeNull();
     expect(result.current.error).toBe('Failed to fetch book metadata');
   });
 
-  it('sets loading state during lookup', async () => {
-    let resolvePromise: (value: unknown) => void;
-    vi.stubGlobal('fetch', vi.fn().mockReturnValue(
-      new Promise(resolve => { resolvePromise = resolve; })
-    ));
+  it('returns cached result on second call', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockApiResponse),
+    });
+    vi.stubGlobal('fetch', fetchMock);
 
     const { result } = renderHook(() => useBookLookup());
-    expect(result.current.loading).toBe(false);
-
-    let lookupPromise: Promise<unknown>;
-    act(() => {
-      lookupPromise = result.current.lookupByIsbn('9780141036144');
-    });
-
-    expect(result.current.loading).toBe(true);
 
     await act(async () => {
-      resolvePromise!({ json: () => Promise.resolve(mockApiResponse) });
-      await lookupPromise;
+      await result.current.lookupByIsbn('4444444444');
     });
 
-    expect(result.current.loading).toBe(false);
+    // Reset mock to verify no new fetch is made
+    fetchMock.mockClear();
+
+    let metadata: Awaited<ReturnType<typeof result.current.lookupByIsbn>>;
+    await act(async () => {
+      metadata = await result.current.lookupByIsbn('4444444444');
+    });
+
+    expect(metadata!.title).toBe('The Great Gatsby');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

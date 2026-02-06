@@ -61,6 +61,7 @@ const BookCard: React.FC<BookCardProps> = ({ book }) => {
                             padding: '0.4rem'
                         }}
                         title={s.replace('-', ' ')}
+                        aria-label={`Set status to ${s.replace('-', ' ')}`}
                     >
                         {statusIcons[s]}
                     </button>
@@ -86,6 +87,7 @@ const BookCard: React.FC<BookCardProps> = ({ book }) => {
 
             <button
                 onClick={() => removeBook(book.id)}
+                aria-label={`Remove ${book.title} from library`}
                 style={{
                     marginTop: 'auto',
                     alignSelf: 'flex-end',
