@@ -32,7 +32,7 @@ export const useBookLookup = () => {
                 thumbnail: volumeInfo.imageLinks?.thumbnail || '',
                 isbn,
             };
-        } catch (err) {
+        } catch {
             setError('Failed to fetch book metadata');
             return null;
         } finally {

@@ -76,7 +76,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
             const isbns = extractISBNs(text);
             setFoundIsbns(isbns);
             setWebImportStep('confirm');
-        } catch (err) {
+        } catch {
             alert('Failed to fetch page. Ensure it is a public URL.');
             setWebImportStep('idle');
         }
@@ -104,7 +104,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                     pageCount: metadata.pageCount,
                     amazonLink: `https://www.amazon.com/s?k=${metadata.isbn}`,
                     coverImg: metadata.thumbnail,
-                    status: (entry.status as any) || 'read',
+                    status: (entry.status as BookEntry['status']) || 'read',
                     notes: entry.notes || '',
                     dateAdded: new Date().toISOString(),
                 });
