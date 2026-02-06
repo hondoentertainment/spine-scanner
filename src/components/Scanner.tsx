@@ -1,12 +1,131 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import Tesseract from 'tesseract.js';
-import { Camera, Loader2, Edit3, Check, Terminal } from 'lucide-react';
+import { Camera, Loader2, Edit3, Check, Terminal, Play, Square } from 'lucide-react';
 
 interface ScannerProps {
     onScan: (isbn: string) => void;
     isScanning: boolean;
 }
+
+// Viewfinder dimensions as fractions of the video frame (must match CSS .viewfinder)
+const VIEWFINDER_WIDTH = 0.80;
+const VIEWFINDER_HEIGHT = 0.20;
+
+/**
+ * Fix common OCR misreads in digit strings:
+ * O/o -> 0, I/l -> 1, S/s -> 5, B -> 8, G/g -> 9, Z/z -> 2
+ */
+const fixOcrDigits = (s: string): string =>
+    s.replace(/[Oo]/g, '0')
+     .replace(/[Il|]/g, '1')
+     .replace(/[Ss]/g, '5')
+     .replace(/[Bb]/g, '8')
+     .replace(/[Gg]/g, '9')
+     .replace(/[Zz]/g, '2');
+
+/**
+ * Extract ISBN candidates from OCR text.
+ * Tries both the raw text and an OCR-corrected version.
+ */
+const extractIsbn = (text: string): string | null => {
+    const candidates: string[] = [];
+
+    for (const source of [text, fixOcrDigits(text)]) {
+        // Look for ISBN-13 (starts with 978 or 979) and ISBN-10 patterns
+        const matches = source.match(/[0-9][- 0-9]{8,17}[0-9X]/g);
+        if (matches) {
+            for (const m of matches) {
+                const clean = m.replace(/[^0-9X]/g, '');
+                if (clean.length === 13 || clean.length === 10) {
+                    candidates.push(clean);
+                }
+            }
+        }
+    }
+
+    // Also try: look for "ISBN" label nearby and grab following digits
+    const isbnLabel = text.match(/ISBN[- ]?(?:1[03])?[: ]?\s*([0-9X][- 0-9X]{9,17})/gi);
+    if (isbnLabel) {
+        for (const m of isbnLabel) {
+            const digits = m.replace(/[^0-9X]/g, '');
+            if (digits.length === 13 || digits.length === 10) {
+                candidates.push(digits);
+            }
+        }
+    }
+
+    // Prefer ISBN-13 starting with 978/979, then any ISBN-13, then ISBN-10
+    const isbn13_978 = candidates.find(c => c.length === 13 && (c.startsWith('978') || c.startsWith('979')));
+    if (isbn13_978) return isbn13_978;
+
+    const isbn13 = candidates.find(c => c.length === 13);
+    if (isbn13) return isbn13;
+
+    const isbn10 = candidates.find(c => c.length === 10);
+    if (isbn10) return isbn10;
+
+    return null;
+};
+
+/**
+ * Crop the center viewfinder region from the full image, apply preprocessing,
+ * and return the processed image as a data URL.
+ * Optionally rotate by the given degrees.
+ */
+const preprocessImage = (
+    img: HTMLImageElement,
+    canvas: HTMLCanvasElement,
+    rotateDeg: number = 0,
+): string => {
+    const ctx = canvas.getContext('2d')!;
+
+    // Crop to viewfinder region
+    const cropX = img.width * (1 - VIEWFINDER_WIDTH) / 2;
+    const cropY = img.height * (1 - VIEWFINDER_HEIGHT) / 2;
+    const cropW = img.width * VIEWFINDER_WIDTH;
+    const cropH = img.height * VIEWFINDER_HEIGHT;
+
+    // Scale up the cropped region for better OCR accuracy
+    const scale = 2;
+    const outW = cropW * scale;
+    const outH = cropH * scale;
+
+    if (rotateDeg === 90 || rotateDeg === 270) {
+        canvas.width = outH;
+        canvas.height = outW;
+    } else {
+        canvas.width = outW;
+        canvas.height = outH;
+    }
+
+    ctx.save();
+
+    if (rotateDeg !== 0) {
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate((rotateDeg * Math.PI) / 180);
+        ctx.translate(-outW / 2, -outH / 2);
+    }
+
+    // Apply contrast boost and grayscale via CSS filter
+    ctx.filter = 'grayscale(100%) contrast(200%) brightness(110%)';
+    ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
+    ctx.restore();
+
+    // Apply manual thresholding for better binarization
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const val = avg > 128 ? 255 : 0;
+        data[i] = val;
+        data[i + 1] = val;
+        data[i + 2] = val;
+    }
+    ctx.putImageData(imageData, 0, 0);
+
+    return canvas.toDataURL('image/png');
+};
 
 const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
     const webcamRef = useRef<Webcam>(null);
@@ -17,92 +136,117 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
     const [showManual, setShowManual] = useState(false);
     const [debugLogs, setDebugLogs] = useState<string[]>([]);
     const [showDebug, setShowDebug] = useState(false);
+    const [autoScan, setAutoScan] = useState(false);
+    const autoScanRef = useRef(false);
+    const processingRef = useRef(false);
+
+    // Keep refs in sync with state for use in interval callbacks
+    useEffect(() => {
+        autoScanRef.current = autoScan;
+    }, [autoScan]);
+    useEffect(() => {
+        processingRef.current = processing;
+    }, [processing]);
 
     const addLog = (msg: string) => {
         console.log(`[Scanner] ${msg}`);
-        setDebugLogs(prev => [msg, ...prev].slice(0, 10));
+        setDebugLogs(prev => [msg, ...prev].slice(0, 15));
     };
 
+    const runOcrOnImage = useCallback(async (processedImage: string, label: string): Promise<string | null> => {
+        const { data: { text } } = await Tesseract.recognize(processedImage, 'eng', {
+            logger: (m) => {
+                if (m.status === 'recognizing text' && m.progress) {
+                    setStatus(`Scanning (${label})... ${Math.round(m.progress * 100)}%`);
+                }
+            },
+        });
+        addLog(`[${label}] text: "${text.trim().substring(0, 50)}"`);
+        return extractIsbn(text);
+    }, []);
+
     const capture = useCallback(async () => {
-        if (!webcamRef.current || processing) return;
+        if (!webcamRef.current || processingRef.current || isScanning) return;
 
-        addLog('Capturing frame...');
         const imageSrc = webcamRef.current.getScreenshot();
-        if (!imageSrc) {
-            addLog('Error: Failed to get screenshot');
-            return;
-        }
-        if (!canvasRef.current) {
-            addLog('Error: Canvas ref missing');
+        if (!imageSrc || !canvasRef.current) {
+            addLog('Error: Failed to capture frame');
             return;
         }
 
+        processingRef.current = true;
         setProcessing(true);
-        setStatus('Processing OCR...');
+        setStatus('Processing...');
 
         try {
             const canvas = canvasRef.current;
-            const ctx = canvas.getContext('2d');
             const img = new Image();
-
-            const imgPromise = new Promise((resolve, reject) => {
-                img.onload = () => resolve(true);
+            await new Promise<void>((resolve, reject) => {
+                img.onload = () => resolve();
                 img.onerror = () => reject(new Error('Failed to load image'));
+                img.src = imageSrc;
             });
 
-            img.src = imageSrc;
-            await imgPromise;
+            // Try horizontal (normal orientation) first
+            addLog('Trying horizontal scan...');
+            const horizontalImg = preprocessImage(img, canvas, 0);
+            let isbn = await runOcrOnImage(horizontalImg, 'horiz');
 
-            canvas.width = img.width;
-            canvas.height = img.height;
+            // If no result, try rotated 90° (for vertical book spines)
+            if (!isbn) {
+                addLog('Trying 90° rotation...');
+                const rotated90 = preprocessImage(img, canvas, 90);
+                isbn = await runOcrOnImage(rotated90, 'rot90');
+            }
 
-            if (ctx) {
-                ctx.filter = 'grayscale(100%) contrast(150%)';
-                ctx.drawImage(img, 0, 0);
-                const processedImage = canvas.toDataURL('image/jpeg');
+            // Try 270° rotation as well
+            if (!isbn) {
+                addLog('Trying 270° rotation...');
+                const rotated270 = preprocessImage(img, canvas, 270);
+                isbn = await runOcrOnImage(rotated270, 'rot270');
+            }
 
-                addLog('OCR recognizing...');
-                const { data: { text } } = await Tesseract.recognize(processedImage, 'eng', {
-                    logger: (m) => {
-                        if (m.status === 'recognizing text' && m.progress) {
-                            setStatus(`Scanning... ${Math.round(m.progress * 100)}%`);
-                        }
-                    },
-                });
-
-                addLog(`Found text: ${text.substring(0, 30)}...`);
-
-                // Resilient ISBN extraction
-                const matches = text.match(/[0-9][- 0-9]{8,17}[0-9X]/g);
-                let foundIsbn = null;
-
-                if (matches) {
-                    for (const m of matches) {
-                        const clean = m.replace(/[^0-9X]/g, '');
-                        if (clean.length === 10 || clean.length === 13) {
-                            foundIsbn = clean;
-                            break;
-                        }
-                    }
-                }
-
-                if (foundIsbn) {
-                    addLog(`ISBN match: ${foundIsbn}`);
-                    setStatus(`Found ISBN: ${foundIsbn}`);
-                    onScan(foundIsbn);
-                } else {
-                    addLog('No ISBN match found in OCR.');
-                    setStatus('No ISBN detected. Try manual input?');
+            if (isbn) {
+                addLog(`ISBN found: ${isbn}`);
+                setStatus(`Found ISBN: ${isbn}`);
+                setAutoScan(false);
+                onScan(isbn);
+            } else {
+                addLog('No ISBN detected in any orientation.');
+                if (!autoScanRef.current) {
+                    setStatus('No ISBN detected. Try adjusting position or use manual input.');
                     setShowManual(true);
+                } else {
+                    setStatus('Auto-scanning... adjust book position');
                 }
             }
         } catch (err: unknown) {
             addLog(`Error: ${err instanceof Error ? err.message : String(err)}`);
-            setStatus('Scan failed.');
+            setStatus('Scan failed. Try again.');
         } finally {
+            processingRef.current = false;
             setProcessing(false);
         }
-    }, [onScan, processing]);
+    }, [onScan, isScanning, runOcrOnImage]);
+
+    // Auto-scan: repeatedly capture every 2 seconds
+    useEffect(() => {
+        if (!autoScan) return;
+
+        addLog('Auto-scan started');
+        setStatus('Auto-scanning... align ISBN in viewfinder');
+
+        const interval = setInterval(() => {
+            if (!processingRef.current && autoScanRef.current) {
+                capture();
+            }
+        }, 2000);
+
+        return () => {
+            clearInterval(interval);
+            addLog('Auto-scan stopped');
+        };
+    }, [autoScan, capture]);
 
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -141,10 +285,11 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
 
             {showDebug && (
                 <div style={{
-                    position: 'absolute', top: '3.5rem', right: '1rem', width: '240px',
+                    position: 'absolute', top: '3.5rem', right: '1rem', width: '260px',
                     background: 'rgba(0,0,0,0.85)', padding: '0.75rem', borderRadius: '0.5rem',
                     fontSize: '0.7rem', color: '#00ff00', fontFamily: 'monospace',
-                    pointerEvents: 'none', zIndex: 100, border: '1px solid #00ff00'
+                    pointerEvents: 'none', zIndex: 100, border: '1px solid #00ff00',
+                    maxHeight: '300px', overflowY: 'auto'
                 }}>
                     <div style={{ marginBottom: '0.5rem', borderBottom: '1px solid #00ff00', paddingBottom: '0.2rem', fontWeight: 'bold' }}>SCANNER LOGS</div>
                     {debugLogs.map((log, i) => (
@@ -160,14 +305,14 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <p style={{ color: '#fff', fontSize: '0.875rem', fontWeight: 500 }}>{status}</p>
-                    {isScanning && <Loader2 size={16} className="animate-spin" style={{ color: 'var(--accent-blue)' }} />}
+                    {(isScanning || (autoScan && processing)) && <Loader2 size={16} className="animate-spin" style={{ color: 'var(--accent-blue)' }} />}
                 </div>
 
                 {!showManual ? (
                     <div style={{ display: 'flex', gap: '1rem' }}>
                         <button
                             onClick={capture}
-                            disabled={processing || isScanning}
+                            disabled={processing || isScanning || autoScan}
                             className="glass"
                             style={{
                                 padding: '1rem 2rem', display: 'flex', alignItems: 'center', gap: '0.5rem',
@@ -176,12 +321,25 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                             }}
                         >
                             {processing ? <Loader2 className="animate-spin" size={20} /> : <Camera size={20} />}
-                            {processing ? 'Scanning...' : 'Capture ISBN'}
+                            {processing ? 'Scanning...' : 'Capture'}
+                        </button>
+                        <button
+                            onClick={() => setAutoScan(prev => !prev)}
+                            disabled={isScanning}
+                            className="glass"
+                            style={{
+                                padding: '1rem', color: 'white', borderRadius: '9999px',
+                                background: autoScan ? 'var(--accent-blue)' : 'transparent',
+                            }}
+                            title={autoScan ? 'Stop auto-scan' : 'Start auto-scan'}
+                        >
+                            {autoScan ? <Square size={20} /> : <Play size={20} />}
                         </button>
                         <button
                             onClick={() => setShowManual(true)}
                             className="glass"
                             style={{ padding: '1rem', color: 'white', borderRadius: '9999px' }}
+                            title="Manual ISBN entry"
                         >
                             <Edit3 size={20} />
                         </button>
