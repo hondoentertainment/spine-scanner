@@ -1,0 +1,201 @@
+.container {
+  padding: 2rem;
+  max-width: 600px;
+  margin: 2rem auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.closeBtn {
+  background: none;
+  color: var(--text-muted);
+}
+
+/* ---- Section ---- */
+.section {
+  margin-bottom: 2rem;
+}
+
+.sectionBorder {
+  composes: section;
+  border-top: 1px solid var(--glass-border);
+  padding-top: 2rem;
+}
+
+.sectionTitle {
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sectionDesc {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+/* ---- Export ---- */
+.formatRow {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.formatBtn {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 9999px;
+}
+
+.exportBtn {
+  width: 100%;
+  padding: 1rem;
+  background: var(--primary);
+  color: white;
+  font-weight: 600;
+}
+
+/* ---- Import ---- */
+.fileWrap {
+  position: relative;
+}
+
+.fileInput {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.fileDrop {
+  padding: 1rem;
+  text-align: center;
+  border: 2px dashed var(--glass-border);
+  color: var(--text-muted);
+}
+
+/* ---- Web import ---- */
+.urlRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.urlInput {
+  flex: 1;
+  padding: 0.75rem;
+  color: var(--text-main);
+  font-family: inherit;
+  outline: none;
+  border: none;
+  background: var(--glass-bg);
+}
+
+.fetchBtn {
+  padding: 0 1.5rem;
+  background: var(--glass-bg);
+  color: var(--text-main);
+}
+
+.confirmBox {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.confirmImportBtn {
+  padding: 0.5rem 1rem;
+  background: var(--accent-blue);
+  color: white;
+  font-size: 0.8rem;
+}
+
+/* ---- Result summary ---- */
+.result {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  border: 1px solid var(--accent-blue);
+}
+
+.resultHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--accent-blue);
+}
+
+.resultList {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  list-style: none;
+}
+
+/* ---- Danger zone ---- */
+.dangerSection {
+  border-top: 1px solid rgba(239, 68, 68, 0.2);
+  padding-top: 2rem;
+}
+
+.dangerBtn {
+  color: #f87171;
+  background: none;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dangerConfirm {
+  padding: 1rem;
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.dangerTitle {
+  color: #f87171;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dangerMsg {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.dangerActions {
+  display: flex;
+  gap: 1rem;
+}
+
+.confirmDeleteBtn {
+  background: #ef4444;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+}
+
+.cancelDeleteBtn {
+  background: var(--glass-bg);
+  color: var(--text-main);
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+}

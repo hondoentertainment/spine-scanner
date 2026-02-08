@@ -1,0 +1,279 @@
+/* ---- Card layout ---- */
+.card {
+  animation: fadeIn 0.2s ease-out;
+  cursor: pointer;
+}
+
+.cardInner {
+  display: flex;
+  gap: 1rem;
+}
+
+.coverImg {
+  width: 80px;
+  height: 120px;
+  border-radius: 0.5rem;
+  object-fit: cover;
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+}
+
+.bookTitle {
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bookAuthor {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.links {
+  margin-top: 0.5rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.amazonBtn {
+  padding: 0.25rem 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--accent-blue);
+}
+
+/* ---- Shelf chips ---- */
+.shelfRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  align-items: center;
+}
+
+.shelfChip {
+  padding: 0.15rem 0.5rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.chipRemove {
+  background: none;
+  padding: 0;
+  display: flex;
+  opacity: 0.7;
+}
+
+.shelfPickerWrap {
+  position: relative;
+}
+
+.shelfPickerBtn {
+  padding: 0.15rem 0.4rem;
+  font-size: 0.6rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.shelfPickerDrop {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 0.3rem;
+  z-index: 20;
+  padding: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 120px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
+}
+
+.shelfPickerItem {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 0.4rem;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.shelfDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ---- Status row ---- */
+.statusRow {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.statusBtn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  padding: 0.4rem;
+}
+
+/* ---- Notes ---- */
+.notes {
+  width: 100%;
+  min-height: 60px;
+  padding: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-main);
+  border: none;
+  resize: vertical;
+  margin-top: 0.5rem;
+  font-family: inherit;
+  outline: none;
+}
+
+/* ---- Actions ---- */
+.actionsRow {
+  display: flex;
+  justify-content: space-between;
+  margin-top: auto;
+}
+
+.editBtn {
+  color: var(--accent-blue);
+  background: none;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.removeBtn {
+  color: #f87171;
+  background: none;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+}
+
+/* ---- Edit mode ---- */
+.editHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.editLabel {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent-blue);
+}
+
+.editBtnGroup {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.saveBtn {
+  padding: 0.4rem 0.75rem;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.cancelBtn {
+  padding: 0.4rem 0.75rem;
+  background: rgba(248, 113, 113, 0.1);
+  color: #f87171;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.editForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.fieldLabel {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.2rem;
+}
+
+.input {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 0.5rem;
+  outline: none;
+  font-family: inherit;
+}
+
+.isbnRow {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.coverPreview {
+  display: flex;
+  justify-content: center;
+}
+
+.coverPreviewImg {
+  height: 80px;
+  border-radius: 0.4rem;
+  object-fit: cover;
+  opacity: 0.8;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

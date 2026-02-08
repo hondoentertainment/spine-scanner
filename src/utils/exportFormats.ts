@@ -1,13 +1,19 @@
-import type { BookEntry } from '../types.ts';
+import type { BookEntry, Shelf } from '../types.ts';
 
-export const exportToJSON = (books: BookEntry[]): string => {
-    return JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), books }, null, 2);
+export const exportToJSON = (books: BookEntry[], shelves: Shelf[] = []): string => {
+    return JSON.stringify({ version: 2, exportedAt: new Date().toISOString(), books, shelves }, null, 2);
 };
 
-export const importFromJSON = (json: string): BookEntry[] => {
+export const importFromJSON = (json: string): { books: BookEntry[]; shelves: Shelf[] } => {
     const data = JSON.parse(json);
-    if (Array.isArray(data)) return data;
-    if (data.books && Array.isArray(data.books)) return data.books;
+    if (Array.isArray(data)) {
+        return { books: data.map((book) => ({ ...book, shelfIds: book.shelfIds || [] })), shelves: [] };
+    }
+    if (data.books && Array.isArray(data.books)) {
+        const books = data.books.map((book: BookEntry) => ({ ...book, shelfIds: book.shelfIds || [] }));
+        const shelves = Array.isArray(data.shelves) ? data.shelves : [];
+        return { books, shelves };
+    }
     throw new Error('Invalid JSON format: expected an array of books or { books: [...] }');
 };
 

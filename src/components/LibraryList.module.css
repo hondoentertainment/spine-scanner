@@ -1,0 +1,233 @@
+.container {
+  margin-top: 3rem;
+}
+
+/* ---- Header row ---- */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.headerActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.iconBtn {
+  padding: 0.75rem;
+  display: flex;
+  align-items: center;
+}
+
+.iconBtnActive {
+  composes: iconBtn;
+}
+
+.manageBtn {
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--accent-blue);
+  background: rgba(56, 189, 248, 0.1);
+}
+
+/* ---- Stats ---- */
+.stats {
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.statItem {
+  text-align: center;
+  min-width: 80px;
+}
+
+.statValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.statLabel {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* ---- Search ---- */
+.searchRow {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.searchWrap {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+}
+
+.searchInput {
+  width: 100%;
+  padding: 0.75rem 0.75rem 0.75rem 2.5rem;
+  border: none;
+  color: var(--text-main);
+  font-size: 0.875rem;
+  background: var(--glass-bg);
+  font-family: inherit;
+  outline: none;
+}
+
+/* ---- Filters ---- */
+.filterRow {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.filterBtn {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 9999px;
+}
+
+.filterCount {
+  opacity: 0.7;
+}
+
+/* ---- Sort ---- */
+.sortRow {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.sortBtn {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: 9999px;
+}
+
+/* ---- View toggle ---- */
+.viewToggle {
+  display: flex;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.viewBtn {
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.viewBtnActive {
+  color: var(--accent-blue);
+  background: rgba(56, 189, 248, 0.1);
+}
+
+/* ---- Empty state ---- */
+.empty {
+  padding: 4rem;
+  text-align: center;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 1rem;
+  border: 1px dashed var(--glass-border);
+}
+
+/* ---- Virtualized wrapper ---- */
+.virtualContainer {
+  position: relative;
+  overflow: auto;
+  border-radius: 1rem;
+}
+
+.virtualInner {
+  position: relative;
+  width: 100%;
+}
+
+/* ---- List view ---- */
+.listRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--glass-border);
+  transition: background 0.15s;
+}
+
+.listRow:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.listCover {
+  width: 40px;
+  height: 60px;
+  border-radius: 0.35rem;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.listInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.listTitle {
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.listAuthor {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.listStatus {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}

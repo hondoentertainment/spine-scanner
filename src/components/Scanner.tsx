@@ -1,22 +1,20 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
-import Tesseract from 'tesseract.js';
-import { BrowserMultiFormatReader } from '@zxing/browser';
+import type { BrowserMultiFormatReader } from '@zxing/browser';
 import { Camera, Loader2, Edit3, Check, Terminal, Play, Square } from 'lucide-react';
 import { isValidIsbn } from '../utils/isbnValidation.ts';
-
-const barcodeReader = new BrowserMultiFormatReader();
+import { extractIsbnCandidates } from '../utils/ocr.ts';
+import { useToast } from './Toast.tsx';
+import s from './Scanner.module.css';
 
 interface ScannerProps {
     onScan: (isbn: string) => void;
     isScanning: boolean;
 }
 
-// Viewfinder dimensions as fractions of the video frame (must match CSS .viewfinder)
 const VIEWFINDER_WIDTH = 0.90;
 const VIEWFINDER_HEIGHT = 0.25;
 
-// Adaptive video constraints: prefer high-res but let mobile pick what works
 const getVideoConstraints = () => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     return {
@@ -26,122 +24,41 @@ const getVideoConstraints = () => {
     };
 };
 
-/**
- * Fix common OCR misreads in digit strings:
- * O/o -> 0, I/l -> 1, S/s -> 5, B -> 8, G/g -> 9, Z/z -> 2
- */
-const fixOcrDigits = (s: string): string =>
-    s.replace(/[Oo]/g, '0')
-     .replace(/[Il|]/g, '1')
-     .replace(/[Ss]/g, '5')
-     .replace(/[Bb]/g, '8')
-     .replace(/[Gg]/g, '9')
-     .replace(/[Zz]/g, '2');
-
-/**
- * Extract ISBN candidates from OCR text.
- * Tries both the raw text and an OCR-corrected version.
- */
-const extractIsbn = (text: string): string | null => {
-    const candidates: string[] = [];
-
-    for (const source of [text, fixOcrDigits(text)]) {
-        // Look for ISBN-13 (starts with 978 or 979) and ISBN-10 patterns
-        const matches = source.match(/[0-9][- 0-9]{8,17}[0-9X]/g);
-        if (matches) {
-            for (const m of matches) {
-                const clean = m.replace(/[^0-9X]/g, '');
-                if (clean.length === 13 || clean.length === 10) {
-                    candidates.push(clean);
-                }
-            }
-        }
-    }
-
-    // Also try: look for "ISBN" label nearby and grab following digits
-    const isbnLabel = text.match(/ISBN[- ]?(?:1[03])?[: ]?\s*([0-9X][- 0-9X]{9,17})/gi);
-    if (isbnLabel) {
-        for (const m of isbnLabel) {
-            const digits = m.replace(/[^0-9X]/g, '');
-            if (digits.length === 13 || digits.length === 10) {
-                candidates.push(digits);
-            }
-        }
-    }
-
-    // Filter to candidates with valid checksums first, fall back to unchecked
-    const valid = candidates.filter(c => isValidIsbn(c));
-    const pool = valid.length > 0 ? valid : candidates;
-
-    // Prefer ISBN-13 starting with 978/979, then any ISBN-13, then ISBN-10
-    const isbn13_978 = pool.find(c => c.length === 13 && (c.startsWith('978') || c.startsWith('979')));
-    if (isbn13_978) return isbn13_978;
-
-    const isbn13 = pool.find(c => c.length === 13);
-    if (isbn13) return isbn13;
-
-    const isbn10 = pool.find(c => c.length === 10);
-    if (isbn10) return isbn10;
-
-    return null;
-};
-
-/**
- * Crop the center viewfinder region from the full image, apply preprocessing,
- * and return the processed image as a data URL.
- * Optionally rotate by the given degrees.
- */
-const preprocessImage = (
-    img: HTMLImageElement,
-    canvas: HTMLCanvasElement,
-    rotateDeg: number = 0,
-): string => {
+const preprocessImage = (img: HTMLImageElement, canvas: HTMLCanvasElement, rotateDeg: number = 0): string => {
     const ctx = canvas.getContext('2d')!;
-
-    // Crop to viewfinder region
     const cropX = img.width * (1 - VIEWFINDER_WIDTH) / 2;
     const cropY = img.height * (1 - VIEWFINDER_HEIGHT) / 2;
     const cropW = img.width * VIEWFINDER_WIDTH;
     const cropH = img.height * VIEWFINDER_HEIGHT;
-
-    // Scale up the cropped region for better OCR accuracy
     const scale = 2;
     const outW = cropW * scale;
     const outH = cropH * scale;
 
     if (rotateDeg === 90 || rotateDeg === 270) {
-        canvas.width = outH;
-        canvas.height = outW;
+        canvas.width = outH; canvas.height = outW;
     } else {
-        canvas.width = outW;
-        canvas.height = outH;
+        canvas.width = outW; canvas.height = outH;
     }
 
     ctx.save();
-
     if (rotateDeg !== 0) {
         ctx.translate(canvas.width / 2, canvas.height / 2);
         ctx.rotate((rotateDeg * Math.PI) / 180);
         ctx.translate(-outW / 2, -outH / 2);
     }
 
-    // Apply contrast boost and grayscale via CSS filter
     ctx.filter = 'grayscale(100%) contrast(200%) brightness(110%)';
     ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
     ctx.restore();
 
-    // Apply manual thresholding for better binarization
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
     for (let i = 0; i < data.length; i += 4) {
         const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
         const val = avg > 128 ? 255 : 0;
-        data[i] = val;
-        data[i + 1] = val;
-        data[i + 2] = val;
+        data[i] = val; data[i + 1] = val; data[i + 2] = val;
     }
     ctx.putImageData(imageData, 0, 0);
-
     return canvas.toDataURL('image/png');
 };
 
@@ -150,21 +67,54 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [processing, setProcessing] = useState(false);
     const [status, setStatus] = useState<string>('Align ISBN inside viewfinder');
+    const [cameraError, setCameraError] = useState<string | null>(null);
+    const [cameraReady, setCameraReady] = useState(false);
     const [manualIsbn, setManualIsbn] = useState('');
     const [showManual, setShowManual] = useState(false);
+    const [isbnSuggestions, setIsbnSuggestions] = useState<string[]>([]);
     const [debugLogs, setDebugLogs] = useState<string[]>([]);
     const [showDebug, setShowDebug] = useState(false);
     const [autoScan, setAutoScan] = useState(false);
     const autoScanRef = useRef(false);
     const processingRef = useRef(false);
+    const barcodeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+    const tesseractRef = useRef<Promise<typeof import('tesseract.js')> | null>(null);
+    const { toast } = useToast();
+    const getBarcodeReader = useCallback(async () => {
+        if (barcodeReaderRef.current) return barcodeReaderRef.current;
+        const mod = await import('@zxing/browser');
+        const reader = new mod.BrowserMultiFormatReader();
+        barcodeReaderRef.current = reader;
+        return reader;
+    }, []);
 
-    // Keep refs in sync with state for use in interval callbacks
-    useEffect(() => {
-        autoScanRef.current = autoScan;
-    }, [autoScan]);
-    useEffect(() => {
-        processingRef.current = processing;
-    }, [processing]);
+    const getRecognize = useCallback(async () => {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5caae87c-2958-4c76-b634-193d7251694a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H2',location:'Scanner.tsx:getRecognize:134',message:'getRecognize enter',data:{hasCached:!!tesseractRef.current},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        if (!tesseractRef.current) {
+            tesseractRef.current = import('tesseract.js');
+        }
+        const mod = (await tesseractRef.current) as unknown as {
+            recognize?: (image: unknown, lang: string, options?: unknown) => Promise<{ data: { text: string } }>;
+            default?: { recognize?: (image: unknown, lang: string, options?: unknown) => Promise<{ data: { text: string } }> };
+        };
+        const recognize = mod.recognize ?? mod.default?.recognize;
+        if (!recognize) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5caae87c-2958-4c76-b634-193d7251694a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H2',location:'Scanner.tsx:getRecognize:146',message:'recognize missing',data:{hasModRecognize:!!mod.recognize,hasDefaultRecognize:!!mod.default?.recognize},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
+            throw new Error('Tesseract recognize() not available');
+        }
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5caae87c-2958-4c76-b634-193d7251694a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H2',location:'Scanner.tsx:getRecognize:151',message:'getRecognize ok',data:{hasRecognize:true},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        return recognize;
+    }, []);
+
+
+    useEffect(() => { autoScanRef.current = autoScan; }, [autoScan]);
+    useEffect(() => { processingRef.current = processing; }, [processing]);
 
     const addLog = (msg: string) => {
         console.log(`[Scanner] ${msg}`);
@@ -172,32 +122,71 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
     };
 
     const runOcrOnImage = useCallback(async (processedImage: string, label: string): Promise<string | null> => {
-        const { data: { text } } = await Tesseract.recognize(processedImage, 'eng', {
-            logger: (m) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5caae87c-2958-4c76-b634-193d7251694a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H1',location:'Scanner.tsx:runOcrOnImage:164',message:'ocr start',data:{label,imageSize:processedImage?.length||0},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        const recognize = await getRecognize();
+        const { data: { text } } = await recognize(processedImage, 'eng', {
+            logger: (m: { status: string; progress?: number }) => {
                 if (m.status === 'recognizing text' && m.progress) {
                     setStatus(`Scanning (${label})... ${Math.round(m.progress * 100)}%`);
                 }
             },
         });
         addLog(`[${label}] text: "${text.trim().substring(0, 50)}"`);
-        return extractIsbn(text);
-    }, []);
+        const candidates = extractIsbnCandidates(text);
+        if (candidates.length > 0) {
+            setIsbnSuggestions(candidates.slice(0, 5));
+            if (!showManual) {
+                setShowManual(true);
+            }
+        }
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5caae87c-2958-4c76-b634-193d7251694a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H1',location:'Scanner.tsx:runOcrOnImage:182',message:'ocr result',data:{label,textSample:text.trim().slice(0,80),candidateCount:candidates.length,firstCandidate:candidates[0]||null},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        return candidates.length > 0 ? candidates[0] : null;
+    }, [getRecognize, showManual]);
 
     const capture = useCallback(async () => {
         if (!webcamRef.current || processingRef.current || isScanning) return;
+        const video = webcamRef.current.video as HTMLVideoElement | undefined;
+        const canvas = canvasRef.current;
+        if (!canvas) { addLog('Error: Missing canvas'); return; }
 
-        const imageSrc = webcamRef.current.getScreenshot();
-        if (!imageSrc || !canvasRef.current) {
-            addLog('Error: Failed to capture frame');
+        // Ensure video is ready
+        if (!video || video.readyState < 2) {
+            addLog('Error: Video not ready');
+            setStatus('Camera is not ready yet. Please wait...');
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5caae87c-2958-4c76-b634-193d7251694a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H3',location:'Scanner.tsx:capture:202',message:'video not ready',data:{hasVideo:!!video,readyState:video?.readyState||null},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
             return;
         }
+
+        let imageSrc = webcamRef.current.getScreenshot();
+        if (!imageSrc) {
+            // Fallback: draw the current video frame manually
+            const width = video.videoWidth || 1280;
+            const height = video.videoHeight || 720;
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) { addLog('Error: No canvas context'); return; }
+            ctx.drawImage(video, 0, 0, width, height);
+            imageSrc = canvas.toDataURL('image/jpeg');
+        }
+
+        if (!imageSrc) { addLog('Error: Failed to capture frame'); return; }
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5caae87c-2958-4c76-b634-193d7251694a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H3',location:'Scanner.tsx:capture:224',message:'captured image',data:{imageSize:imageSrc.length,usedFallback:!webcamRef.current.getScreenshot || !webcamRef.current.getScreenshot()},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
 
         processingRef.current = true;
         setProcessing(true);
         setStatus('Processing...');
+        setIsbnSuggestions([]);
 
         try {
-            const canvas = canvasRef.current;
             const img = new Image();
             await new Promise<void>((resolve, reject) => {
                 img.onload = () => resolve();
@@ -205,40 +194,21 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                 img.src = imageSrc;
             });
 
-            // Try barcode detection first (much faster than OCR)
             addLog('Trying barcode scan...');
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5caae87c-2958-4c76-b634-193d7251694a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H4',location:'Scanner.tsx:capture:241',message:'barcode scan start',data:{},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
             let isbn: string | null = null;
             try {
-                const result = await barcodeReader.decodeFromImageElement(img);
+                const reader = await getBarcodeReader();
+                const result = await reader.decodeFromImageElement(img);
                 const text = result.getText().replace(/[^0-9X]/g, '');
-                if (text.length === 13 || text.length === 10) {
-                    addLog(`Barcode detected: ${text}`);
-                    isbn = text;
-                }
-            } catch {
-                addLog('No barcode found, falling back to OCR');
-            }
+                if (text.length === 13 || text.length === 10) { addLog(`Barcode detected: ${text}`); isbn = text; }
+            } catch { addLog('No barcode found, falling back to OCR'); }
 
-            // Try horizontal (normal orientation) first
-            if (!isbn) {
-                addLog('Trying horizontal scan...');
-                const horizontalImg = preprocessImage(img, canvas, 0);
-                isbn = await runOcrOnImage(horizontalImg, 'horiz');
-            }
-
-            // If no result, try rotated 90° (for vertical book spines)
-            if (!isbn) {
-                addLog('Trying 90° rotation...');
-                const rotated90 = preprocessImage(img, canvas, 90);
-                isbn = await runOcrOnImage(rotated90, 'rot90');
-            }
-
-            // Try 270° rotation as well
-            if (!isbn) {
-                addLog('Trying 270° rotation...');
-                const rotated270 = preprocessImage(img, canvas, 270);
-                isbn = await runOcrOnImage(rotated270, 'rot270');
-            }
+            if (!isbn) { addLog('Trying horizontal scan...'); isbn = await runOcrOnImage(preprocessImage(img, canvas, 0), 'horiz'); }
+            if (!isbn) { addLog('Trying 90° rotation...'); isbn = await runOcrOnImage(preprocessImage(img, canvas, 90), 'rot90'); }
+            if (!isbn) { addLog('Trying 270° rotation...'); isbn = await runOcrOnImage(preprocessImage(img, canvas, 270), 'rot270'); }
 
             if (isbn) {
                 addLog(`ISBN found: ${isbn}`);
@@ -257,40 +227,35 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
         } catch (err: unknown) {
             addLog(`Error: ${err instanceof Error ? err.message : String(err)}`);
             setStatus('Scan failed. Try again.');
+            toast('OCR failed. Please try again or use manual entry.', 'error');
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5caae87c-2958-4c76-b634-193d7251694a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H5',location:'Scanner.tsx:capture:270',message:'scan error',data:{error:err instanceof Error?err.message:String(err)},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
         } finally {
             processingRef.current = false;
             setProcessing(false);
         }
-    }, [onScan, isScanning, runOcrOnImage]);
+    }, [onScan, isScanning, runOcrOnImage, getBarcodeReader]);
 
-    // Auto-scan: repeatedly capture every 2 seconds
     useEffect(() => {
         if (!autoScan) return;
-
         addLog('Auto-scan started');
         setStatus('Auto-scanning... align ISBN in viewfinder');
-
         const interval = setInterval(() => {
-            if (!processingRef.current && autoScanRef.current) {
-                capture();
-            }
+            if (!processingRef.current && autoScanRef.current) capture();
         }, 2000);
-
-        return () => {
-            clearInterval(interval);
-            addLog('Auto-scan stopped');
-        };
+        return () => { clearInterval(interval); addLog('Auto-scan stopped'); };
     }, [autoScan, capture]);
 
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const cleanIsbn = manualIsbn.replace(/[^0-9X]/g, '');
         if (cleanIsbn.length !== 10 && cleanIsbn.length !== 13) {
-            alert('Please enter a 10 or 13 digit ISBN.');
+            toast('Please enter a 10 or 13 digit ISBN.', 'warning');
             return;
         }
         if (!isValidIsbn(cleanIsbn)) {
-            alert('Invalid ISBN checksum. Please double-check the number.');
+            toast('Invalid ISBN checksum. Please double-check the number.', 'error');
             return;
         }
         onScan(cleanIsbn);
@@ -305,133 +270,127 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                 ref={webcamRef}
                 screenshotFormat="image/jpeg"
                 videoConstraints={getVideoConstraints()}
+                onUserMedia={() => {
+                    setCameraError(null);
+                    setCameraReady(true);
+                    setStatus('Align ISBN inside viewfinder');
+                }}
+                onUserMediaError={(err) => {
+                    const msg = err instanceof Error ? err.message : 'Camera access denied';
+                    setCameraError(`Camera error: ${msg}`);
+                    setStatus('Camera error. Check permissions.');
+                }}
                 style={{ width: '100%', height: 'auto', display: 'block', minHeight: '240px' }}
                 playsInline
             />
             <canvas ref={canvasRef} style={{ display: 'none' }} />
             <div className="viewfinder"></div>
 
-            <button
-                onClick={() => setShowDebug(!showDebug)}
+            <button onClick={() => setShowDebug(!showDebug)}
                 aria-label={showDebug ? 'Hide debug logs' : 'Show debug logs'}
-                style={{
-                    position: 'absolute', top: '0.75rem', right: '0.75rem', padding: '0.625rem',
-                    borderRadius: '50%', background: showDebug ? 'var(--primary)' : 'rgba(0,0,0,0.5)',
-                    color: 'white', border: 'none', cursor: 'pointer', zIndex: 100,
-                    WebkitTapHighlightColor: 'transparent',
-                    minWidth: '44px', minHeight: '44px',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
-            >
+                className={s.debugBtn}
+                style={{ background: showDebug ? 'var(--primary)' : 'rgba(0,0,0,0.5)' }}>
                 <Terminal size={16} />
             </button>
 
             {showDebug && (
-                <div style={{
-                    position: 'absolute', top: '3.5rem', right: '0.75rem',
-                    width: 'min(260px, calc(100% - 1.5rem))',
-                    background: 'rgba(0,0,0,0.85)', padding: '0.75rem', borderRadius: '0.5rem',
-                    fontSize: '0.65rem', color: '#00ff00', fontFamily: 'monospace',
-                    pointerEvents: 'none', zIndex: 100, border: '1px solid #00ff00',
-                    maxHeight: '200px', overflowY: 'auto'
-                }}>
-                    <div style={{ marginBottom: '0.5rem', borderBottom: '1px solid #00ff00', paddingBottom: '0.2rem', fontWeight: 'bold' }}>SCANNER LOGS</div>
+                <div className={s.debugPanel}>
+                    <div className={s.debugHeader}>
+                        <span>SCANNER LOGS</span>
+                        <button
+                            className={s.copyLogsBtn}
+                            onClick={async () => {
+                                try {
+                                    await navigator.clipboard.writeText(debugLogs.slice().reverse().join('\n'));
+                                    toast('Scanner logs copied', 'success');
+                                } catch {
+                                    toast('Unable to copy logs', 'error');
+                                }
+                            }}
+                            aria-label="Copy scanner logs"
+                        >
+                            Copy
+                        </button>
+                    </div>
                     {debugLogs.map((log, i) => (
-                        <div key={i} style={{ marginBottom: '0.2rem' }}>&gt; {log}</div>
+                        <div key={i} className={s.debugLine}>&gt; {log}</div>
                     ))}
                 </div>
             )}
 
-            <div style={{
-                position: 'absolute', bottom: 0, left: 0, right: 0,
-                padding: '1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px))',
-                background: 'linear-gradient(transparent, rgba(0,0,0,0.9))',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem'
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textAlign: 'center' }}>
-                    <p style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500 }}>{status}</p>
-                    {(isScanning || (autoScan && processing)) && <Loader2 size={16} className="animate-spin" style={{ color: 'var(--accent-blue)' }} />}
+            <div className={s.controls}>
+                <div className={s.statusLine}>
+                    <div className={s.cameraStatus}>
+                        <span className={`${s.cameraDot} ${cameraReady ? s.cameraDotReady : cameraError ? s.cameraDotError : s.cameraDotPending}`} />
+                        <span className={s.cameraLabel}>
+                            {cameraError ? 'Camera error' : cameraReady ? 'Camera ready' : 'Camera starting'}
+                        </span>
+                    </div>
+                    <p className={s.statusText}>{status}</p>
+                    {(isScanning || (autoScan && processing)) && (
+                        <Loader2 size={16} className="animate-spin" style={{ color: 'var(--accent-blue)' }} />
+                    )}
                 </div>
+                {cameraError && (
+                    <div className={s.cameraError}>
+                        {cameraError}
+                    </div>
+                )}
 
                 {!showManual ? (
-                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                        <button
-                            onClick={capture}
-                            disabled={processing || isScanning || autoScan}
+                    <div className={s.btnRow}>
+                        <button onClick={capture} disabled={processing || isScanning || autoScan || !!cameraError || !cameraReady}
                             aria-label={processing ? 'Scanning in progress' : 'Capture and scan'}
-                            className="glass"
-                            style={{
-                                padding: '0.875rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                color: 'white', background: processing ? 'rgba(255,255,255,0.1)' : 'var(--primary)',
-                                fontSize: '0.9rem', fontWeight: 600, borderRadius: '9999px',
-                                minHeight: '48px', WebkitTapHighlightColor: 'transparent',
-                            }}
-                        >
+                            className={`glass ${s.captureBtn}`}
+                            style={{ background: processing ? 'rgba(255,255,255,0.1)' : 'var(--primary)' }}>
                             {processing ? <Loader2 className="animate-spin" size={20} /> : <Camera size={20} />}
                             {processing ? 'Scanning...' : 'Capture'}
                         </button>
-                        <button
-                            onClick={() => setAutoScan(prev => !prev)}
-                            disabled={isScanning}
+                        <button onClick={() => setAutoScan(prev => !prev)} disabled={isScanning}
                             aria-label={autoScan ? 'Stop auto-scan' : 'Start auto-scan'}
-                            className="glass"
-                            style={{
-                                padding: '0.875rem', color: 'white', borderRadius: '9999px',
-                                background: autoScan ? 'var(--accent-blue)' : 'transparent',
-                                minWidth: '48px', minHeight: '48px',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                WebkitTapHighlightColor: 'transparent',
-                            }}
-                            title={autoScan ? 'Stop auto-scan' : 'Start auto-scan'}
-                        >
+                            className={`glass ${s.roundBtn}`}
+                            style={{ background: autoScan ? 'var(--accent-blue)' : 'transparent' }}
+                            title={autoScan ? 'Stop auto-scan' : 'Start auto-scan'}>
                             {autoScan ? <Square size={20} /> : <Play size={20} />}
                         </button>
-                        <button
-                            onClick={() => setShowManual(true)}
-                            aria-label="Manual ISBN entry"
-                            className="glass"
-                            style={{
-                                padding: '0.875rem', color: 'white', borderRadius: '9999px',
-                                minWidth: '48px', minHeight: '48px',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                WebkitTapHighlightColor: 'transparent',
-                            }}
-                            title="Manual ISBN entry"
-                        >
+                        <button onClick={() => setShowManual(true)} aria-label="Manual ISBN entry"
+                            className={`glass ${s.roundBtn}`} title="Manual ISBN entry">
                             <Edit3 size={20} />
                         </button>
                     </div>
                 ) : (
-                    <form onSubmit={handleManualSubmit} style={{ display: 'flex', gap: '0.5rem', width: '100%', maxWidth: '340px' }}>
-                        <input
-                            type="text" inputMode="numeric" placeholder="Enter ISBN..." value={manualIsbn}
-                            onChange={(e) => setManualIsbn(e.target.value)}
-                            aria-label="Enter ISBN manually"
-                            className="glass" autoFocus
-                            style={{
-                                flex: 1, padding: '0.75rem 1rem', border: 'none', color: 'white',
-                                fontSize: '1rem', minHeight: '48px',
-                            }}
-                        />
-                        <button
-                            type="submit" disabled={manualIsbn.length < 5 || isScanning}
-                            aria-label="Submit ISBN"
-                            className="glass" style={{
-                                padding: '0.75rem', background: 'var(--accent-blue)', color: 'white',
-                                borderRadius: '0.5rem', minWidth: '48px', minHeight: '48px',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}
-                        >
+                    <form onSubmit={handleManualSubmit} className={s.manualForm}>
+                        <input type="text" inputMode="numeric" placeholder="Enter ISBN..." value={manualIsbn}
+                            onChange={(e) => setManualIsbn(e.target.value)} aria-label="Enter ISBN manually"
+                            className={`glass ${s.manualInput}`} autoFocus />
+                        <button type="submit" disabled={manualIsbn.length < 5 || isScanning}
+                            aria-label="Submit ISBN" className={`glass ${s.submitBtn}`}>
                             {isScanning ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
                         </button>
-                        <button type="button" onClick={() => setShowManual(false)} className="glass" style={{
-                            padding: '0.75rem', color: 'var(--text-muted)',
-                            minWidth: '48px', minHeight: '48px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                            Close
-                        </button>
+                        <button type="button" onClick={() => setShowManual(false)}
+                            className={`glass ${s.closeBtn}`}>Close</button>
                     </form>
+                )}
+                {isbnSuggestions.length > 0 && (
+                    <div className={s.suggestionRow}>
+                        {isbnSuggestions.map((candidate) => (
+                            <button
+                                key={candidate}
+                                type="button"
+                                onClick={() => {
+                                    setManualIsbn(candidate);
+                                    setShowManual(true);
+                                }}
+                                className={`glass ${s.suggestionBtn}`}
+                                title={isValidIsbn(candidate) ? 'Valid ISBN' : 'Checksum may be invalid'}
+                            >
+                                {candidate}
+                                {!isValidIsbn(candidate) && (
+                                    <span className={s.suggestionNote}>?</span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
                 )}
             </div>
         </div>

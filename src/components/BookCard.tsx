@@ -1,15 +1,32 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
+import { useToast } from './Toast.tsx';
 import type { BookEntry } from '../types.ts';
-import { Trash2, ExternalLink, BookOpen, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { Trash2, ExternalLink, BookOpen, CheckCircle, Clock, XCircle, Pencil, X, Save, Tag } from 'lucide-react';
 import { generateAmazonLink } from '../utils/amazonLink.ts';
+import s from './BookCard.module.css';
 
 interface BookCardProps {
     book: BookEntry;
+    onClick?: () => void;
 }
 
-const BookCard: React.FC<BookCardProps> = ({ book }) => {
-    const { updateBookStatus, updateBookNotes, removeBook } = useBookStore();
+const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
+    const { updateBook, updateBookStatus, updateBookNotes, removeBook, shelves, assignShelf, unassignShelf } = useBookStore();
+    const { toast, confirm } = useToast();
+    const [editing, setEditing] = useState(false);
+    const [showShelfPicker, setShowShelfPicker] = useState(false);
+    const [draft, setDraft] = useState({
+        title: book.title,
+        author: book.author,
+        isbn: book.isbn,
+        pageCount: book.pageCount,
+        coverImg: book.coverImg,
+    });
+
+    const bookShelfIds = book.shelfIds || [];
+    const bookShelves = shelves.filter((sh) => bookShelfIds.includes(sh.id));
+    const availableShelves = shelves.filter((sh) => !bookShelfIds.includes(sh.id));
 
     const statusIcons = {
         'to-read': <Clock size={16} />,
@@ -18,90 +35,185 @@ const BookCard: React.FC<BookCardProps> = ({ book }) => {
         'dnf': <XCircle size={16} />,
     };
 
+    const handleEdit = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setDraft({
+            title: book.title,
+            author: book.author,
+            isbn: book.isbn,
+            pageCount: book.pageCount,
+            coverImg: book.coverImg,
+        });
+        setEditing(true);
+    };
+
+    const handleSave = () => {
+        updateBook(book.id, {
+            title: draft.title.trim() || book.title,
+            author: draft.author.trim() || book.author,
+            isbn: draft.isbn.trim() || book.isbn,
+            pageCount: draft.pageCount || 0,
+            coverImg: draft.coverImg.trim(),
+            amazonLink: generateAmazonLink(draft.isbn.trim() || book.isbn),
+        });
+        setEditing(false);
+        toast('Book updated', 'success');
+    };
+
+    const handleCancel = () => setEditing(false);
+
+    const handleRemove = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const yes = await confirm({
+            title: 'Remove Book',
+            message: `Remove "${book.title}" from your library?`,
+            confirmLabel: 'Remove',
+            danger: true,
+        });
+        if (yes) {
+            removeBook(book.id);
+            toast('Book removed', 'info');
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSave(); }
+        if (e.key === 'Escape') handleCancel();
+    };
+
+    if (editing) {
+        return (
+            <div className={`book-card glass ${s.card}`}>
+                <div className={s.editHeader}>
+                    <span className={s.editLabel}>Edit Book</span>
+                    <div className={s.editBtnGroup}>
+                        <button onClick={handleSave} aria-label="Save changes" className={s.saveBtn}>
+                            <Save size={14} /> Save
+                        </button>
+                        <button onClick={handleCancel} aria-label="Cancel editing" className={s.cancelBtn}>
+                            <X size={14} /> Cancel
+                        </button>
+                    </div>
+                </div>
+
+                <div className={s.editForm} onKeyDown={handleKeyDown}>
+                    <div>
+                        <div className={s.fieldLabel}>Title</div>
+                        <input className={s.input} type="text" value={draft.title}
+                            onChange={(e) => setDraft({ ...draft, title: e.target.value })} autoFocus />
+                    </div>
+                    <div>
+                        <div className={s.fieldLabel}>Author</div>
+                        <input className={s.input} type="text" value={draft.author}
+                            onChange={(e) => setDraft({ ...draft, author: e.target.value })} />
+                    </div>
+                    <div className={s.isbnRow}>
+                        <div style={{ flex: 1 }}>
+                            <div className={s.fieldLabel}>ISBN</div>
+                            <input className={s.input} type="text" value={draft.isbn}
+                                onChange={(e) => setDraft({ ...draft, isbn: e.target.value })} />
+                        </div>
+                        <div style={{ width: '90px' }}>
+                            <div className={s.fieldLabel}>Pages</div>
+                            <input className={s.input} type="number" value={draft.pageCount || ''}
+                                onChange={(e) => setDraft({ ...draft, pageCount: parseInt(e.target.value) || 0 })} min={0} />
+                        </div>
+                    </div>
+                    <div>
+                        <div className={s.fieldLabel}>Cover Image URL</div>
+                        <input className={s.input} type="url" value={draft.coverImg}
+                            onChange={(e) => setDraft({ ...draft, coverImg: e.target.value })} placeholder="https://..." />
+                    </div>
+                    {draft.coverImg && (
+                        <div className={s.coverPreview}>
+                            <img src={draft.coverImg} alt="Cover preview" className={s.coverPreviewImg}
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className="book-card glass">
-            <div style={{ display: 'flex', gap: '1rem' }}>
+        <div className={`book-card glass ${s.card}`} onClick={onClick} role="button" tabIndex={0}
+             onKeyDown={(e) => { if (e.key === 'Enter') onClick?.(); }}>
+            <div className={s.cardInner}>
                 <img
                     src={book.coverImg || 'https://via.placeholder.com/128x192?text=No+Cover'}
                     alt={book.title}
-                    style={{ width: '80px', height: '120px', borderRadius: '0.5rem', objectFit: 'cover' }}
+                    className={s.coverImg}
                 />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <h3 style={{ fontSize: '1rem', marginBottom: '0.25rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {book.title}
-                    </h3>
-                    <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>{book.author}</p>
-                    <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
-                        <a
-                            href={generateAmazonLink(book.isbn)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="glass"
-                            style={{ padding: '0.25rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem', color: 'var(--accent-blue)' }}
-                        >
+                <div className={s.info}>
+                    <h3 className={s.bookTitle}>{book.title}</h3>
+                    <p className={s.bookAuthor}>{book.author}</p>
+                    <div className={s.links}>
+                        <a href={generateAmazonLink(book.isbn)} target="_blank" rel="noopener noreferrer"
+                           className={`glass ${s.amazonBtn}`} onClick={(e) => e.stopPropagation()}>
                             <ExternalLink size={12} /> Amazon
                         </a>
                     </div>
                 </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                {(['to-read', 'reading', 'read', 'dnf'] as const).map((s) => (
-                    <button
-                        key={s}
-                        onClick={() => updateBookStatus(book.id, s)}
-                        className={`status-badge ${book.status === s ? `status-${s}` : ''}`}
-                        style={{
-                            flex: 1,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            background: book.status === s ? undefined : 'rgba(255,255,255,0.05)',
-                            border: 'none',
-                            padding: '0.4rem'
-                        }}
-                        title={s.replace('-', ' ')}
-                        aria-label={`Set status to ${s.replace('-', ' ')}`}
-                    >
-                        {statusIcons[s]}
+            {/* Shelf chips */}
+            <div className={s.shelfRow} onClick={(e) => e.stopPropagation()}>
+                {bookShelves.map((shelf) => (
+                    <span key={shelf.id} className={s.shelfChip}
+                          style={{ background: `${shelf.color}20`, color: shelf.color }}>
+                        {shelf.name}
+                        <button onClick={() => unassignShelf(book.id, shelf.id)}
+                                aria-label={`Remove from ${shelf.name}`}
+                                className={s.chipRemove} style={{ color: shelf.color }}>
+                            <X size={10} />
+                        </button>
+                    </span>
+                ))}
+                {shelves.length > 0 && (
+                    <div className={s.shelfPickerWrap}>
+                        <button onClick={() => setShowShelfPicker(!showShelfPicker)}
+                                aria-label="Add to shelf" className={s.shelfPickerBtn}>
+                            <Tag size={10} /> +
+                        </button>
+                        {showShelfPicker && availableShelves.length > 0 && (
+                            <div className={s.shelfPickerDrop}>
+                                {availableShelves.map((shelf) => (
+                                    <button key={shelf.id}
+                                        onClick={() => { assignShelf(book.id, shelf.id); setShowShelfPicker(false); }}
+                                        className={s.shelfPickerItem} style={{ color: shelf.color }}>
+                                        <span className={s.shelfDot} style={{ background: shelf.color }} />
+                                        {shelf.name}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            <div className={s.statusRow} onClick={(e) => e.stopPropagation()}>
+                {(['to-read', 'reading', 'read', 'dnf'] as const).map((st) => (
+                    <button key={st} onClick={() => updateBookStatus(book.id, st)}
+                        className={`status-badge ${book.status === st ? `status-${st}` : ''} ${s.statusBtn}`}
+                        title={st.replace('-', ' ')} aria-label={`Set status to ${st.replace('-', ' ')}`}>
+                        {statusIcons[st]}
                     </button>
                 ))}
             </div>
 
-            <textarea
-                placeholder="Add your notes or quotes..."
-                value={book.notes}
+            <textarea placeholder="Add your notes or quotes..." value={book.notes}
                 onChange={(e) => updateBookNotes(book.id, e.target.value)}
-                className="glass"
-                style={{
-                    width: '100%',
-                    minHeight: '60px',
-                    padding: '0.5rem',
-                    fontSize: '0.875rem',
-                    color: 'var(--text-main)',
-                    border: 'none',
-                    resize: 'vertical',
-                    marginTop: '0.5rem'
-                }}
-            />
+                className={`glass ${s.notes}`}
+                onClick={(e) => e.stopPropagation()} />
 
-            <button
-                onClick={() => removeBook(book.id)}
-                aria-label={`Remove ${book.title} from library`}
-                style={{
-                    marginTop: 'auto',
-                    alignSelf: 'flex-end',
-                    color: '#f87171',
-                    background: 'none',
-                    padding: '0.5rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.25rem',
-                    fontSize: '0.75rem'
-                }}
-            >
-                <Trash2 size={14} /> Remove
-            </button>
+            <div className={s.actionsRow} onClick={(e) => e.stopPropagation()}>
+                <button onClick={handleEdit} aria-label={`Edit ${book.title}`} className={s.editBtn}>
+                    <Pencil size={14} /> Edit
+                </button>
+                <button onClick={handleRemove} aria-label={`Remove ${book.title} from library`} className={s.removeBtn}>
+                    <Trash2 size={14} /> Remove
+                </button>
+            </div>
         </div>
     );
 };

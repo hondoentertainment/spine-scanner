@@ -21,15 +21,15 @@ describe('exportToJSON / importFromJSON', () => {
         const books = [makeBook(), makeBook({ id: '2', isbn: '9780544003415', title: '1984' })];
         const json = exportToJSON(books);
         const imported = importFromJSON(json);
-        expect(imported).toHaveLength(2);
-        expect(imported[0].title).toBe('The Great Gatsby');
-        expect(imported[1].title).toBe('1984');
+        expect(imported.books).toHaveLength(2);
+        expect(imported.books[0].title).toBe('The Great Gatsby');
+        expect(imported.books[1].title).toBe('1984');
     });
 
     it('includes version and export date in JSON', () => {
         const json = exportToJSON([makeBook()]);
         const parsed = JSON.parse(json);
-        expect(parsed.version).toBe(1);
+        expect(parsed.version).toBe(2);
         expect(parsed.exportedAt).toBeDefined();
     });
 
@@ -37,7 +37,7 @@ describe('exportToJSON / importFromJSON', () => {
         const books = [makeBook()];
         const json = JSON.stringify(books);
         const imported = importFromJSON(json);
-        expect(imported).toHaveLength(1);
+        expect(imported.books).toHaveLength(1);
     });
 
     it('throws on invalid JSON format', () => {
@@ -48,9 +48,9 @@ describe('exportToJSON / importFromJSON', () => {
         const book = makeBook({ notes: 'Some notes', status: 'reading' });
         const json = exportToJSON([book]);
         const imported = importFromJSON(json);
-        expect(imported[0].notes).toBe('Some notes');
-        expect(imported[0].status).toBe('reading');
-        expect(imported[0].pageCount).toBe(180);
+        expect(imported.books[0].notes).toBe('Some notes');
+        expect(imported.books[0].status).toBe('reading');
+        expect(imported.books[0].pageCount).toBe(180);
     });
 });
 

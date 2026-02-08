@@ -1,21 +1,14 @@
 import React, { useState } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useBookLookup } from '../hooks/useBookLookup.ts';
+import { useToast } from './Toast.tsx';
 import { parseCSV, extractISBNs } from '../utils/importLogic.ts';
 import type { ImportResult } from '../utils/importLogic.ts';
 import { exportToGoodreadsCSV } from '../utils/goodreadsExport.ts';
 import { exportToJSON, importFromJSON, exportToLibraryThingTSV, exportToStoryGraphCSV } from '../utils/exportFormats.ts';
-import {
-    Download,
-    Upload,
-    Trash2,
-    Globe,
-    AlertTriangle,
-    CheckCircle,
-    Loader2,
-    X
-} from 'lucide-react';
+import { Download, Upload, Trash2, Globe, CheckCircle, Loader2, X } from 'lucide-react';
 import type { BookEntry } from '../types.ts';
+import s from './DataManagement.module.css';
 
 interface DataManagementProps {
     onClose?: () => void;
@@ -24,12 +17,12 @@ interface DataManagementProps {
 type ExportFormat = 'json' | 'goodreads' | 'librarything' | 'storygraph';
 
 const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
-    const { books, addBook, removeBook } = useBookStore();
+    const { books, shelves, addBook, removeBook, setShelves } = useBookStore();
     const { lookupByIsbn } = useBookLookup();
+    const { toast, confirm } = useToast();
 
     const [importing, setImporting] = useState(false);
     const [result, setResult] = useState<ImportResult | null>(null);
-    const [showConfirmDelete, setShowConfirmDelete] = useState(false);
     const [url, setUrl] = useState('');
     const [webImportStep, setWebImportStep] = useState<'idle' | 'fetching' | 'confirm'>('idle');
     const [foundIsbns, setFoundIsbns] = useState<string[]>([]);
@@ -38,39 +31,46 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
     const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
         setImporting(true);
         setResult(null);
 
         const reader = new FileReader();
         reader.onload = async (event) => {
             const text = event.target?.result as string;
-
-            // Try JSON import first
             if (file.name.endsWith('.json')) {
                 try {
-                    const jsonBooks = importFromJSON(text);
+                    const { books: jsonBooks, shelves: jsonShelves } = importFromJSON(text);
                     const res: ImportResult = { added: 0, duplicates: 0, errors: [] };
+                    const existingShelfIds = new Set(shelves.map((s) => s.id));
+                    const mergedShelves = [...shelves];
+                    if (jsonShelves.length > 0) {
+                        jsonShelves.forEach((shelf) => {
+                            if (!existingShelfIds.has(shelf.id)) {
+                                mergedShelves.push(shelf);
+                                existingShelfIds.add(shelf.id);
+                            }
+                        });
+                        setShelves(mergedShelves);
+                    }
+                    const knownShelfIds = new Set(mergedShelves.map((shelf) => shelf.id));
                     for (const book of jsonBooks) {
-                        if (books.find(b => b.isbn === book.isbn)) {
-                            res.duplicates++;
-                        } else {
-                            addBook({ ...book, id: crypto.randomUUID() });
+                        if (books.find(b => b.isbn === book.isbn)) res.duplicates++;
+                        else {
+                            const safeShelfIds = (book.shelfIds || []).filter((id) => knownShelfIds.has(id));
+                            addBook({ ...book, id: crypto.randomUUID(), shelfIds: safeShelfIds });
                             res.added++;
                         }
                     }
                     setResult(res);
                     setImporting(false);
+                    toast(`Imported ${res.added} books`, 'success');
                     return;
-                } catch {
-                    // Fall through to CSV/text parsing
-                }
+                } catch { /* fall through */ }
             }
 
             let entries: Partial<BookEntry>[] = [];
-            if (file.name.endsWith('.csv') || text.includes(',')) {
-                entries = parseCSV(text);
-            } else {
+            if (file.name.endsWith('.csv') || text.includes(',')) entries = parseCSV(text);
+            else {
                 const isbns = extractISBNs(text);
                 entries = isbns.map((isbn: string) => ({ isbn }));
             }
@@ -85,35 +85,23 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
         try {
             const res = await fetch(url).catch(() => null);
             let text = '';
-            if (res) {
-                text = await res.text();
-            } else {
-                if (url.includes('amazon') || url.includes('goodreads')) {
-                    text = 'ISBN: 9780141036144, 9780544003415';
-                }
-            }
+            if (res) text = await res.text();
+            else if (url.includes('amazon') || url.includes('goodreads')) text = 'ISBN: 9780141036144, 9780544003415';
 
             const isbns = extractISBNs(text);
             setFoundIsbns(isbns);
             setWebImportStep('confirm');
         } catch {
-            alert('Failed to fetch page. Ensure it is a public URL.');
+            toast('Failed to fetch page. Ensure it is a public URL.', 'error');
             setWebImportStep('idle');
         }
     };
 
     const processEntries = async (entries: Partial<BookEntry>[]) => {
         const res: ImportResult = { added: 0, duplicates: 0, errors: [] };
-
         for (const entry of entries) {
             if (!entry.isbn) continue;
-
-            const exists = books.find(b => b.isbn === entry.isbn);
-            if (exists) {
-                res.duplicates++;
-                continue;
-            }
-
+            if (books.find(b => b.isbn === entry.isbn)) { res.duplicates++; continue; }
             const metadata = await lookupByIsbn(entry.isbn);
             if (metadata) {
                 addBook({
@@ -127,164 +115,131 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                     status: (entry.status as BookEntry['status']) || 'read',
                     notes: entry.notes || '',
                     dateAdded: new Date().toISOString(),
+                    shelfIds: [],
                 });
                 res.added++;
             } else {
                 res.errors.push(`Metadata not found for ISBN ${entry.isbn}`);
             }
         }
-
         setResult(res);
         setImporting(false);
         setWebImportStep('idle');
+        toast(`Imported ${res.added} book${res.added !== 1 ? 's' : ''}`, 'success');
     };
 
     const downloadFile = (content: string, filename: string, mime: string) => {
         const blob = new Blob([content], { type: `${mime};charset=utf-8;` });
-        const url = URL.createObjectURL(blob);
+        const u = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        link.click();
-        URL.revokeObjectURL(url);
+        link.href = u; link.download = filename; link.click();
+        URL.revokeObjectURL(u);
     };
 
     const handleExport = () => {
         const date = new Date().toISOString().split('T')[0];
         switch (exportFormat) {
-            case 'json':
-                downloadFile(exportToJSON(books), `spinescanner_${date}.json`, 'application/json');
-                break;
-            case 'goodreads':
-                downloadFile(exportToGoodreadsCSV(books), `spinescanner_goodreads_${date}.csv`, 'text/csv');
-                break;
-            case 'librarything':
-                downloadFile(exportToLibraryThingTSV(books), `spinescanner_librarything_${date}.tsv`, 'text/tab-separated-values');
-                break;
-            case 'storygraph':
-                downloadFile(exportToStoryGraphCSV(books), `spinescanner_storygraph_${date}.csv`, 'text/csv');
-                break;
+            case 'json': downloadFile(exportToJSON(books, shelves), `spinescanner_${date}.json`, 'application/json'); break;
+            case 'goodreads': downloadFile(exportToGoodreadsCSV(books), `spinescanner_goodreads_${date}.csv`, 'text/csv'); break;
+            case 'librarything': downloadFile(exportToLibraryThingTSV(books), `spinescanner_librarything_${date}.tsv`, 'text/tab-separated-values'); break;
+            case 'storygraph': downloadFile(exportToStoryGraphCSV(books), `spinescanner_storygraph_${date}.csv`, 'text/csv'); break;
+        }
+        toast('Export downloaded', 'success');
+    };
+
+    const removeAllBooks = async () => {
+        const yes = await confirm({
+            title: 'Remove All Books',
+            message: `This will permanently delete all ${books.length} books. This action is irreversible.`,
+            confirmLabel: 'Yes, remove everything',
+            danger: true,
+        });
+        if (yes) {
+            books.forEach(b => removeBook(b.id));
+            toast('Library cleared', 'info');
+            onClose?.();
         }
     };
 
-    const removeAllBooks = () => {
-        books.forEach(b => removeBook(b.id));
-        setShowConfirmDelete(false);
-        onClose?.();
-    };
-
     return (
-        <div className="glass" style={{ padding: '2rem', maxWidth: '600px', margin: '2rem auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                <h2 style={{ fontSize: '1.5rem', fontWeight: 800 }}>Manage Library Data</h2>
-                {onClose && <button onClick={onClose} aria-label="Close data management" style={{ background: 'none', color: 'var(--text-muted)' }}><X /></button>}
+        <div className={`glass ${s.container}`}>
+            <div className={s.header}>
+                <h2 className={s.title}>Manage Library Data</h2>
+                {onClose && <button onClick={onClose} aria-label="Close data management" className={s.closeBtn}><X /></button>}
             </div>
 
-            <section style={{ marginBottom: '2rem' }}>
-                <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {/* Export */}
+            <section className={s.section}>
+                <h3 className={s.sectionTitle}>
                     <Download size={20} style={{ color: 'var(--accent-blue)' }} /> Export Library
                 </h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                <p className={s.sectionDesc}>
                     Back up your collection. JSON preserves all data; CSV formats are for importing into other services.
                 </p>
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                    {([
-                        ['json', 'JSON (Full Backup)'],
-                        ['goodreads', 'Goodreads CSV'],
-                        ['librarything', 'LibraryThing TSV'],
-                        ['storygraph', 'StoryGraph CSV'],
-                    ] as [ExportFormat, string][]).map(([fmt, label]) => (
-                        <button
-                            key={fmt}
-                            onClick={() => setExportFormat(fmt)}
-                            className="glass"
+                <div className={s.formatRow}>
+                    {([['json', 'JSON (Full Backup)'], ['goodreads', 'Goodreads CSV'], ['librarything', 'LibraryThing TSV'], ['storygraph', 'StoryGraph CSV']] as [ExportFormat, string][]).map(([fmt, label]) => (
+                        <button key={fmt} onClick={() => setExportFormat(fmt)} className={`glass ${s.formatBtn}`}
                             style={{
-                                padding: '0.5rem 0.75rem',
-                                fontSize: '0.8rem',
-                                fontWeight: 600,
                                 color: exportFormat === fmt ? 'var(--accent-blue)' : 'var(--text-muted)',
                                 background: exportFormat === fmt ? 'rgba(56, 189, 248, 0.1)' : undefined,
-                                borderRadius: '9999px',
-                            }}
-                        >
+                            }}>
                             {label}
                         </button>
                     ))}
                 </div>
-                <button onClick={handleExport} className="glass" style={{ width: '100%', padding: '1rem', background: 'var(--primary)', color: 'white', fontWeight: 600 }}>
+                <button onClick={handleExport} className={`glass ${s.exportBtn}`}>
                     Export ({exportFormat.toUpperCase()})
                 </button>
             </section>
 
-            <section style={{ marginBottom: '2rem', borderTop: '1px solid var(--glass-border)', paddingTop: '2rem' }}>
-                <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {/* File import */}
+            <section className={s.sectionBorder}>
+                <h3 className={s.sectionTitle}>
                     <Upload size={20} style={{ color: '#a855f7' }} /> Import from File
                 </h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                <p className={s.sectionDesc}>
                     Upload a .json, .csv, or .txt file. JSON import restores full backups. CSV/TXT requires ISBN column.
                 </p>
-                <div style={{ position: 'relative' }}>
-                    <input
-                        type="file"
-                        accept=".csv,.txt,.json,.tsv"
-                        onChange={handleFileImport}
-                        aria-label="Import books from file"
-                        style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-                        disabled={importing}
-                    />
-                    <div className="glass" style={{ padding: '1rem', textAlign: 'center', border: '2px dashed var(--glass-border)', color: 'var(--text-muted)' }}>
+                <div className={s.fileWrap}>
+                    <input type="file" accept=".csv,.txt,.json,.tsv" onChange={handleFileImport}
+                        aria-label="Import books from file" className={s.fileInput} disabled={importing} />
+                    <div className={`glass ${s.fileDrop}`}>
                         {importing ? <Loader2 className="animate-spin mx-auto" /> : 'Drop file here or click to browse'}
                     </div>
                 </div>
             </section>
 
-            <section style={{ marginBottom: '2rem', borderTop: '1px solid var(--glass-border)', paddingTop: '2rem' }}>
-                <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {/* Web import */}
+            <section className={s.sectionBorder}>
+                <h3 className={s.sectionTitle}>
                     <Globe size={20} style={{ color: '#22c55e' }} /> Import from Web
                 </h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-                    Fetch books from a public webpage (e.g. Amazon Wishlist).
-                </p>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input
-                        type="url"
-                        placeholder="https://example.com/books"
-                        value={url}
-                        onChange={(e) => setUrl(e.target.value)}
-                        className="glass"
-                        aria-label="URL to import books from"
-                        style={{ flex: 1, padding: '0.75rem', color: 'white' }}
-                    />
-                    <button
-                        onClick={handleWebImport}
-                        disabled={webImportStep === 'fetching' || !url}
-                        className="glass"
-                        style={{ padding: '0 1.5rem', background: 'var(--glass-bg)', color: 'white' }}
-                    >
+                <p className={s.sectionDesc}>Fetch books from a public webpage (e.g. Amazon Wishlist).</p>
+                <div className={s.urlRow}>
+                    <input type="url" placeholder="https://example.com/books" value={url}
+                        onChange={(e) => setUrl(e.target.value)} className={`glass ${s.urlInput}`}
+                        aria-label="URL to import books from" />
+                    <button onClick={handleWebImport} disabled={webImportStep === 'fetching' || !url}
+                        className={`glass ${s.fetchBtn}`}>
                         {webImportStep === 'fetching' ? <Loader2 className="animate-spin" /> : 'Fetch'}
                     </button>
                 </div>
-
                 {webImportStep === 'confirm' && (
-                    <div className="glass" style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(56, 189, 248, 0.1)' }}>
-                        <p style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>Found <strong>{foundIsbns.length}</strong> ISBNs on this page.</p>
-                        <button
-                            onClick={() => processEntries(foundIsbns.map(isbn => ({ isbn })))}
-                            className="glass"
-                            style={{ padding: '0.5rem 1rem', background: 'var(--accent-blue)', color: 'white', fontSize: '0.8rem' }}
-                        >
-                            Confirm Import
-                        </button>
+                    <div className={`glass ${s.confirmBox}`}>
+                        <p style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>
+                            Found <strong>{foundIsbns.length}</strong> ISBNs on this page.
+                        </p>
+                        <button onClick={() => processEntries(foundIsbns.map(isbn => ({ isbn })))}
+                            className={`glass ${s.confirmImportBtn}`}>Confirm Import</button>
                     </div>
                 )}
             </section>
 
+            {/* Result */}
             {result && (
-                <div className="glass" style={{ marginBottom: '2rem', padding: '1rem', border: '1px solid var(--accent-blue)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', color: 'var(--accent-blue)' }}>
-                        <CheckCircle size={18} /> Import Summary
-                    </div>
-                    <ul style={{ fontSize: '0.85rem', color: 'var(--text-muted)', listStyle: 'none' }}>
+                <div className={`glass ${s.result}`}>
+                    <div className={s.resultHeader}><CheckCircle size={18} /> Import Summary</div>
+                    <ul className={s.resultList}>
                         <li>Books added: {result.added}</li>
                         <li>Duplicates skipped: {result.duplicates}</li>
                         {result.errors.length > 0 && <li style={{ color: '#f87171' }}>Errors: {result.errors.length}</li>}
@@ -292,32 +247,11 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                 </div>
             )}
 
-            <section style={{ borderTop: '1px solid rgba(239, 68, 68, 0.2)', paddingTop: '2rem' }}>
-                {!showConfirmDelete ? (
-                    <button
-                        onClick={() => setShowConfirmDelete(true)}
-                        style={{ color: '#f87171', background: 'none', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                    >
-                        <Trash2 size={16} /> Remove all books from library
-                    </button>
-                ) : (
-                    <div className="glass" style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-                        <p style={{ color: '#f87171', fontWeight: 600, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <AlertTriangle size={18} /> Are you absolutely sure?
-                        </p>
-                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                            This will permanently delete all {books.length} books. This action is irreversible.
-                        </p>
-                        <div style={{ display: 'flex', gap: '1rem' }}>
-                            <button onClick={removeAllBooks} style={{ background: '#ef4444', color: 'white', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontWeight: 600 }}>
-                                Yes, remove everything
-                            </button>
-                            <button onClick={() => setShowConfirmDelete(false)} style={{ background: 'var(--glass-bg)', color: 'white', padding: '0.5rem 1rem', borderRadius: '0.5rem' }}>
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                )}
+            {/* Danger zone */}
+            <section className={s.dangerSection}>
+                <button onClick={removeAllBooks} className={s.dangerBtn}>
+                    <Trash2 size={16} /> Remove all books from library
+                </button>
             </section>
         </div>
     );

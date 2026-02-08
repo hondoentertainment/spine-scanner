@@ -1,0 +1,224 @@
+.debugBtn {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  padding: 0.625rem;
+  border-radius: 50%;
+  color: white;
+  border: none;
+  cursor: pointer;
+  z-index: 100;
+  -webkit-tap-highlight-color: transparent;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.debugPanel {
+  position: absolute;
+  top: 3.5rem;
+  right: 0.75rem;
+  width: min(260px, calc(100% - 1.5rem));
+  background: rgba(0, 0, 0, 0.85);
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.65rem;
+  color: #00ff00;
+  font-family: monospace;
+  pointer-events: none;
+  z-index: 100;
+  border: 1px solid #00ff00;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.debugHeader {
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid #00ff00;
+  padding-bottom: 0.2rem;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.debugLine {
+  margin-bottom: 0.2rem;
+}
+
+.copyLogsBtn {
+  pointer-events: auto;
+  background: rgba(0, 0, 0, 0.6);
+  color: #00ff00;
+  border: 1px solid #00ff00;
+  border-radius: 0.35rem;
+  padding: 0.15rem 0.35rem;
+  font-size: 0.6rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.9));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.statusLine {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+  flex-wrap: wrap;
+}
+
+.statusText {
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.cameraStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.cameraDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.cameraDotReady {
+  background: #22c55e;
+}
+
+.cameraDotError {
+  background: #ef4444;
+}
+
+.cameraDotPending {
+  background: #f59e0b;
+}
+
+.cameraLabel {
+  font-weight: 600;
+}
+
+.cameraError {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.75rem;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  border-radius: 0.5rem;
+  text-align: center;
+}
+
+.btnRow {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.captureBtn {
+  padding: 0.875rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  min-height: 48px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.roundBtn {
+  padding: 0.875rem;
+  color: white;
+  border-radius: 9999px;
+  min-width: 48px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.manualForm {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 340px;
+}
+
+.manualInput {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: none;
+  color: white;
+  font-size: 1rem;
+  min-height: 48px;
+  font-family: inherit;
+  outline: none;
+}
+
+.submitBtn {
+  padding: 0.75rem;
+  background: var(--accent-blue);
+  color: white;
+  border-radius: 0.5rem;
+  min-width: 48px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.closeBtn {
+  padding: 0.75rem;
+  color: var(--text-muted);
+  min-width: 48px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.suggestionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.suggestionBtn {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-main);
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.suggestionNote {
+  color: #f59e0b;
+  font-weight: 700;
+}

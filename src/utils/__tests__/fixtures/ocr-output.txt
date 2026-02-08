@@ -1,0 +1,9 @@
+SCAN RESULT
+------------
+Title: The book with some random text
+Auth0r: G. Orwell
+
+ISBN 97B-0l4-1O3614-4
+Other text: 0-7432-7356-7
+Barcode: 978-0-14-103614-4
+Noise: 9?8O141O36144

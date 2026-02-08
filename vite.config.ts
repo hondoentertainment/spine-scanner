@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
+const base = process.env.VERCEL ? '/' : '/spine-scanner/';
+
 export default defineConfig({
   plugins: [
     react(),
@@ -58,5 +60,15 @@ export default defineConfig({
       },
     }),
   ],
-  base: '/spine-scanner/',
+  base,
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom'],
+          scanner: ['tesseract.js', '@zxing/browser', '@zxing/library', 'react-webcam'],
+        },
+      },
+    },
+  },
 })

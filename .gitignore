@@ -22,3 +22,18 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.vercel
+
+# Test artifacts
+test-results/
+
+# Build debug output
+build_output.txt
+ts_errors.txt
+tsc_errors.txt
+
+# OCR trained data (large binary)
+eng.traineddata
+
+# Environment
+.env
