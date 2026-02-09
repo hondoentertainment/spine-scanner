@@ -186,7 +186,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
 
     const addLog = useCallback((msg: string) => {
         console.log(`[Scanner] ${msg}`);
-        setDebugLogs(prev => [msg, ...prev].slice(0, 25));
+        setDebugLogs(prev => [msg, ...prev].slice(0, 40));
     }, []);
 
     /* ── Load the tesseract.js module (once) ────────────────────── */
@@ -261,6 +261,18 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
 
         return workerPromise.current;
     }, [loadTessModule, addLog]);
+
+    // Pre-warm OCR engine when camera is ready (downloads WASM + lang data in background)
+    useEffect(() => {
+        if (!cameraReady) return;
+        addLog('Pre-warming OCR engine...');
+        getWorker()
+            .then(w => {
+                if (w) addLog('OCR engine pre-warmed and ready');
+                else addLog('OCR worker unavailable — will use fallback on scan');
+            })
+            .catch(err => addLog(`Pre-warm failed: ${err instanceof Error ? err.message : String(err)}`));
+    }, [cameraReady, getWorker, addLog]);
 
     // Terminate worker on unmount
     useEffect(() => {
@@ -412,12 +424,17 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
             addLog('Phase 1: Barcode scan...');
             setStatus('Scanning barcode...');
 
-            let isbn = await tryBarcodeDecode(img, 'full');
-            if (!isbn) {
-                isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_NARROW), 'narrow');
-            }
-            if (!isbn) {
-                isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_MEDIUM), 'medium');
+            let isbn: string | null = null;
+            try {
+                isbn = await tryBarcodeDecode(img, 'full');
+                if (!isbn) {
+                    isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_NARROW), 'narrow');
+                }
+                if (!isbn) {
+                    isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_MEDIUM), 'medium');
+                }
+            } catch (barcodeErr) {
+                addLog(`Barcode phase error: ${barcodeErr instanceof Error ? barcodeErr.message : String(barcodeErr)}`);
             }
 
             if (isbn && isValidIsbn(isbn)) {
@@ -451,17 +468,22 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
             ];
 
             for (const pass of ocrPasses) {
-                setStatus(`OCR: ${pass.label}...`);
-                const processed = preprocessImage(img, canvas, pass.rotation, pass.crop, pass.mode);
-                const result = await runOcr(processed, pass.label);
-                result.allCandidates.forEach(c => allCandidates.add(c));
+                try {
+                    setStatus(`OCR: ${pass.label}...`);
+                    const processed = preprocessImage(img, canvas, pass.rotation, pass.crop, pass.mode);
+                    const result = await runOcr(processed, pass.label);
+                    result.allCandidates.forEach(c => allCandidates.add(c));
 
-                if (result.isbn) {
-                    addLog(`ISBN via OCR [${pass.label}]: ${result.isbn}`);
-                    setStatus(`Found ISBN: ${result.isbn}`);
-                    setAutoScan(false);
-                    onScan(result.isbn);
-                    return;
+                    if (result.isbn) {
+                        addLog(`ISBN via OCR [${pass.label}]: ${result.isbn}`);
+                        setStatus(`Found ISBN: ${result.isbn}`);
+                        setAutoScan(false);
+                        onScan(result.isbn);
+                        return;
+                    }
+                } catch (ocrErr) {
+                    addLog(`OCR pass [${pass.label}] error: ${ocrErr instanceof Error ? ocrErr.message : String(ocrErr)}`);
+                    // Continue to next pass
                 }
             }
 
@@ -485,9 +507,12 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
             }
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
+            const stack = err instanceof Error ? err.stack?.split('\n').slice(0, 3).join(' | ') : '';
             addLog(`SCAN ERROR: ${msg}`);
-            setStatus('Scan failed. Try again.');
-            toast('Scan failed. Please try again or use manual entry.', 'error');
+            if (stack) addLog(`Stack: ${stack}`);
+            setStatus(`Scan error: ${msg.substring(0, 100)}`);
+            setShowDebug(true); // Auto-open debug panel so user can see details
+            toast(`Scan failed: ${msg.substring(0, 60)}`, 'error');
         } finally {
             processingRef.current = false;
             setProcessing(false);
