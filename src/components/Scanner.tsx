@@ -30,6 +30,19 @@ const CROP_NARROW: CropRegion = { widthFrac: 0.92, heightFrac: 0.28, label: 'nar
 const CROP_MEDIUM: CropRegion = { widthFrac: 0.94, heightFrac: 0.50, label: 'medium' };
 const CROP_WIDE: CropRegion   = { widthFrac: 0.96, heightFrac: 0.75, label: 'wide' };
 
+/**
+ * Build local asset paths for Tesseract.js.
+ *
+ * The worker script and WASM core files are served from /tesseract/
+ * on the same origin, eliminating CDN dependency for the critical assets.
+ * Language data still loads from CDN on first visit (cached in IndexedDB
+ * by tesseract.js after that).
+ *
+ * import.meta.env.BASE_URL is set by Vite to the `base` config value
+ * (e.g., '/spine-scanner/' on GitHub Pages, '/' on Vercel).
+ */
+const TESS_ASSET_BASE = `${import.meta.env.BASE_URL}tesseract/`.replace('//', '/');
+
 const getVideoConstraints = () => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     return {
@@ -222,8 +235,15 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                     return null;
                 }
 
-                addLog('Creating OCR worker...');
+                // Resolve full URLs for the web worker (it runs in a Blob URL
+                // context, so it needs absolute URLs for importScripts).
+                const workerURL = new URL(`${TESS_ASSET_BASE}worker.min.js`, window.location.href).href;
+                const coreURL = new URL(TESS_ASSET_BASE, window.location.href).href;
+                addLog(`Creating OCR worker (local assets: ${workerURL.substring(0, 60)}...)`);
+
                 const worker = await tess.createWorker('eng', 1, {
+                    workerPath: workerURL,
+                    corePath: coreURL,
                     logger: (m: { status: string; progress?: number }) => {
                         if (m.status === 'loading tesseract core') {
                             setStatus('Loading OCR engine...');

@@ -1,0 +1,42 @@
+/**
+ * Copies tesseract.js WASM core files from node_modules to public/tesseract/
+ * so the OCR web worker can load them from the same origin instead of CDN.
+ *
+ * This eliminates the most fragile CDN dependency: the WASM core is loaded
+ * via importScripts() inside a Blob URL worker, which cannot be intercepted
+ * by any Service Worker. Serving locally makes it reliable on all networks.
+ *
+ * Runs as postinstall and prebuild hook.
+ */
+import { copyFileSync, mkdirSync, existsSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const root = resolve(__dirname, '..');
+const targetDir = resolve(root, 'public', 'tesseract');
+
+// LSTM-only variants (matches OEM.LSTM_ONLY default).
+// getCore.js picks the right one based on browser SIMD support.
+const CORE_FILES = [
+  'tesseract-core-simd-lstm.wasm.js',       // Chrome 91+, Firefox 89+
+  'tesseract-core-lstm.wasm.js',             // No-SIMD fallback
+  'tesseract-core-relaxedsimd-lstm.wasm.js', // Chrome 114+, Safari 15.2+
+];
+
+mkdirSync(targetDir, { recursive: true });
+
+let copied = 0;
+for (const file of CORE_FILES) {
+  const src = resolve(root, 'node_modules', 'tesseract.js-core', file);
+  const dest = resolve(targetDir, file);
+  if (existsSync(src)) {
+    copyFileSync(src, dest);
+    console.log(`  ✓ ${file}`);
+    copied++;
+  } else {
+    console.warn(`  ⚠ ${file} not found in node_modules`);
+  }
+}
+
+console.log(`Copied ${copied}/${CORE_FILES.length} tesseract core files to public/tesseract/`);

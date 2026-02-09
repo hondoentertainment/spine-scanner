@@ -35,5 +35,8 @@ tsc_errors.txt
 # OCR trained data (large binary)
 eng.traineddata
 
+# Tesseract WASM core files copied from node_modules at build time (~3.8 MB each)
+public/tesseract/*.wasm.js
+
 # Environment
 .env
