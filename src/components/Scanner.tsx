@@ -7,12 +7,29 @@ import { extractIsbnCandidates } from '../utils/ocr.ts';
 import { useToast } from './Toast.tsx';
 import s from './Scanner.module.css';
 
+/* ================================================================
+ *  Types
+ * ================================================================ */
+
 interface ScannerProps {
     onScan: (isbn: string) => void;
     isScanning: boolean;
 }
 
-/* ── Camera constraints ───────────────────────────────────────── */
+interface CropRegion {
+    widthFrac: number;
+    heightFrac: number;
+    label: string;
+}
+
+/* ================================================================
+ *  Constants
+ * ================================================================ */
+
+const CROP_NARROW: CropRegion = { widthFrac: 0.92, heightFrac: 0.28, label: 'narrow' };
+const CROP_MEDIUM: CropRegion = { widthFrac: 0.94, heightFrac: 0.50, label: 'medium' };
+const CROP_WIDE: CropRegion   = { widthFrac: 0.96, heightFrac: 0.75, label: 'wide' };
+
 const getVideoConstraints = () => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     return {
@@ -22,29 +39,16 @@ const getVideoConstraints = () => {
     };
 };
 
-/* ── Image preprocessing for OCR ──────────────────────────────── */
-interface CropRegion {
-    /** Fraction of image width (0-1) */
-    widthFrac: number;
-    /** Fraction of image height (0-1) */
-    heightFrac: number;
-    label: string;
-}
-
-const CROP_NARROW: CropRegion = { widthFrac: 0.92, heightFrac: 0.28, label: 'narrow' };
-const CROP_MEDIUM: CropRegion = { widthFrac: 0.94, heightFrac: 0.50, label: 'medium' };
-const CROP_WIDE: CropRegion   = { widthFrac: 0.96, heightFrac: 0.75, label: 'wide' };
+/* ================================================================
+ *  Image preprocessing helpers
+ * ================================================================ */
 
 /**
- * Preprocess an image for Tesseract OCR.
+ * Preprocess for OCR. Two modes:
+ *   "clean"    → grayscale only (let Tesseract do adaptive thresholding)
+ *   "enhanced" → grayscale + moderate contrast boost
  *
- * Key insight: Modern Tesseract.js v7 handles clean grayscale FAR better
- * than aggressively binarized images. Tesseract does its own adaptive
- * thresholding internally — feeding it a binarized image defeats that.
- *
- * Strategy:
- *   "clean"    → grayscale + 2x scale (let Tesseract handle the rest)
- *   "enhanced" → grayscale + moderate contrast/brightness + 2x scale
+ * NO binarization — Tesseract.js v7 handles that internally.
  */
 const preprocessImage = (
     img: HTMLImageElement,
@@ -54,7 +58,6 @@ const preprocessImage = (
     mode: 'clean' | 'enhanced' = 'clean',
 ): string => {
     const ctx = canvas.getContext('2d')!;
-
     const cropX = img.width * (1 - crop.widthFrac) / 2;
     const cropY = img.height * (1 - crop.heightFrac) / 2;
     const cropW = img.width * crop.widthFrac;
@@ -72,29 +75,22 @@ const preprocessImage = (
     }
 
     ctx.save();
-
     if (rotateDeg !== 0) {
         ctx.translate(canvas.width / 2, canvas.height / 2);
         ctx.rotate((rotateDeg * Math.PI) / 180);
         ctx.translate(-outW / 2, -outH / 2);
     }
 
-    // Apply filter based on mode — NO binarization
-    if (mode === 'enhanced') {
-        ctx.filter = 'grayscale(100%) contrast(140%) brightness(108%)';
-    } else {
-        ctx.filter = 'grayscale(100%) contrast(110%)';
-    }
+    ctx.filter = mode === 'enhanced'
+        ? 'grayscale(100%) contrast(140%) brightness(108%)'
+        : 'grayscale(100%) contrast(110%)';
 
     ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
     ctx.restore();
-
     return canvas.toDataURL('image/png');
 };
 
-/**
- * Crop the image for barcode scanning (no grayscale — zxing handles it).
- */
+/** Crop for barcode — no filters, zxing handles grayscale internally. */
 const cropForBarcode = (
     img: HTMLImageElement,
     canvas: HTMLCanvasElement,
@@ -105,21 +101,55 @@ const cropForBarcode = (
     const cropY = img.height * (1 - crop.heightFrac) / 2;
     const cropW = img.width * crop.widthFrac;
     const cropH = img.height * crop.heightFrac;
-
     canvas.width = cropW;
     canvas.height = cropH;
     ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-
     return canvas.toDataURL('image/png');
 };
 
-/* ── Tesseract worker types ───────────────────────────────────── */
-interface TesseractWorker {
-    recognize: (image: string) => Promise<{ data: { text: string } }>;
-    terminate: () => Promise<void>;
+/* ================================================================
+ *  Tesseract.js module resolution helper
+ * ================================================================
+ *
+ *  tesseract.js v7 is CJS (`module.exports = { ... }`).
+ *  When Vite bundles it for browser ESM, the exports may land:
+ *    - As named exports (tesseract.createWorker)
+ *    - On .default (tesseract.default.createWorker)
+ *    - Or both
+ *
+ *  This helper resolves both cases robustly.
+ */
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type TessModule = any;
+
+interface ResolvedTesseract {
+    createWorker: TessModule;
+    recognize: TessModule;
+    PSM: Record<string, string>;
 }
 
-/* ── Component ────────────────────────────────────────────────── */
+function resolveTesseractModule(mod: TessModule): ResolvedTesseract {
+    // Try named exports first, then .default
+    const root = mod.createWorker ? mod : mod.default ?? mod;
+    const createWorker = root.createWorker;
+    const recognize = root.recognize;
+    const PSM = root.PSM ?? {};
+
+    if (!createWorker && !recognize) {
+        throw new Error(
+            `tesseract.js module resolution failed. `
+            + `Keys: [${Object.keys(mod).join(', ')}], `
+            + `default keys: [${mod.default ? Object.keys(mod.default).join(', ') : 'N/A'}]`
+        );
+    }
+    return { createWorker, recognize, PSM };
+}
+
+/* ================================================================
+ *  Component
+ * ================================================================ */
+
 const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
     const webcamRef = useRef<Webcam>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -137,24 +167,107 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
     const processingRef = useRef(false);
     const showManualRef = useRef(false);
 
-    // Persistent barcode reader and Tesseract worker (created once, reused)
     const barcodeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
-    const workerRef = useRef<TesseractWorker | null>(null);
-    const workerInitPromise = useRef<Promise<TesseractWorker> | null>(null);
+
+    // Tesseract state
+    const tessModuleRef = useRef<ResolvedTesseract | null>(null);
+    const tessModulePromise = useRef<Promise<ResolvedTesseract> | null>(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const workerRef = useRef<any>(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const workerPromise = useRef<Promise<any> | null>(null);
+    const workerFailed = useRef(false);
 
     const { toast } = useToast();
 
-    // Keep refs in sync with state
     useEffect(() => { autoScanRef.current = autoScan; }, [autoScan]);
     useEffect(() => { processingRef.current = processing; }, [processing]);
     useEffect(() => { showManualRef.current = showManual; }, [showManual]);
 
     const addLog = useCallback((msg: string) => {
         console.log(`[Scanner] ${msg}`);
-        setDebugLogs(prev => [msg, ...prev].slice(0, 20));
+        setDebugLogs(prev => [msg, ...prev].slice(0, 25));
     }, []);
 
-    /* ── Lazy barcode reader ────────────────────────────────────── */
+    /* ── Load the tesseract.js module (once) ────────────────────── */
+    const loadTessModule = useCallback(async (): Promise<ResolvedTesseract> => {
+        if (tessModuleRef.current) return tessModuleRef.current;
+        if (tessModulePromise.current) return tessModulePromise.current;
+
+        tessModulePromise.current = (async () => {
+            addLog('Loading OCR module...');
+            const raw = await import('tesseract.js');
+            const resolved = resolveTesseractModule(raw);
+            addLog(`OCR module loaded (createWorker: ${!!resolved.createWorker}, recognize: ${!!resolved.recognize}, PSM keys: ${Object.keys(resolved.PSM).length})`);
+            tessModuleRef.current = resolved;
+            tessModulePromise.current = null;
+            return resolved;
+        })();
+
+        return tessModulePromise.current;
+    }, [addLog]);
+
+    /* ── Create a persistent Tesseract worker (with fallback) ───── */
+    const getWorker = useCallback(async () => {
+        if (workerRef.current) return workerRef.current;
+        if (workerFailed.current) return null; // Don't retry if previous attempt failed
+        if (workerPromise.current) return workerPromise.current;
+
+        workerPromise.current = (async () => {
+            try {
+                const tess = await loadTessModule();
+                if (!tess.createWorker) {
+                    addLog('createWorker not available, will use recognize() fallback');
+                    workerFailed.current = true;
+                    return null;
+                }
+
+                addLog('Creating OCR worker...');
+                const worker = await tess.createWorker('eng', 1, {
+                    logger: (m: { status: string; progress?: number }) => {
+                        if (m.status === 'loading tesseract core') {
+                            setStatus('Loading OCR engine...');
+                        } else if (m.status === 'loading language traineddata') {
+                            setStatus('Downloading language data...');
+                        } else if (m.status === 'initializing tesseract') {
+                            setStatus('Initializing OCR...');
+                        } else if (m.status === 'recognizing text' && m.progress) {
+                            setStatus(`OCR: ${Math.round(m.progress * 100)}%`);
+                        }
+                    },
+                });
+
+                // Configure for ISBN-friendly recognition.
+                // PSM.SINGLE_BLOCK = '6' → treat image as a single uniform block of text.
+                // NO character whitelist — it causes Tesseract to map ALL letters to
+                // allowed chars, producing massive digit noise that drowns out real ISBNs.
+                // Instead, we let Tesseract read everything and extract ISBNs from the text.
+                await worker.setParameters({
+                    tessedit_pageseg_mode: tess.PSM.SINGLE_BLOCK || '6',
+                });
+
+                addLog('OCR worker ready');
+                workerRef.current = worker;
+                workerPromise.current = null;
+                return worker;
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                addLog(`Worker creation failed: ${msg}`);
+                workerFailed.current = true;
+                workerPromise.current = null;
+                return null;
+            }
+        })();
+
+        return workerPromise.current;
+    }, [loadTessModule, addLog]);
+
+    // Terminate worker on unmount
+    useEffect(() => {
+        return () => { workerRef.current?.terminate?.().catch(() => {}); };
+    }, []);
+
+    /* ── Barcode reader ─────────────────────────────────────────── */
     const getBarcodeReader = useCallback(async () => {
         if (barcodeReaderRef.current) return barcodeReaderRef.current;
         const mod = await import('@zxing/browser');
@@ -163,84 +276,32 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
         return reader;
     }, []);
 
-    /* ── Lazy persistent Tesseract worker ────────────────────────── */
-    const getWorker = useCallback(async (): Promise<TesseractWorker> => {
-        if (workerRef.current) return workerRef.current;
-
-        // Ensure only one worker creation at a time
-        if (workerInitPromise.current) return workerInitPromise.current;
-
-        workerInitPromise.current = (async () => {
-            addLog('Initializing OCR engine...');
-            const tesseract = await import('tesseract.js');
-            const createWorker = tesseract.createWorker;
-            const PSM = tesseract.PSM;
-
-            const worker = await createWorker('eng', 1, {
-                logger: (m: { status: string; progress?: number }) => {
-                    if (m.status === 'recognizing text' && m.progress) {
-                        setStatus(`OCR: ${Math.round(m.progress * 100)}%`);
-                    }
-                },
-            });
-
-            // Configure for ISBN detection:
-            // - SINGLE_BLOCK: treat the image as a single block of text
-            // - Character whitelist: only digits, X, hyphens, spaces, and ISBN label chars
-            await worker.setParameters({
-                tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
-                tessedit_char_whitelist: '0123456789X- :ISBNisbn.',
-            });
-
-            addLog('OCR engine ready');
-            workerRef.current = worker as unknown as TesseractWorker;
-            workerInitPromise.current = null;
-            return workerRef.current;
-        })();
-
-        return workerInitPromise.current;
-    }, [addLog]);
-
-    // Terminate worker on unmount
-    useEffect(() => {
-        return () => {
-            workerRef.current?.terminate().catch(() => {});
-        };
-    }, []);
-
-    /* ── Try barcode decoding on an image/canvas ────────────────── */
+    /* ── Try barcode decode on an image source ──────────────────── */
     const tryBarcodeDecode = useCallback(async (
         imageSource: HTMLImageElement | string,
         label: string,
     ): Promise<string | null> => {
         try {
             const reader = await getBarcodeReader();
-
             let result;
             if (typeof imageSource === 'string') {
-                // Data URL → load into an Image element for zxing
                 const tempImg = new Image();
                 await new Promise<void>((resolve, reject) => {
                     tempImg.onload = () => resolve();
-                    tempImg.onerror = () => reject(new Error('Failed to load'));
+                    tempImg.onerror = () => reject(new Error('img load fail'));
                     tempImg.src = imageSource;
                 });
                 result = await reader.decodeFromImageElement(tempImg);
             } else {
                 result = await reader.decodeFromImageElement(imageSource);
             }
-
             const text = result.getText().replace(/[^0-9X]/g, '');
-            if ((text.length === 13 || text.length === 10) && isValidIsbn(text)) {
-                addLog(`Barcode [${label}]: ${text} ✓`);
+            if ((text.length === 13 || text.length === 10)) {
+                addLog(`Barcode [${label}]: ${text}${isValidIsbn(text) ? ' ✓' : ' (bad checksum)'}`);
                 return text;
             }
-            if (text.length === 13 || text.length === 10) {
-                addLog(`Barcode [${label}]: ${text} (invalid checksum)`);
-                return text; // Still return — it's a real barcode read
-            }
         } catch {
-            // No barcode found — this is normal
+            // No barcode — normal
         }
         return null;
     }, [getBarcodeReader, addLog]);
@@ -250,22 +311,57 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
         processedImage: string,
         label: string,
     ): Promise<{ isbn: string | null; allCandidates: string[] }> => {
+        let text = '';
+
+        // Path A: Persistent worker (fast — reuses initialized worker)
         const worker = await getWorker();
-        const { data: { text } } = await worker.recognize(processedImage);
-
-        const trimmed = text.trim();
-        addLog(`[${label}] OCR: "${trimmed.substring(0, 60)}"`);
-
-        const candidates = extractIsbnCandidates(trimmed);
-
-        if (candidates.length > 0) {
-            addLog(`[${label}] candidates: ${candidates.slice(0, 3).join(', ')}`);
+        if (worker) {
+            try {
+                const result = await worker.recognize(processedImage);
+                text = result.data.text;
+            } catch (err) {
+                addLog(`Worker recognize failed: ${err instanceof Error ? err.message : String(err)}`);
+                // Worker may be dead — mark for recreation
+                workerRef.current = null;
+                workerFailed.current = false; // Allow retry
+            }
         }
 
-        // Only auto-accept a candidate if it has a valid ISBN checksum
+        // Path B: One-shot recognize() fallback (slower — creates/destroys worker)
+        if (!text) {
+            try {
+                const tess = await loadTessModule();
+                if (tess.recognize) {
+                    addLog(`[${label}] Using one-shot recognize() fallback`);
+                    const result = await tess.recognize(processedImage, 'eng', {
+                        logger: (m: { status: string; progress?: number }) => {
+                            if (m.status === 'recognizing text' && m.progress) {
+                                setStatus(`OCR (${label}): ${Math.round(m.progress * 100)}%`);
+                            }
+                        },
+                    });
+                    text = result.data.text;
+                }
+            } catch (err) {
+                addLog(`One-shot recognize failed: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+
+        const trimmed = text.trim();
+        if (trimmed) {
+            addLog(`[${label}] OCR text: "${trimmed.substring(0, 80)}"`);
+        } else {
+            addLog(`[${label}] OCR returned empty text`);
+        }
+
+        const candidates = extractIsbnCandidates(trimmed);
+        if (candidates.length > 0) {
+            addLog(`[${label}] candidates: ${candidates.slice(0, 4).join(', ')}`);
+        }
+
         const validIsbn = candidates.find(c => isValidIsbn(c));
         return { isbn: validIsbn ?? null, allCandidates: candidates };
-    }, [getWorker, addLog]);
+    }, [getWorker, loadTessModule, addLog]);
 
     /* ── Main capture & scan pipeline ───────────────────────────── */
     const capture = useCallback(async () => {
@@ -274,17 +370,15 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
         const video = webcamRef.current.video as HTMLVideoElement | undefined;
         const canvas = canvasRef.current;
         if (!canvas) { addLog('Error: Missing canvas'); return; }
-
         if (!video || video.readyState < 2) {
             addLog('Error: Video not ready');
             setStatus('Camera is not ready yet. Please wait...');
             return;
         }
 
-        // Capture screenshot from webcam
+        // Capture frame
         let imageSrc = webcamRef.current.getScreenshot();
         if (!imageSrc) {
-            // Fallback: draw current video frame to canvas
             const width = video.videoWidth || 1280;
             const height = video.videoHeight || 720;
             canvas.width = width;
@@ -293,8 +387,8 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
             if (!ctx) { addLog('Error: No canvas context'); return; }
             ctx.drawImage(video, 0, 0, width, height);
             imageSrc = canvas.toDataURL('image/jpeg', 0.92);
+            addLog('Used manual canvas capture fallback');
         }
-
         if (!imageSrc) { addLog('Error: Failed to capture frame'); return; }
 
         processingRef.current = true;
@@ -305,80 +399,65 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
         const allCandidates = new Set<string>();
 
         try {
-            // Load captured image into an Image element
             const img = new Image();
             await new Promise<void>((resolve, reject) => {
                 img.onload = () => resolve();
-                img.onerror = () => reject(new Error('Failed to load image'));
+                img.onerror = () => reject(new Error('Failed to load captured image'));
                 img.src = imageSrc;
             });
 
-            /* ─── Phase 1: Barcode scanning (fast) ─────────────── */
+            addLog(`Frame: ${img.width}x${img.height}`);
+
+            /* ── Phase 1: Barcode scan (fast, multiple crops) ──── */
             addLog('Phase 1: Barcode scan...');
             setStatus('Scanning barcode...');
 
-            // Try full frame first
             let isbn = await tryBarcodeDecode(img, 'full');
-
-            // Try cropped viewfinder region
             if (!isbn) {
-                const croppedBarcode = cropForBarcode(img, canvas, CROP_NARROW);
-                isbn = await tryBarcodeDecode(croppedBarcode, 'crop');
+                isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_NARROW), 'narrow');
             }
-
-            // Try medium crop
             if (!isbn) {
-                const medCrop = cropForBarcode(img, canvas, CROP_MEDIUM);
-                isbn = await tryBarcodeDecode(medCrop, 'med');
+                isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_MEDIUM), 'medium');
             }
 
             if (isbn && isValidIsbn(isbn)) {
-                addLog(`ISBN found via barcode: ${isbn}`);
+                addLog(`ISBN via barcode: ${isbn}`);
                 setStatus(`Found ISBN: ${isbn}`);
                 setAutoScan(false);
                 onScan(isbn);
                 return;
             }
             if (isbn) {
-                // Barcode read but invalid checksum — keep as suggestion
                 allCandidates.add(isbn);
-                addLog(`Barcode read (invalid checksum): ${isbn}`);
             }
 
-            /* ─── Phase 2: OCR scanning (slower) ──────────────── */
+            /* ── Phase 2: OCR scan (multiple passes) ──────────── */
             addLog('Phase 2: OCR scan...');
 
-            // Strategy: try multiple crop regions x orientations x preprocessing
-            // Stop as soon as we find a valid ISBN
+            // Prioritized OCR passes — stop on first valid ISBN
             const ocrPasses: Array<{
                 crop: CropRegion;
                 rotation: number;
                 mode: 'clean' | 'enhanced';
                 label: string;
             }> = [
-                // Narrow crop, horizontal (most likely for back-cover ISBN)
-                { crop: CROP_NARROW, rotation: 0,   mode: 'clean',    label: 'narrow-0°' },
-                { crop: CROP_NARROW, rotation: 0,   mode: 'enhanced', label: 'narrow-0°-enh' },
-                // Narrow crop, rotated (for spine text)
-                { crop: CROP_NARROW, rotation: 90,  mode: 'clean',    label: 'narrow-90°' },
-                { crop: CROP_NARROW, rotation: 270, mode: 'clean',    label: 'narrow-270°' },
-                // Medium crop, horizontal (wider search area)
-                { crop: CROP_MEDIUM, rotation: 0,   mode: 'clean',    label: 'medium-0°' },
-                { crop: CROP_MEDIUM, rotation: 0,   mode: 'enhanced', label: 'medium-0°-enh' },
-                // Wide crop as last resort
-                { crop: CROP_WIDE,   rotation: 0,   mode: 'clean',    label: 'wide-0°' },
+                { crop: CROP_NARROW, rotation: 0,   mode: 'clean',    label: 'narrow-0' },
+                { crop: CROP_NARROW, rotation: 0,   mode: 'enhanced', label: 'narrow-0-enh' },
+                { crop: CROP_MEDIUM, rotation: 0,   mode: 'clean',    label: 'medium-0' },
+                { crop: CROP_MEDIUM, rotation: 0,   mode: 'enhanced', label: 'medium-0-enh' },
+                { crop: CROP_NARROW, rotation: 90,  mode: 'clean',    label: 'narrow-90' },
+                { crop: CROP_NARROW, rotation: 270, mode: 'clean',    label: 'narrow-270' },
+                { crop: CROP_WIDE,   rotation: 0,   mode: 'clean',    label: 'wide-0' },
             ];
 
             for (const pass of ocrPasses) {
                 setStatus(`OCR: ${pass.label}...`);
                 const processed = preprocessImage(img, canvas, pass.rotation, pass.crop, pass.mode);
                 const result = await runOcr(processed, pass.label);
-
-                // Collect all candidates for suggestions
                 result.allCandidates.forEach(c => allCandidates.add(c));
 
                 if (result.isbn) {
-                    addLog(`ISBN found via OCR [${pass.label}]: ${result.isbn}`);
+                    addLog(`ISBN via OCR [${pass.label}]: ${result.isbn}`);
                     setStatus(`Found ISBN: ${result.isbn}`);
                     setAutoScan(false);
                     onScan(result.isbn);
@@ -386,21 +465,17 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                 }
             }
 
-            /* ─── Phase 3: No valid ISBN found ─────────────────── */
+            /* ── Phase 3: No valid ISBN ───────────────────────── */
             const candidateList = Array.from(allCandidates);
             if (candidateList.length > 0) {
-                addLog(`No valid ISBN, but ${candidateList.length} suggestion(s)`);
+                addLog(`No valid ISBN, ${candidateList.length} suggestion(s): ${candidateList.slice(0, 3).join(', ')}`);
                 setIsbnSuggestions(candidateList.slice(0, 5));
-                if (!showManualRef.current) {
-                    setShowManual(true);
-                }
-                if (!autoScanRef.current) {
-                    setStatus('ISBN not confirmed. Check suggestions below or adjust position.');
-                } else {
-                    setStatus('Auto-scanning... adjust position');
-                }
+                if (!showManualRef.current) setShowManual(true);
+                setStatus(autoScanRef.current
+                    ? 'Auto-scanning... adjust position'
+                    : 'ISBN not confirmed. Check suggestions or adjust position.');
             } else {
-                addLog('No ISBN detected in any orientation/crop.');
+                addLog('No ISBN detected in any pass.');
                 if (!autoScanRef.current) {
                     setStatus('No ISBN detected. Try adjusting position or use manual input.');
                     setShowManual(true);
@@ -409,7 +484,8 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                 }
             }
         } catch (err: unknown) {
-            addLog(`Error: ${err instanceof Error ? err.message : String(err)}`);
+            const msg = err instanceof Error ? err.message : String(err);
+            addLog(`SCAN ERROR: ${msg}`);
             setStatus('Scan failed. Try again.');
             toast('Scan failed. Please try again or use manual entry.', 'error');
         } finally {
@@ -453,7 +529,6 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                 audio={false}
                 ref={webcamRef}
                 screenshotFormat="image/jpeg"
-                screenshotQuality={0.92}
                 videoConstraints={getVideoConstraints()}
                 onUserMedia={() => {
                     setCameraError(null);
@@ -471,7 +546,6 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
             <canvas ref={canvasRef} style={{ display: 'none' }} />
             <div className="viewfinder"></div>
 
-            {/* Debug log toggle */}
             <button
                 onClick={() => setShowDebug(!showDebug)}
                 aria-label={showDebug ? 'Hide debug logs' : 'Show debug logs'}
@@ -506,7 +580,6 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                 </div>
             )}
 
-            {/* Controls */}
             <div className={s.controls}>
                 <div className={s.statusLine}>
                     <div className={s.cameraStatus}>
@@ -520,9 +593,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                         <Loader2 size={16} className="animate-spin" style={{ color: 'var(--accent-blue)' }} />
                     )}
                 </div>
-                {cameraError && (
-                    <div className={s.cameraError}>{cameraError}</div>
-                )}
+                {cameraError && <div className={s.cameraError}>{cameraError}</div>}
 
                 {!showManual ? (
                     <div className={s.btnRow}>
@@ -557,54 +628,31 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                     </div>
                 ) : (
                     <form onSubmit={handleManualSubmit} className={s.manualForm}>
-                        <input
-                            type="text"
-                            inputMode="numeric"
-                            placeholder="Enter ISBN..."
-                            value={manualIsbn}
-                            onChange={(e) => setManualIsbn(e.target.value)}
-                            aria-label="Enter ISBN manually"
-                            className={`glass ${s.manualInput}`}
-                            autoFocus
-                        />
-                        <button
-                            type="submit"
-                            disabled={manualIsbn.length < 5 || isScanning}
-                            aria-label="Submit ISBN"
-                            className={`glass ${s.submitBtn}`}
-                        >
+                        <input type="text" inputMode="numeric" placeholder="Enter ISBN..." value={manualIsbn}
+                            onChange={(e) => setManualIsbn(e.target.value)} aria-label="Enter ISBN manually"
+                            className={`glass ${s.manualInput}`} autoFocus />
+                        <button type="submit" disabled={manualIsbn.length < 5 || isScanning}
+                            aria-label="Submit ISBN" className={`glass ${s.submitBtn}`}>
                             {isScanning ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
                         </button>
-                        <button
-                            type="button"
-                            onClick={() => setShowManual(false)}
-                            className={`glass ${s.closeBtn}`}
-                        >
-                            Close
-                        </button>
+                        <button type="button" onClick={() => setShowManual(false)} className={`glass ${s.closeBtn}`}>Close</button>
                     </form>
                 )}
 
                 {isbnSuggestions.length > 0 && (
                     <div className={s.suggestionRow}>
                         {isbnSuggestions.map((candidate) => (
-                            <button
-                                key={candidate}
-                                type="button"
+                            <button key={candidate} type="button"
                                 onClick={() => {
-                                    if (isValidIsbn(candidate)) {
-                                        onScan(candidate);
-                                    } else {
-                                        setManualIsbn(candidate);
-                                        setShowManual(true);
-                                    }
+                                    if (isValidIsbn(candidate)) { onScan(candidate); }
+                                    else { setManualIsbn(candidate); setShowManual(true); }
                                 }}
                                 className={`glass ${s.suggestionBtn}`}
                                 title={isValidIsbn(candidate) ? 'Valid ISBN — tap to add' : 'Checksum may be invalid — tap to edit'}
                             >
                                 {candidate}
                                 {isValidIsbn(candidate)
-                                    ? <span style={{ color: '#22c55e', fontWeight: 700 }}>✓</span>
+                                    ? <span style={{ color: '#22c55e', fontWeight: 700 }}>{'\u2713'}</span>
                                     : <span className={s.suggestionNote}>?</span>
                                 }
                             </button>
