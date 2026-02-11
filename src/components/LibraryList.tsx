@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
 import BookCard from './BookCard.tsx';
 import BookDetail from './BookDetail.tsx';
@@ -17,9 +17,13 @@ type ViewMode = 'grid' | 'list';
 
 interface LibraryListProps {
     onManageData?: () => void;
+    /** When set, opens the book with this ISBN in the detail panel. Cleared via onOpenComplete. */
+    initialOpenIsbn?: string | null;
+    /** Called after opening a book via initialOpenIsbn so the parent can clear the prop. */
+    onOpenComplete?: () => void;
 }
 
-const LibraryList: React.FC<LibraryListProps> = ({ onManageData }) => {
+const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn, onOpenComplete }) => {
     const { books, shelves } = useBookStore();
     const [searchTerm, setSearchTerm] = useState('');
     const [sortBy, setSortBy] = useState<SortField>('dateAdded');
@@ -86,6 +90,15 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData }) => {
 
     const openDetail = useCallback((book: BookEntry) => setSelectedBook(book), []);
     const closeDetail = useCallback(() => setSelectedBook(null), []);
+
+    // Open book when initialOpenIsbn is set (e.g. from duplicate-scan flow)
+    useEffect(() => {
+        if (initialOpenIsbn) {
+            const book = books.find(b => b.isbn === initialOpenIsbn);
+            if (book) setSelectedBook(book);
+            onOpenComplete?.();
+        }
+    }, [initialOpenIsbn, books, onOpenComplete]);
 
     // Keep selectedBook fresh
     const freshSelectedBook = selectedBook

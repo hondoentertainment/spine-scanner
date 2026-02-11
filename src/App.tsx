@@ -30,7 +30,8 @@ function App() {
   const { pendingChanges, markDirty, markSynced, flushing, setFlushing } = useSyncQueue();
   const { online, justReconnected, clearReconnected } = useOnlineStatus();
   const { theme, toggleTheme } = useTheme();
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
+  const [openBookIsbn, setOpenBookIsbn] = useState<string | null>(null);
 
   // Track whether initial sync has completed to avoid marking dirty during hydration
   const initialSyncDone = useRef(false);
@@ -130,7 +131,16 @@ function App() {
 
     if (books.find(b => b.isbn === isbn)) {
       console.log(`[App] ISBN ${isbn} already exists in library.`);
-      toast('This book is already in your library!', 'warning');
+      const openInLibrary = await confirm({
+        title: 'Book already in library',
+        message: 'You already have this in your library. Update notes instead?',
+        confirmLabel: 'Open in library',
+        cancelLabel: 'Dismiss',
+      });
+      if (openInLibrary) {
+        setOpenBookIsbn(isbn);
+        setView('library');
+      }
       return;
     }
 
@@ -254,7 +264,11 @@ function App() {
               </div>
             }
           >
-            <LibraryList onManageData={() => setView('data')} />
+            <LibraryList
+              onManageData={() => setView('data')}
+              initialOpenIsbn={openBookIsbn}
+              onOpenComplete={() => setOpenBookIsbn(null)}
+            />
           </Suspense>
         )}
         {view === 'data' && (
