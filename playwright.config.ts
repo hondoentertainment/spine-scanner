@@ -19,6 +19,18 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'mobile-chrome-pixel-7',
+      use: { ...devices['Pixel 7'] },
+    },
+    {
+      name: 'mobile-safari-iphone-14',
+      use: { ...devices['iPhone 14'] },
+    },
+    {
+      name: 'mobile-chrome-galaxy-s9',
+      use: { ...devices['Galaxy S9+'] },
+    },
   ],
   webServer: useWebServer
     ? {

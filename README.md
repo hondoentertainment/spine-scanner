@@ -113,11 +113,18 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 | `npm run preview` | Preview production build |
 | `npm run test` | Run tests once |
 | `npm run test:watch` | Run tests in watch mode |
+| `npm run test:e2e` | Run Playwright end-to-end tests |
+| `npm run test:e2e:mobile` | Run mobile Playwright matrix projects |
+| `npm run test:e2e:desktop` | Run desktop Playwright baseline |
 | `npm run lint` | Lint with ESLint |
 
 ## Deployment
 
 The app auto-deploys to GitHub Pages on push to `main` via GitHub Actions. The workflow installs dependencies, builds, and uploads to Pages.
+
+## Mobile Validation
+
+See `e2e/MOBILE_TEST_MATRIX.md` for the mobile test matrix, release gate criteria, and run-log template.
 
 ## Project Structure
 
