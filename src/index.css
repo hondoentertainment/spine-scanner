@@ -79,7 +79,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .scanner-container {
   position: relative;
   width: 100%;
-  max-width: 640px;
+  max-width: 960px;
   margin: 0 auto;
   border-radius: 1.5rem;
   overflow: hidden;
@@ -90,13 +90,27 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
-  width: 90%;
-  height: 25%;
+  transform: translate(-50%, -55%);
+  width: 92%;
+  height: 40%;
   border: 2px solid var(--accent-blue);
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
-  border-radius: 4px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  border-radius: 6px;
   pointer-events: none;
+}
+
+/* Corner brackets on the viewfinder for better visual guidance */
+.viewfinder::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 3px solid transparent;
+  border-top-color: var(--accent-blue);
+  border-left-color: var(--accent-blue);
+  border-radius: 6px 0 0 0;
+  width: 28px;
+  height: 28px;
+  filter: drop-shadow(0 0 6px var(--accent-blue));
 }
 
 .viewfinder::after {
@@ -106,9 +120,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   left: 0;
   width: 100%;
   height: 2px;
-  background: var(--accent-blue);
-  box-shadow: 0 0 15px var(--accent-blue);
-  animation: scan 2s linear infinite;
+  background: linear-gradient(90deg, transparent, var(--accent-blue), transparent);
+  box-shadow: 0 0 20px var(--accent-blue);
+  animation: scan 2.2s ease-in-out infinite;
 }
 
 @keyframes scan {
@@ -165,6 +179,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   .scanner-container {
     border-radius: 1rem;
     max-width: 100%;
+  }
+
+  .viewfinder {
+    height: 35%;
   }
 
   .book-grid {

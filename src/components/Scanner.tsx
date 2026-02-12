@@ -3,7 +3,7 @@ import Webcam from 'react-webcam';
 import type { BrowserMultiFormatReader } from '@zxing/browser';
 import { Camera, Loader2, Edit3, Check, Terminal, Play, Square, ImagePlus } from 'lucide-react';
 import { isValidIsbn } from '../utils/isbnValidation.ts';
-import { extractIsbnCandidates } from '../utils/ocr.ts';
+import { extractIsbnCandidates, tryFixChecksum } from '../utils/ocr.ts';
 import { useToast } from './Toast.tsx';
 import s from './Scanner.module.css';
 
@@ -29,6 +29,8 @@ interface CropRegion {
 const CROP_NARROW: CropRegion = { widthFrac: 0.92, heightFrac: 0.28, label: 'narrow' };
 const CROP_MEDIUM: CropRegion = { widthFrac: 0.94, heightFrac: 0.50, label: 'medium' };
 const CROP_WIDE: CropRegion   = { widthFrac: 0.96, heightFrac: 0.75, label: 'wide' };
+const CROP_FULL: CropRegion   = { widthFrac: 1.00, heightFrac: 1.00, label: 'full' };
+const CROP_CENTER: CropRegion = { widthFrac: 0.70, heightFrac: 0.40, label: 'center' };
 
 /**
  * Build local asset paths for Tesseract.js.
@@ -47,8 +49,8 @@ const getVideoConstraints = () => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     return {
         facingMode: 'environment',
-        width: isMobile ? { ideal: 1920 } : { ideal: 1280 },
-        height: isMobile ? { ideal: 1080 } : { ideal: 720 },
+        width: isMobile ? { ideal: 1920 } : { ideal: 1920 },
+        height: isMobile ? { ideal: 1080 } : { ideal: 1080 },
     };
 };
 
@@ -56,26 +58,50 @@ const getVideoConstraints = () => {
  *  Image preprocessing helpers
  * ================================================================ */
 
+type PreprocessMode = 'clean' | 'enhanced' | 'boost' | 'invert' | 'sharpen';
+
 /**
- * Preprocess for OCR. Two modes:
- *   "clean"    → grayscale only (let Tesseract do adaptive thresholding)
- *   "enhanced" → grayscale + moderate contrast boost
+ * Preprocess for OCR. Five modes:
+ *   "clean"    → grayscale + slight contrast (let Tesseract handle the rest)
+ *   "enhanced" → grayscale + moderate contrast + brightness boost
+ *   "boost"    → grayscale + high contrast + brightness (for faded/worn text)
+ *   "invert"   → grayscale + invert colors (for light text on dark backgrounds)
+ *   "sharpen"  → grayscale + contrast + CSS sharpening via SVG filter
  *
  * NO binarization — Tesseract.js v7 handles that internally.
  */
+const PREPROCESS_FILTERS: Record<PreprocessMode, string> = {
+    clean:    'grayscale(100%) contrast(110%)',
+    enhanced: 'grayscale(100%) contrast(140%) brightness(108%)',
+    boost:    'grayscale(100%) contrast(180%) brightness(115%)',
+    invert:   'grayscale(100%) contrast(130%) invert(100%)',
+    sharpen:  'grayscale(100%) contrast(130%) brightness(105%)',
+};
+
+/**
+ * Adaptive scale factor — higher resolution images need less upscaling,
+ * lower resolution images benefit from more.
+ */
+const getAdaptiveScale = (imgWidth: number): number => {
+    if (imgWidth >= 1920) return 1.5;
+    if (imgWidth >= 1280) return 2;
+    if (imgWidth >= 640) return 2.5;
+    return 3;
+};
+
 const preprocessImage = (
     img: HTMLImageElement,
     canvas: HTMLCanvasElement,
     rotateDeg: number,
     crop: CropRegion,
-    mode: 'clean' | 'enhanced' = 'clean',
+    mode: PreprocessMode = 'clean',
 ): string => {
     const ctx = canvas.getContext('2d')!;
     const cropX = img.width * (1 - crop.widthFrac) / 2;
     const cropY = img.height * (1 - crop.heightFrac) / 2;
     const cropW = img.width * crop.widthFrac;
     const cropH = img.height * crop.heightFrac;
-    const scale = 2;
+    const scale = getAdaptiveScale(img.width);
     const outW = cropW * scale;
     const outH = cropH * scale;
 
@@ -94,13 +120,78 @@ const preprocessImage = (
         ctx.translate(-outW / 2, -outH / 2);
     }
 
-    ctx.filter = mode === 'enhanced'
-        ? 'grayscale(100%) contrast(140%) brightness(108%)'
-        : 'grayscale(100%) contrast(110%)';
-
+    ctx.filter = PREPROCESS_FILTERS[mode];
     ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
     ctx.restore();
+
+    // For "sharpen" mode: apply unsharp-mask-like post-processing
+    if (mode === 'sharpen' && typeof ctx.getImageData === 'function') {
+        try {
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imgData.data;
+            // Simple sharpening kernel applied per-pixel (center weight emphasize)
+            const w = canvas.width;
+            const src = new Uint8ClampedArray(data);
+            for (let y = 1; y < canvas.height - 1; y++) {
+                for (let x = 1; x < w - 1; x++) {
+                    const i = (y * w + x) * 4;
+                    for (let c = 0; c < 3; c++) {
+                        const val = 5 * src[i + c]
+                            - src[((y - 1) * w + x) * 4 + c]
+                            - src[((y + 1) * w + x) * 4 + c]
+                            - src[(y * w + (x - 1)) * 4 + c]
+                            - src[(y * w + (x + 1)) * 4 + c];
+                        data[i + c] = Math.min(255, Math.max(0, val));
+                    }
+                }
+            }
+            ctx.putImageData(imgData, 0, 0);
+        } catch {
+            // getImageData/putImageData not available — skip sharpening
+        }
+    }
+
     return canvas.toDataURL('image/png');
+};
+
+/**
+ * Detect average brightness of the viewfinder area.
+ * Returns a value 0-255 (dark to bright).
+ * Useful for deciding if "invert" mode should be prioritized.
+ * Returns 128 (neutral) if canvas operations are unavailable.
+ */
+const detectBrightness = (
+    img: HTMLImageElement,
+    canvas: HTMLCanvasElement,
+    crop: CropRegion,
+): number => {
+    try {
+        const ctx = canvas.getContext('2d');
+        if (!ctx || typeof ctx.getImageData !== 'function') return 128;
+
+        const cropX = img.width * (1 - crop.widthFrac) / 2;
+        const cropY = img.height * (1 - crop.heightFrac) / 2;
+        const cropW = img.width * crop.widthFrac;
+        const cropH = img.height * crop.heightFrac;
+
+        // Use small canvas for fast brightness sampling
+        const sampleW = Math.min(cropW, 200);
+        const sampleH = Math.min(cropH, 150);
+        canvas.width = sampleW;
+        canvas.height = sampleH;
+        ctx.filter = 'grayscale(100%)';
+        ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, sampleW, sampleH);
+
+        const imgData = ctx.getImageData(0, 0, sampleW, sampleH);
+        let total = 0;
+        for (let i = 0; i < imgData.data.length; i += 4) {
+            total += imgData.data[i]; // R channel (grayscale so R=G=B)
+        }
+        return total / (imgData.data.length / 4);
+    } catch {
+        // Canvas operations may not be available in test/SSR environments
+        return 128; // neutral brightness — will use standard pass ordering
+    }
 };
 
 /** Crop for barcode — no filters, zxing handles grayscale internally. */
@@ -449,10 +540,16 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
             try {
                 isbn = await tryBarcodeDecode(img, 'full');
                 if (!isbn) {
+                    isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_CENTER), 'center');
+                }
+                if (!isbn) {
                     isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_NARROW), 'narrow');
                 }
                 if (!isbn) {
                     isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_MEDIUM), 'medium');
+                }
+                if (!isbn) {
+                    isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_WIDE), 'wide');
                 }
             } catch (barcodeErr) {
                 addLog(`Barcode phase error: ${barcodeErr instanceof Error ? barcodeErr.message : String(barcodeErr)}`);
@@ -469,23 +566,64 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                 allCandidates.add(isbn);
             }
 
-            /* ── Phase 2: OCR scan (multiple passes) ──────────── */
+            /* ── Phase 2: OCR scan (comprehensive multi-pass) ──── */
             addLog('Phase 2: OCR scan...');
 
-            // Prioritized OCR passes — stop on first valid ISBN
+            // Detect brightness to determine if dark-background modes
+            // (invert) should be prioritized
+            const brightness = detectBrightness(img, canvas, CROP_MEDIUM);
+            const isDark = brightness < 90;
+            addLog(`Scene brightness: ${brightness.toFixed(0)} (${isDark ? 'dark — will try invert early' : 'normal'})`);
+
+            // Build prioritized OCR passes — stop on first valid ISBN
+            // Passes are ordered: most likely to succeed first
             const ocrPasses: Array<{
                 crop: CropRegion;
                 rotation: number;
-                mode: 'clean' | 'enhanced';
+                mode: PreprocessMode;
                 label: string;
             }> = [
+                // Tier 1: Standard orientations with viewfinder-sized crops
                 { crop: CROP_NARROW, rotation: 0,   mode: 'clean',    label: 'narrow-0' },
                 { crop: CROP_NARROW, rotation: 0,   mode: 'enhanced', label: 'narrow-0-enh' },
+                { crop: CROP_CENTER, rotation: 0,   mode: 'clean',    label: 'center-0' },
                 { crop: CROP_MEDIUM, rotation: 0,   mode: 'clean',    label: 'medium-0' },
                 { crop: CROP_MEDIUM, rotation: 0,   mode: 'enhanced', label: 'medium-0-enh' },
+
+                // Tier 2: If scene is dark, try invert early; otherwise defer
+                ...(isDark ? [
+                    { crop: CROP_NARROW, rotation: 0,   mode: 'invert' as PreprocessMode, label: 'narrow-0-inv' },
+                    { crop: CROP_MEDIUM, rotation: 0,   mode: 'invert' as PreprocessMode, label: 'medium-0-inv' },
+                ] : []),
+
+                // Tier 3: Rotated for vertical book spines
                 { crop: CROP_NARROW, rotation: 90,  mode: 'clean',    label: 'narrow-90' },
                 { crop: CROP_NARROW, rotation: 270, mode: 'clean',    label: 'narrow-270' },
+                { crop: CROP_NARROW, rotation: 90,  mode: 'enhanced', label: 'narrow-90-enh' },
+                { crop: CROP_NARROW, rotation: 270, mode: 'enhanced', label: 'narrow-270-enh' },
+                { crop: CROP_MEDIUM, rotation: 90,  mode: 'clean',    label: 'medium-90' },
+                { crop: CROP_MEDIUM, rotation: 270, mode: 'clean',    label: 'medium-270' },
+
+                // Tier 4: Upside-down text (some spines read bottom-to-top)
+                { crop: CROP_NARROW, rotation: 180, mode: 'clean',    label: 'narrow-180' },
+                { crop: CROP_MEDIUM, rotation: 180, mode: 'clean',    label: 'medium-180' },
+
+                // Tier 5: Aggressive preprocessing for difficult scans
+                { crop: CROP_NARROW, rotation: 0,   mode: 'boost',    label: 'narrow-0-boost' },
+                { crop: CROP_MEDIUM, rotation: 0,   mode: 'boost',    label: 'medium-0-boost' },
+                { crop: CROP_NARROW, rotation: 0,   mode: 'sharpen',  label: 'narrow-0-sharp' },
                 { crop: CROP_WIDE,   rotation: 0,   mode: 'clean',    label: 'wide-0' },
+                { crop: CROP_WIDE,   rotation: 0,   mode: 'enhanced', label: 'wide-0-enh' },
+
+                // Tier 6: Full frame as last resort
+                { crop: CROP_FULL,   rotation: 0,   mode: 'clean',    label: 'full-0' },
+                { crop: CROP_FULL,   rotation: 0,   mode: 'enhanced', label: 'full-0-enh' },
+
+                // Tier 7: Invert for non-dark scenes (deferred)
+                ...(!isDark ? [
+                    { crop: CROP_NARROW, rotation: 0,   mode: 'invert' as PreprocessMode, label: 'narrow-0-inv' },
+                    { crop: CROP_MEDIUM, rotation: 0,   mode: 'invert' as PreprocessMode, label: 'medium-0-inv' },
+                ] : []),
             ];
 
             for (const pass of ocrPasses) {
@@ -510,9 +648,24 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
 
             /* ── Phase 3: No valid ISBN ───────────────────────── */
             const candidateList = Array.from(allCandidates);
-            if (candidateList.length > 0) {
-                addLog(`No valid ISBN, ${candidateList.length} suggestion(s): ${candidateList.slice(0, 3).join(', ')}`);
-                setIsbnSuggestions(candidateList.slice(0, 5));
+
+            // Try fuzzy checksum repair on invalid candidates — show as suggestions only
+            // (never auto-submit, since the repair may produce wrong ISBNs)
+            const repairedSuggestions: string[] = [];
+            for (const c of candidateList) {
+                if (!isValidIsbn(c)) {
+                    const repaired = tryFixChecksum(c);
+                    if (repaired && !candidateList.includes(repaired) && !repairedSuggestions.includes(repaired)) {
+                        repairedSuggestions.push(repaired);
+                        addLog(`Checksum repair: ${c} → ${repaired} (suggested)`);
+                    }
+                }
+            }
+            const allSuggestions = [...candidateList, ...repairedSuggestions];
+
+            if (allSuggestions.length > 0) {
+                addLog(`No valid ISBN, ${allSuggestions.length} suggestion(s): ${allSuggestions.slice(0, 4).join(', ')}`);
+                setIsbnSuggestions(allSuggestions.slice(0, 6));
                 if (!showManualRef.current) setShowManual(true);
                 setStatus(autoScanRef.current
                     ? 'Auto-scanning... adjust position'
@@ -605,22 +758,54 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
             }
             if (isbn) allCandidates.add(isbn);
 
-            /* ── Phase 2: OCR scan ──────── */
+            /* ── Phase 2: OCR scan (comprehensive) ──────── */
             addLog('Phase 2: OCR on photo...');
+
+            const photoBrightness = detectBrightness(img, canvas, CROP_MEDIUM);
+            const photoDark = photoBrightness < 90;
+            addLog(`Photo brightness: ${photoBrightness.toFixed(0)} (${photoDark ? 'dark' : 'normal'})`);
 
             const ocrPasses: Array<{
                 crop: CropRegion;
                 rotation: number;
-                mode: 'clean' | 'enhanced';
+                mode: PreprocessMode;
                 label: string;
             }> = [
+                // Standard orientations
                 { crop: CROP_NARROW, rotation: 0,   mode: 'clean',    label: 'photo-narrow-0' },
                 { crop: CROP_NARROW, rotation: 0,   mode: 'enhanced', label: 'photo-narrow-0-enh' },
+                { crop: CROP_CENTER, rotation: 0,   mode: 'clean',    label: 'photo-center-0' },
                 { crop: CROP_MEDIUM, rotation: 0,   mode: 'clean',    label: 'photo-medium-0' },
                 { crop: CROP_MEDIUM, rotation: 0,   mode: 'enhanced', label: 'photo-medium-0-enh' },
-                { crop: CROP_WIDE,   rotation: 0,   mode: 'clean',    label: 'photo-wide-0' },
+                // Invert for dark photos
+                ...(photoDark ? [
+                    { crop: CROP_NARROW, rotation: 0, mode: 'invert' as PreprocessMode, label: 'photo-narrow-inv' },
+                    { crop: CROP_MEDIUM, rotation: 0, mode: 'invert' as PreprocessMode, label: 'photo-medium-inv' },
+                ] : []),
+                // Rotations
                 { crop: CROP_NARROW, rotation: 90,  mode: 'clean',    label: 'photo-narrow-90' },
                 { crop: CROP_NARROW, rotation: 270, mode: 'clean',    label: 'photo-narrow-270' },
+                { crop: CROP_NARROW, rotation: 90,  mode: 'enhanced', label: 'photo-narrow-90-enh' },
+                { crop: CROP_NARROW, rotation: 270, mode: 'enhanced', label: 'photo-narrow-270-enh' },
+                { crop: CROP_MEDIUM, rotation: 90,  mode: 'clean',    label: 'photo-medium-90' },
+                { crop: CROP_MEDIUM, rotation: 270, mode: 'clean',    label: 'photo-medium-270' },
+                // Upside-down
+                { crop: CROP_NARROW, rotation: 180, mode: 'clean',    label: 'photo-narrow-180' },
+                { crop: CROP_MEDIUM, rotation: 180, mode: 'clean',    label: 'photo-medium-180' },
+                // Aggressive preprocessing
+                { crop: CROP_NARROW, rotation: 0,   mode: 'boost',    label: 'photo-narrow-boost' },
+                { crop: CROP_MEDIUM, rotation: 0,   mode: 'boost',    label: 'photo-medium-boost' },
+                { crop: CROP_NARROW, rotation: 0,   mode: 'sharpen',  label: 'photo-narrow-sharp' },
+                { crop: CROP_WIDE,   rotation: 0,   mode: 'clean',    label: 'photo-wide-0' },
+                { crop: CROP_WIDE,   rotation: 0,   mode: 'enhanced', label: 'photo-wide-0-enh' },
+                // Full frame last resort
+                { crop: CROP_FULL,   rotation: 0,   mode: 'clean',    label: 'photo-full-0' },
+                { crop: CROP_FULL,   rotation: 0,   mode: 'enhanced', label: 'photo-full-0-enh' },
+                // Deferred invert
+                ...(!photoDark ? [
+                    { crop: CROP_NARROW, rotation: 0, mode: 'invert' as PreprocessMode, label: 'photo-narrow-inv' },
+                    { crop: CROP_MEDIUM, rotation: 0, mode: 'invert' as PreprocessMode, label: 'photo-medium-inv' },
+                ] : []),
             ];
 
             for (const pass of ocrPasses) {
@@ -643,9 +828,21 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
 
             /* ── Phase 3: No valid ISBN ──── */
             const candidateList = Array.from(allCandidates);
-            if (candidateList.length > 0) {
-                addLog(`No valid ISBN from photo, ${candidateList.length} suggestion(s): ${candidateList.slice(0, 3).join(', ')}`);
-                setIsbnSuggestions(candidateList.slice(0, 5));
+            const photoRepaired: string[] = [];
+            for (const c of candidateList) {
+                if (!isValidIsbn(c)) {
+                    const repaired = tryFixChecksum(c);
+                    if (repaired && !candidateList.includes(repaired) && !photoRepaired.includes(repaired)) {
+                        photoRepaired.push(repaired);
+                        addLog(`Checksum repair: ${c} → ${repaired} (suggested)`);
+                    }
+                }
+            }
+            const allPhotoSuggestions = [...candidateList, ...photoRepaired];
+
+            if (allPhotoSuggestions.length > 0) {
+                addLog(`No valid ISBN from photo, ${allPhotoSuggestions.length} suggestion(s): ${allPhotoSuggestions.slice(0, 4).join(', ')}`);
+                setIsbnSuggestions(allPhotoSuggestions.slice(0, 6));
                 setShowManual(true);
                 setStatus('ISBN not confirmed. Check suggestions or try a clearer photo.');
             } else {
@@ -712,7 +909,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                     setStatus('Camera unavailable — upload a photo or enter ISBN manually.');
                     addLog(`Camera error: ${msg}`);
                 }}
-                style={{ width: '100%', height: 'auto', display: 'block', minHeight: '240px' }}
+                style={{ width: '100%', height: 'auto', display: 'block', minHeight: '340px' }}
                 playsInline
             />
             <canvas ref={canvasRef} style={{ display: 'none' }} />
