@@ -19,7 +19,7 @@ test.describe('SpineScanner App', () => {
 
   test('can navigate to Library view', async ({ page }) => {
     await page.getByRole('button', { name: /library/i }).click();
-    await expect(page.getByText('Your Library')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Your Library/ })).toBeVisible();
   });
 
   test('can navigate to Data view', async ({ page }) => {
@@ -51,8 +51,8 @@ test.describe('SpineScanner App', () => {
   });
 
   test('manual ISBN input is accessible', async ({ page }) => {
-    // Click the manual entry button in the scanner
-    const manualBtn = page.getByRole('button', { name: /manual isbn entry/i });
+    // Click the manual entry button (icon button with aria-label, or fallback "Enter ISBN manually" text)
+    const manualBtn = page.getByRole('button', { name: /manual isbn entry|enter isbn manually/i }).first();
     await expect(manualBtn).toBeVisible();
     await manualBtn.click();
 
@@ -79,7 +79,8 @@ test.describe('SpineScanner App', () => {
     await page.getByRole('button', { name: /library/i }).click();
     await expect(page.getByRole('button', { name: /all/i }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: /to read/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /reading/i })).toBeVisible();
+    // Filter button shows "Reading (0)" — avoid matching "Toggle reading statistics"
+    await expect(page.getByRole('button', { name: /^Reading \(\d+\)$/ })).toBeVisible();
   });
 
   test('can switch between grid and list view', async ({ page }) => {
@@ -98,7 +99,7 @@ test.describe('SpineScanner App', () => {
     await page.getByRole('button', { name: /library/i }).click();
     const shelfToggle = page.getByRole('button', { name: /toggle shelf manager/i });
     await shelfToggle.click();
-    await expect(page.getByText('Shelves')).toBeVisible();
+    await expect(page.getByText('Shelves', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /create new shelf/i })).toBeVisible();
   });
 
@@ -107,6 +108,6 @@ test.describe('SpineScanner App', () => {
     await expect(page.getByText('Manage Library Data')).toBeVisible();
     await page.getByRole('button', { name: /close data management/i }).click();
     // Should navigate back to library
-    await expect(page.getByText('Your Library')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Your Library/ })).toBeVisible();
   });
 });
