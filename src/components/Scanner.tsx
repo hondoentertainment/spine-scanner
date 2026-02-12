@@ -1,7 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import type { BrowserMultiFormatReader } from '@zxing/browser';
-import { Camera, Loader2, Edit3, Check, Terminal, Play, Square } from 'lucide-react';
+import { Camera, Loader2, Edit3, Check, Terminal, Play, Square, ImagePlus } from 'lucide-react';
 import { isValidIsbn } from '../utils/isbnValidation.ts';
 import { extractIsbnCandidates } from '../utils/ocr.ts';
 import { useToast } from './Toast.tsx';
@@ -180,6 +180,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
     const processingRef = useRef(false);
     const showManualRef = useRef(false);
 
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const barcodeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
 
     // Tesseract state
@@ -539,6 +540,131 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
         }
     }, [onScan, isScanning, tryBarcodeDecode, runOcr, addLog, toast]);
 
+    /* ── Photo upload handler ─────────────────────────────────── */
+    const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || processingRef.current || isScanning) return;
+
+        // Reset file input so the same file can be re-selected
+        e.target.value = '';
+
+        addLog(`Photo upload: ${file.name} (${(file.size / 1024).toFixed(0)} KB)`);
+        processingRef.current = true;
+        setProcessing(true);
+        setStatus('Processing uploaded photo...');
+        setIsbnSuggestions([]);
+
+        const allCandidates = new Set<string>();
+
+        try {
+            // Load the uploaded image
+            const imageSrc = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.readAsDataURL(file);
+            });
+
+            const img = new Image();
+            await new Promise<void>((resolve, reject) => {
+                img.onload = () => resolve();
+                img.onerror = () => reject(new Error('Failed to load image'));
+                img.src = imageSrc;
+            });
+
+            const canvas = canvasRef.current;
+            if (!canvas) { addLog('Error: Missing canvas'); return; }
+
+            addLog(`Photo: ${img.width}x${img.height}`);
+
+            /* ── Phase 1: Barcode scan ──── */
+            addLog('Phase 1: Barcode scan on photo...');
+            setStatus('Scanning barcode in photo...');
+
+            let isbn: string | null = null;
+            try {
+                isbn = await tryBarcodeDecode(img, 'photo-full');
+                if (!isbn) {
+                    isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_NARROW), 'photo-narrow');
+                }
+                if (!isbn) {
+                    isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_MEDIUM), 'photo-medium');
+                }
+                if (!isbn) {
+                    isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_WIDE), 'photo-wide');
+                }
+            } catch (barcodeErr) {
+                addLog(`Barcode phase error: ${barcodeErr instanceof Error ? barcodeErr.message : String(barcodeErr)}`);
+            }
+
+            if (isbn && isValidIsbn(isbn)) {
+                addLog(`ISBN via barcode (photo): ${isbn}`);
+                setStatus(`Found ISBN: ${isbn}`);
+                onScan(isbn);
+                return;
+            }
+            if (isbn) allCandidates.add(isbn);
+
+            /* ── Phase 2: OCR scan ──────── */
+            addLog('Phase 2: OCR on photo...');
+
+            const ocrPasses: Array<{
+                crop: CropRegion;
+                rotation: number;
+                mode: 'clean' | 'enhanced';
+                label: string;
+            }> = [
+                { crop: CROP_NARROW, rotation: 0,   mode: 'clean',    label: 'photo-narrow-0' },
+                { crop: CROP_NARROW, rotation: 0,   mode: 'enhanced', label: 'photo-narrow-0-enh' },
+                { crop: CROP_MEDIUM, rotation: 0,   mode: 'clean',    label: 'photo-medium-0' },
+                { crop: CROP_MEDIUM, rotation: 0,   mode: 'enhanced', label: 'photo-medium-0-enh' },
+                { crop: CROP_WIDE,   rotation: 0,   mode: 'clean',    label: 'photo-wide-0' },
+                { crop: CROP_NARROW, rotation: 90,  mode: 'clean',    label: 'photo-narrow-90' },
+                { crop: CROP_NARROW, rotation: 270, mode: 'clean',    label: 'photo-narrow-270' },
+            ];
+
+            for (const pass of ocrPasses) {
+                try {
+                    setStatus(`OCR: ${pass.label}...`);
+                    const processed = preprocessImage(img, canvas, pass.rotation, pass.crop, pass.mode);
+                    const result = await runOcr(processed, pass.label);
+                    result.allCandidates.forEach(c => allCandidates.add(c));
+
+                    if (result.isbn) {
+                        addLog(`ISBN via OCR [${pass.label}]: ${result.isbn}`);
+                        setStatus(`Found ISBN: ${result.isbn}`);
+                        onScan(result.isbn);
+                        return;
+                    }
+                } catch (ocrErr) {
+                    addLog(`OCR pass [${pass.label}] error: ${ocrErr instanceof Error ? ocrErr.message : String(ocrErr)}`);
+                }
+            }
+
+            /* ── Phase 3: No valid ISBN ──── */
+            const candidateList = Array.from(allCandidates);
+            if (candidateList.length > 0) {
+                addLog(`No valid ISBN from photo, ${candidateList.length} suggestion(s): ${candidateList.slice(0, 3).join(', ')}`);
+                setIsbnSuggestions(candidateList.slice(0, 5));
+                setShowManual(true);
+                setStatus('ISBN not confirmed. Check suggestions or try a clearer photo.');
+            } else {
+                addLog('No ISBN detected in photo.');
+                setStatus('No ISBN detected. Try a clearer photo or enter manually.');
+                setShowManual(true);
+            }
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            addLog(`PHOTO SCAN ERROR: ${msg}`);
+            setStatus(`Scan error: ${msg.substring(0, 100)}`);
+            setShowDebug(true);
+            toast(`Scan failed: ${msg.substring(0, 60)}`, 'error');
+        } finally {
+            processingRef.current = false;
+            setProcessing(false);
+        }
+    }, [onScan, isScanning, tryBarcodeDecode, runOcr, addLog, toast]);
+
     /* ── Auto-scan interval ───────────────────────────────────── */
     useEffect(() => {
         if (!autoScan) return;
@@ -583,7 +709,8 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                 onUserMediaError={(err) => {
                     const msg = err instanceof Error ? err.message : 'Camera access denied';
                     setCameraError(`Camera error: ${msg}`);
-                    setStatus('Camera error. Check permissions.');
+                    setStatus('Camera unavailable — upload a photo or enter ISBN manually.');
+                    addLog(`Camera error: ${msg}`);
                 }}
                 style={{ width: '100%', height: 'auto', display: 'block', minHeight: '240px' }}
                 playsInline
@@ -638,19 +765,91 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                         <Loader2 size={16} className="animate-spin" style={{ color: 'var(--accent-blue)' }} />
                     )}
                 </div>
-                {cameraError && <div className={s.cameraError}>{cameraError}</div>}
+                {cameraError && (
+                    <div className={s.cameraError}>
+                        {cameraError}
+                        {!showManual && (
+                            <button
+                                onClick={() => setShowManual(true)}
+                                style={{
+                                    marginLeft: '0.5rem',
+                                    textDecoration: 'underline',
+                                    background: 'none',
+                                    border: 'none',
+                                    color: 'inherit',
+                                    cursor: 'pointer',
+                                    fontSize: 'inherit',
+                                }}
+                            >
+                                Enter ISBN manually
+                            </button>
+                        )}
+                    </div>
+                )}
 
-                {!showManual ? (
+                {/* Hidden file input for photo upload */}
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleFileUpload}
+                    style={{ display: 'none' }}
+                    aria-hidden="true"
+                />
+
+                {cameraError ? (
+                    /* Camera failed — show upload + manual as primary actions */
+                    <div className={s.fallbackActions}>
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={processing || isScanning}
+                            className={`glass ${s.uploadBtn}`}
+                        >
+                            {processing ? <Loader2 className="animate-spin" size={20} /> : <ImagePlus size={20} />}
+                            {processing ? 'Scanning...' : 'Take Photo / Upload'}
+                        </button>
+                        {!showManual ? (
+                            <button
+                                onClick={() => setShowManual(true)}
+                                className={`glass ${s.manualEntryBtn}`}
+                            >
+                                <Edit3 size={18} />
+                                Enter ISBN manually
+                            </button>
+                        ) : (
+                            <form onSubmit={handleManualSubmit} className={s.manualForm}>
+                                <input type="text" inputMode="numeric" placeholder="Enter ISBN..." value={manualIsbn}
+                                    onChange={(e) => setManualIsbn(e.target.value)} aria-label="Enter ISBN manually"
+                                    className={`glass ${s.manualInput}`} autoFocus />
+                                <button type="submit" disabled={manualIsbn.length < 5 || isScanning}
+                                    aria-label="Submit ISBN" className={`glass ${s.submitBtn}`}>
+                                    {isScanning ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
+                                </button>
+                                <button type="button" onClick={() => setShowManual(false)} className={`glass ${s.closeBtn}`}>Close</button>
+                            </form>
+                        )}
+                    </div>
+                ) : !showManual ? (
                     <div className={s.btnRow}>
                         <button
                             onClick={capture}
-                            disabled={processing || isScanning || autoScan || !!cameraError || !cameraReady}
+                            disabled={processing || isScanning || autoScan || !cameraReady}
                             aria-label={processing ? 'Scanning in progress' : 'Capture and scan'}
                             className={`glass ${s.captureBtn}`}
                             style={{ background: processing ? 'rgba(255,255,255,0.1)' : 'var(--primary)' }}
                         >
                             {processing ? <Loader2 className="animate-spin" size={20} /> : <Camera size={20} />}
                             {processing ? 'Scanning...' : 'Capture'}
+                        </button>
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={processing || isScanning}
+                            aria-label="Upload photo of ISBN"
+                            className={`glass ${s.roundBtn}`}
+                            title="Upload photo of ISBN"
+                        >
+                            <ImagePlus size={20} />
                         </button>
                         <button
                             onClick={() => setAutoScan(prev => !prev)}

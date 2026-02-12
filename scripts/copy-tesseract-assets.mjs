@@ -24,9 +24,15 @@ const CORE_FILES = [
   'tesseract-core-relaxedsimd-lstm.wasm.js', // Chrome 114+, Safari 15.2+
 ];
 
+// Worker script — runs inside a Web Worker (Blob URL), so it must be
+// fetchable from the same origin via importScripts().
+const WORKER_FILE = 'worker.min.js';
+
 mkdirSync(targetDir, { recursive: true });
 
 let copied = 0;
+
+// Copy WASM core files
 for (const file of CORE_FILES) {
   const src = resolve(root, 'node_modules', 'tesseract.js-core', file);
   const dest = resolve(targetDir, file);
@@ -39,4 +45,15 @@ for (const file of CORE_FILES) {
   }
 }
 
-console.log(`Copied ${copied}/${CORE_FILES.length} tesseract core files to public/tesseract/`);
+// Copy worker script
+const workerSrc = resolve(root, 'node_modules', 'tesseract.js', 'dist', WORKER_FILE);
+const workerDest = resolve(targetDir, WORKER_FILE);
+if (existsSync(workerSrc)) {
+  copyFileSync(workerSrc, workerDest);
+  console.log(`  ✓ ${WORKER_FILE}`);
+  copied++;
+} else {
+  console.warn(`  ⚠ ${WORKER_FILE} not found in node_modules/tesseract.js/dist/`);
+}
+
+console.log(`Copied ${copied}/${CORE_FILES.length + 1} tesseract assets to public/tesseract/`);

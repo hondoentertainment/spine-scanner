@@ -32,6 +32,8 @@ playwright-report/
 build_output.txt
 ts_errors.txt
 tsc_errors.txt
+scanner-test-err.txt
+scanner-test-out.txt
 
 # OCR trained data (large binary)
 eng.traineddata

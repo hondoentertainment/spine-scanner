@@ -83,10 +83,19 @@ vi.mock('react-webcam', () => {
 
   const setWebcamState = (next: Partial<typeof webcamState>) => {
     webcamState = { ...webcamState, ...next };
+    callbackFired = false; // Reset so the next render fires the callback
   };
+
+  // Track whether the media callback has been fired for the current render cycle.
+  // Reset via __setWebcamState (called in beforeEach) so each test starts fresh.
+  let callbackFired = false;
 
   const Webcam = React.forwardRef((props: any, ref) => {
     React.useEffect(() => {
+      // Fire the media callback only once to prevent infinite re-render loops.
+      // (State updates inside the callback trigger re-renders → new props → useEffect re-fires.)
+      if (callbackFired) return;
+      callbackFired = true;
       if (webcamState.autoError) {
         props.onUserMediaError?.(webcamState.autoError);
       } else if (webcamState.autoUserMedia) {
@@ -182,7 +191,7 @@ describe('Scanner', () => {
 
   /* ── Camera readiness ──────────────────────────────────────── */
   describe('camera readiness', () => {
-    it('shows camera error and disables capture on permission failure', async () => {
+    it('shows camera error and upload fallback on permission failure', async () => {
       const mod = await import('react-webcam') as any;
       mod.__setWebcamState({
         autoUserMedia: false,
@@ -195,8 +204,9 @@ describe('Scanner', () => {
         expect(screen.getByText(/Camera error: Permission denied/i)).toBeInTheDocument();
       });
 
-      const capture = screen.getByRole('button', { name: /capture and scan/i });
-      expect(capture).toBeDisabled();
+      // Capture button should be replaced by upload + manual entry fallback
+      expect(screen.queryByRole('button', { name: /capture and scan/i })).not.toBeInTheDocument();
+      expect(screen.getByText(/Take Photo \/ Upload/)).toBeInTheDocument();
     });
 
     it('enables capture after camera is ready', async () => {
@@ -424,6 +434,98 @@ describe('Scanner', () => {
       // When isScanning (book lookup in progress), capture should be disabled
       const btn = screen.getByRole('button', { name: /capture and scan|scanning in progress/i });
       expect(btn).toBeDisabled();
+    });
+  });
+
+  /* ── Photo upload UI ──────────────────────────────────────── */
+  describe('photo upload', () => {
+    it('shows upload button alongside capture when camera works', () => {
+      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
+      expect(screen.getByLabelText('Upload photo of ISBN')).toBeInTheDocument();
+    });
+
+    it('renders hidden file input with correct attributes', () => {
+      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      expect(fileInput).toBeTruthy();
+      expect(fileInput.getAttribute('accept')).toBe('image/*');
+      expect(fileInput.getAttribute('capture')).toBe('environment');
+      expect(fileInput.getAttribute('aria-hidden')).toBe('true');
+      expect(fileInput.style.display).toBe('none');
+    });
+  });
+
+  /* ── Camera error fallback UI ─────────────────────────────── */
+  describe('camera error fallback', () => {
+    it('shows upload + manual entry when camera fails', async () => {
+      const mod = await import('react-webcam') as any;
+      mod.__setWebcamState({
+        autoUserMedia: false,
+        autoError: new Error('Could not start video source'),
+      });
+
+      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Take Photo \/ Upload/)).toBeInTheDocument();
+      });
+      // Manual entry text may appear in both the error message link and the fallback button
+      const manualEntryElements = screen.getAllByText(/Enter ISBN manually/);
+      expect(manualEntryElements.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('hides capture and auto-scan buttons when camera fails', async () => {
+      const mod = await import('react-webcam') as any;
+      mod.__setWebcamState({
+        autoUserMedia: false,
+        autoError: new Error('Permission denied'),
+      });
+
+      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Take Photo \/ Upload/)).toBeInTheDocument();
+      });
+
+      expect(screen.queryByRole('button', { name: /capture and scan/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /start auto-scan/i })).not.toBeInTheDocument();
+    });
+
+    it('shows status message about alternatives', async () => {
+      const mod = await import('react-webcam') as any;
+      mod.__setWebcamState({
+        autoUserMedia: false,
+        autoError: new Error('No camera'),
+      });
+
+      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/upload a photo or enter ISBN manually/i)).toBeInTheDocument();
+      });
+    });
+
+    it('logs camera error to debug panel', async () => {
+      const mod = await import('react-webcam') as any;
+      mod.__setWebcamState({
+        autoUserMedia: false,
+        autoError: new Error('Device not found'),
+      });
+
+      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
+
+      // Camera error message should appear
+      await waitFor(() => {
+        expect(screen.getByText(/Camera error: Device not found/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /show debug logs/i }));
+
+      // Debug logs should contain the error message
+      await waitFor(() => {
+        const logEntries = screen.getAllByText(/Device not found/);
+        expect(logEntries.length).toBeGreaterThanOrEqual(1);
+      });
     });
   });
 });
