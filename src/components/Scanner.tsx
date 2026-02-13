@@ -1,7 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import type { BrowserMultiFormatReader } from '@zxing/browser';
-import { Camera, Loader2, Edit3, Check, Terminal, Play, Square, ImagePlus, Zap } from 'lucide-react';
+import { Camera, Loader2, Edit3, Check, Terminal, Play, Square, ImagePlus, Zap, Flashlight } from 'lucide-react';
 import { isValidIsbn } from '../utils/isbnValidation.ts';
 import { extractIsbnCandidates, tryFixChecksum } from '../utils/ocr.ts';
 import { useToast } from './Toast.tsx';
@@ -673,6 +673,15 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
             }
             if (isbn) {
                 allCandidates.add(isbn);
+                // Try checksum repair before falling through to OCR
+                const repaired = tryFixChecksum(isbn);
+                if (repaired) {
+                    addLog(`ISBN via barcode (repaired): ${isbn} → ${repaired}`);
+                    setStatus(`Found ISBN: ${repaired}`);
+                    setAutoScan(false);
+                    onScan(repaired);
+                    return;
+                }
             }
 
             /* ── Phase 2: OCR scan (focused, fast) ─────────────── */
@@ -835,7 +844,16 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                 onScan(isbn);
                 return;
             }
-            if (isbn) allCandidates.add(isbn);
+            if (isbn) {
+                allCandidates.add(isbn);
+                const repaired = tryFixChecksum(isbn);
+                if (repaired) {
+                    addLog(`ISBN via barcode (photo, repaired): ${isbn} → ${repaired}`);
+                    setStatus(`Found ISBN: ${repaired}`);
+                    onScan(repaired);
+                    return;
+                }
+            }
 
             /* ── Phase 2: OCR scan (focused) ──────── */
             addLog('Phase 2: OCR on photo...');

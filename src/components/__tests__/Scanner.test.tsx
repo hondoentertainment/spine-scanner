@@ -248,8 +248,8 @@ describe('Scanner', () => {
       await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 5000 });
     });
 
-    it('falls through to OCR if barcode has invalid checksum', async () => {
-      barcodeResult = '9780141036145'; // invalid
+    it('falls through to OCR if barcode has invalid checksum (no repair)', async () => {
+      barcodeResult = '9780141036145'; // invalid, tryFixChecksum returns null
       ocrText = 'No ISBN here at all';
 
       const onScan = vi.fn();
@@ -262,6 +262,20 @@ describe('Scanner', () => {
       // Give it time to run through OCR passes
       await new Promise(r => setTimeout(r, 2000));
       expect(onScan).not.toHaveBeenCalled();
+    }, 10000);
+
+    it('calls onScan with repaired ISBN when barcode has repairable checksum', async () => {
+      // 9780306406151 is invalid; tryFixChecksum repairs to 9780306466151 (0→6 at position 7)
+      barcodeResult = '9780306406151';
+
+      const onScan = vi.fn();
+      renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
+
+      const capture = screen.getByRole('button', { name: /capture and scan/i });
+      await waitFor(() => expect(capture).not.toBeDisabled());
+      await act(async () => { fireEvent.click(capture); });
+
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780306466151'), { timeout: 8000 });
     }, 10000);
   });
 
@@ -295,6 +309,30 @@ describe('Scanner', () => {
         expect(screen.getByText('9780306406158')).toBeInTheDocument();
       }, { timeout: 10000 });
       expect(onScan).not.toHaveBeenCalled();
+    }, 15000);
+
+    it('populates manual form when user clicks invalid ISBN suggestion', async () => {
+      ocrText = 'ISBN 9780306406158'; // invalid checksum, no repair
+
+      const onScan = vi.fn();
+      renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
+
+      const capture = screen.getByRole('button', { name: /capture and scan/i });
+      await waitFor(() => expect(capture).not.toBeDisabled());
+      await act(async () => { fireEvent.click(capture); });
+
+      await waitFor(() => {
+        expect(screen.getByText('9780306406158')).toBeInTheDocument();
+      }, { timeout: 10000 });
+
+      // Click the invalid suggestion (has ? mark) - should populate manual form
+      const suggestionBtn = screen.getByRole('button', { name: /9780306406158/ });
+      fireEvent.click(suggestionBtn);
+
+      await waitFor(() => {
+        const input = screen.getByRole('textbox', { name: /enter isbn/i });
+        expect(input).toHaveValue('9780306406158');
+      });
     }, 15000);
 
     it('does not call onScan when OCR returns no ISBN candidates', async () => {
@@ -453,6 +491,32 @@ describe('Scanner', () => {
       expect(fileInput.getAttribute('aria-hidden')).toBe('true');
       expect(fileInput.style.display).toBe('none');
     });
+
+    it('calls onScan when photo contains valid barcode', async () => {
+      barcodeResult = '9780141036144';
+
+      const onScan = vi.fn();
+      renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Upload photo of ISBN')).toBeInTheDocument();
+      });
+
+      const mockReadAsDataURL = vi.fn(function (this: FileReader) {
+        this.result = 'data:image/png;base64,iVBORw0KGgo=';
+        Promise.resolve().then(() => this.onload?.({ target: this } as ProgressEvent<FileReader>));
+      });
+      vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(mockReadAsDataURL);
+
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File(['test'], 'test.png', { type: 'image/png' });
+
+      await act(async () => {
+        fireEvent.change(fileInput, { target: { files: [file] } });
+      });
+
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 8000 });
+    }, 10000);
   });
 
   /* ── Camera error fallback UI ─────────────────────────────── */

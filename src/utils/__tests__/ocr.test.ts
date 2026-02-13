@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractIsbnCandidates, fixOcrDigits } from '../ocr';
+import { extractIsbnCandidates, fixOcrDigits, tryFixChecksum } from '../ocr';
 import { isValidIsbn } from '../isbnValidation';
 
 /* ================================================================
@@ -294,5 +294,46 @@ describe('extractIsbnCandidates', () => {
       // But should not crash
       expect(Array.isArray(c)).toBe(true);
     });
+  });
+});
+
+/* ================================================================
+ *  tryFixChecksum — Fuzzy checksum repair for OCR/barcode misreads
+ * ================================================================ */
+
+describe('tryFixChecksum', () => {
+  it('returns null for valid ISBN (already valid)', () => {
+    expect(tryFixChecksum('9780141036144')).toBe('9780141036144');
+    expect(tryFixChecksum('0743273567')).toBe('0743273567');
+  });
+
+  it('repairs single-digit OCR error (ISBN-13)', () => {
+    // 9780306406151 invalid; tryFixChecksum fixes via 0→6 at position 7 → 9780306466151
+    const repaired = tryFixChecksum('9780306406151');
+    expect(repaired).toBe('9780306466151');
+    expect(isValidIsbn(repaired!)).toBe(true);
+  });
+
+  it('repairs single-digit OCR error (ISBN-10)', () => {
+    // 0743273567 valid; 0743273561 has 1 instead of 7 (ambiguous 1↔7)
+    const repaired = tryFixChecksum('0743273561');
+    expect(repaired).toBe('0743273567');
+  });
+
+  it('returns null when no single-digit fix exists', () => {
+    // 1111111111111 is invalid; no single-digit substitution yields valid ISBN
+    expect(tryFixChecksum('1111111111111')).toBeNull();
+  });
+
+  it('returns null for wrong-length strings', () => {
+    expect(tryFixChecksum('12345')).toBeNull();
+    expect(tryFixChecksum('')).toBeNull();
+  });
+
+  it('handles ambiguous digit substitutions', () => {
+    // Uses ambiguous map: 0→6/8/9, 1→7/4, etc.
+    // 9780306406151 invalid; 0→6 at position 7 yields valid 9780306466151
+    const repaired = tryFixChecksum('9780306406151');
+    expect(repaired).toBe('9780306466151');
   });
 });
