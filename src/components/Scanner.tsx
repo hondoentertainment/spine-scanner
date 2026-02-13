@@ -1,7 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import type { BrowserMultiFormatReader } from '@zxing/browser';
-import { Camera, Loader2, Edit3, Check, Terminal, Play, Square, ImagePlus, Zap, Flashlight } from 'lucide-react';
+import { Camera, Loader2, Edit3, Check, Terminal, Play, Square, ImagePlus, Zap } from 'lucide-react';
 import { isValidIsbn } from '../utils/isbnValidation.ts';
 import { extractIsbnCandidates, tryFixChecksum } from '../utils/ocr.ts';
 import { useToast } from './Toast.tsx';
