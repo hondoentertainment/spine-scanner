@@ -317,7 +317,8 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                 const coreURL = new URL(TESS_ASSET_BASE, window.location.href).href;
                 addLog(`Creating OCR worker (attempt ${workerRetries.current + 1}/${MAX_WORKER_RETRIES}, assets: ${workerURL.substring(0, 50)}...)`);
 
-                const worker = await withTimeout(
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const worker: any = await withTimeout(
                     tess.createWorker('eng', 1, {
                         workerPath: workerURL,
                         corePath: coreURL,
@@ -539,7 +540,8 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
         const worker = await getWorker();
         if (worker) {
             try {
-                const result = await withTimeout(
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const result: any = await withTimeout(
                     worker.recognize(processedImage),
                     OCR_PASS_TIMEOUT,
                     `OCR ${label}`
@@ -558,7 +560,8 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                 const tess = await loadTessModule();
                 if (tess.recognize) {
                     addLog(`[${label}] Using one-shot recognize() fallback`);
-                    const result = await withTimeout(
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const result: any = await withTimeout(
                         tess.recognize(processedImage, 'eng', {
                             logger: (m: { status: string; progress?: number }) => {
                                 if (m.status === 'recognizing text' && m.progress) {
