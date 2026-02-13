@@ -426,7 +426,7 @@ describe('Scanner', () => {
   describe('auto-scan', () => {
     it('has auto-scan toggle', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
-      expect(screen.getByRole('button', { name: /start auto-scan/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /start auto.*scan/i })).toBeInTheDocument();
     });
 
     it('disables capture while isScanning is true', () => {
