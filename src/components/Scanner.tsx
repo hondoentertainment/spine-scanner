@@ -634,35 +634,54 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning })
                     }
                 }
 
-                // === ZXing fallback — decode from video frame ===
+                // === ZXing fallback — decode from video frame via canvas ===
                 // Always run fallback when native detector is unavailable.
                 // When native exists, sample fallback less frequently for resiliency.
                 const shouldRunZxingFallback = !liveDetectedIsbn && (!detector || scanCount % ZXING_FALLBACK_EVERY_N_FRAMES === 0);
                 if (shouldRunZxingFallback) {
-                    try {
-                        const reader = await getBarcodeReader();
-                        // Try direct video decoding first (most efficient)
-                        const result = await reader.decodeFromVideoElement(video);
-                        const raw = result.getText().replace(/[^0-9X]/g, '');
-                        if (raw.length === 13 || raw.length === 10) {
-                            if (isValidIsbn(raw)) {
-                                liveDetectedIsbn = raw;
-                                bumpLiveTelemetry('zxingHits', 1, true);
-                                addLog(`ZXing: ${raw} ✓`);
-                            } else {
-                                // Try checksum repair
-                                const repaired = tryFixChecksum(raw);
-                                if (repaired) {
-                                    liveDetectedIsbn = repaired;
-                                    bumpLiveTelemetry('zxingHits', 1, true);
-                                    addLog(`ZXing: ${raw} → repaired to ${repaired} ✓`);
-                                } else {
-                                    addLog(`ZXing: ${raw} (invalid checksum, repair failed)`);
+                    const bCanvas = barcodeCanvasRef.current;
+                    if (bCanvas) {
+                        const ctx = bCanvas.getContext('2d');
+                        if (ctx) {
+                            // Use full resolution for better barcode detection
+                            bCanvas.width = video.videoWidth;
+                            bCanvas.height = video.videoHeight;
+                            ctx.drawImage(video, 0, 0);
+
+                            try {
+                                const reader = await getBarcodeReader();
+                                // Use PNG for lossless quality
+                                const dataUrl = bCanvas.toDataURL('image/png');
+                                const tmpImg = liveZxingImageRef.current ?? new Image();
+                                liveZxingImageRef.current = tmpImg;
+                                await new Promise<void>((resolve, reject) => {
+                                    tmpImg.onload = () => resolve();
+                                    tmpImg.onerror = () => reject(new Error('fail'));
+                                    tmpImg.src = dataUrl;
+                                });
+                                const result = await reader.decodeFromImageElement(tmpImg);
+                                const raw = result.getText().replace(/[^0-9X]/g, '');
+                                if (raw.length === 13 || raw.length === 10) {
+                                    if (isValidIsbn(raw)) {
+                                        liveDetectedIsbn = raw;
+                                        bumpLiveTelemetry('zxingHits', 1, true);
+                                        addLog(`ZXing: ${raw} ✓`);
+                                    } else {
+                                        // Try checksum repair
+                                        const repaired = tryFixChecksum(raw);
+                                        if (repaired) {
+                                            liveDetectedIsbn = repaired;
+                                            bumpLiveTelemetry('zxingHits', 1, true);
+                                            addLog(`ZXing: ${raw} → repaired to ${repaired} ✓`);
+                                        } else {
+                                            addLog(`ZXing: ${raw} (invalid checksum, repair failed)`);
+                                        }
+                                    }
                                 }
+                            } catch {
+                                // No barcode in this frame — normal
                             }
                         }
-                    } catch {
-                        // No barcode in this frame — normal
                     }
                 }
 
