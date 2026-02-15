@@ -55,12 +55,14 @@ const OCR_PASS_TIMEOUT = 8000;
 /** Max time (ms) for the entire OCR pipeline. */
 const OCR_TOTAL_TIMEOUT = 35000;
 
-/** Interval (ms) between continuous barcode scans. ~4fps */
-const BARCODE_SCAN_INTERVAL = 250;
-/** Decode fallback frames less frequently when native detector is active. */
-const ZXING_FALLBACK_EVERY_N_FRAMES = 3;
-/** Require repeated detection to reduce one-frame false positives. */
-const LIVE_DETECTION_CONFIRMATIONS = 2;
+/** Interval (ms) between continuous barcode scans. ~5fps for responsive detection. */
+const BARCODE_SCAN_INTERVAL = 200;
+/** Run ZXing fallback every N frames when native detector is also active.
+ *  Set to 1 = run every frame for maximum detection rate. */
+const ZXING_FALLBACK_EVERY_N_FRAMES = 1;
+/** Require repeated detection to reduce one-frame false positives.
+ *  1 = accept on first detection (fastest), 2 = require confirmation. */
+const LIVE_DETECTION_CONFIRMATIONS = 1;
 /** Prevent repeated triggers of the same live code in quick succession. */
 const LIVE_SCAN_DUPLICATE_COOLDOWN_MS = 3000;
 
@@ -73,12 +75,14 @@ const BLUR_VARIANCE_THRESHOLD = 120;
  */
 const TESS_ASSET_BASE = `${import.meta.env.BASE_URL}tesseract/`.replace('//', '/');
 
-const getVideoConstraints = () => {
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+const getVideoConstraints = (): MediaTrackConstraints => {
     return {
         facingMode: 'environment',
-        width: isMobile ? { ideal: 1920 } : { ideal: 1920 },
-        height: isMobile ? { ideal: 1080 } : { ideal: 1080 },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        // Request continuous autofocus — critical for barcode scanning
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ...(({ focusMode: { ideal: 'continuous' } }) as any),
     };
 };
 
@@ -508,11 +512,24 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning })
     /* ── Barcode reader ─────────────────────────────────────────── */
     const getBarcodeReader = useCallback(async () => {
         if (barcodeReaderRef.current) return barcodeReaderRef.current;
-        const mod = await import('@zxing/browser');
-        const reader = new mod.BrowserMultiFormatReader();
+        const [browserMod, libraryMod] = await Promise.all([
+            import('@zxing/browser'),
+            import('@zxing/library'),
+        ]);
+        // Configure hints to focus on barcode formats used for ISBNs
+        const hints = new Map();
+        hints.set(libraryMod.DecodeHintType.POSSIBLE_FORMATS, [
+            libraryMod.BarcodeFormat.EAN_13,
+            libraryMod.BarcodeFormat.EAN_8,
+            libraryMod.BarcodeFormat.UPC_A,
+            libraryMod.BarcodeFormat.UPC_E,
+        ]);
+        hints.set(libraryMod.DecodeHintType.TRY_HARDER, true);
+        const reader = new browserMod.BrowserMultiFormatReader(hints);
         barcodeReaderRef.current = reader;
+        addLog('ZXing reader initialized (EAN-13/EAN-8/UPC-A/UPC-E, TRY_HARDER)');
         return reader;
-    }, []);
+    }, [addLog]);
 
     const getBarcodeDetector = useCallback(() => {
         if (!('BarcodeDetector' in window)) return null;
@@ -646,11 +663,40 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning })
                             // Use full resolution for better barcode detection
                             bCanvas.width = video.videoWidth;
                             bCanvas.height = video.videoHeight;
+
+                            // Apply grayscale + high contrast for barcode clarity
+                            ctx.filter = 'grayscale(1) contrast(1.8)';
                             ctx.drawImage(video, 0, 0);
+                            ctx.filter = 'none';
+
+                            const tryZxingDecode = async (reader: BrowserMultiFormatReader, img: HTMLImageElement): Promise<string | null> => {
+                                try {
+                                    const result = await reader.decodeFromImageElement(img);
+                                    return result.getText().replace(/[^0-9X]/g, '');
+                                } catch {
+                                    return null;
+                                }
+                            };
+
+                            const acceptZxingResult = (raw: string) => {
+                                if (isValidIsbn(raw)) {
+                                    liveDetectedIsbn = raw;
+                                    bumpLiveTelemetry('zxingHits', 1, true);
+                                    addLog(`ZXing: ${raw} ✓`);
+                                } else {
+                                    const repaired = tryFixChecksum(raw);
+                                    if (repaired) {
+                                        liveDetectedIsbn = repaired;
+                                        bumpLiveTelemetry('zxingHits', 1, true);
+                                        addLog(`ZXing: ${raw} → repaired to ${repaired} ✓`);
+                                    } else {
+                                        addLog(`ZXing: ${raw} (invalid checksum, repair failed)`);
+                                    }
+                                }
+                            };
 
                             try {
                                 const reader = await getBarcodeReader();
-                                // Use PNG for lossless quality
                                 const dataUrl = bCanvas.toDataURL('image/png');
                                 const tmpImg = liveZxingImageRef.current ?? new Image();
                                 liveZxingImageRef.current = tmpImg;
@@ -659,23 +705,23 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning })
                                     tmpImg.onerror = () => reject(new Error('fail'));
                                     tmpImg.src = dataUrl;
                                 });
-                                const result = await reader.decodeFromImageElement(tmpImg);
-                                const raw = result.getText().replace(/[^0-9X]/g, '');
-                                if (raw.length === 13 || raw.length === 10) {
-                                    if (isValidIsbn(raw)) {
-                                        liveDetectedIsbn = raw;
-                                        bumpLiveTelemetry('zxingHits', 1, true);
-                                        addLog(`ZXing: ${raw} ✓`);
-                                    } else {
-                                        // Try checksum repair
-                                        const repaired = tryFixChecksum(raw);
-                                        if (repaired) {
-                                            liveDetectedIsbn = repaired;
-                                            bumpLiveTelemetry('zxingHits', 1, true);
-                                            addLog(`ZXing: ${raw} → repaired to ${repaired} ✓`);
-                                        } else {
-                                            addLog(`ZXing: ${raw} (invalid checksum, repair failed)`);
-                                        }
+                                // First attempt: preprocessed (grayscale + contrast)
+                                let raw = await tryZxingDecode(reader, tmpImg);
+                                if (raw && (raw.length === 13 || raw.length === 10)) {
+                                    acceptZxingResult(raw);
+                                } else {
+                                    // Second attempt: raw frame (no preprocessing)
+                                    ctx.filter = 'none';
+                                    ctx.drawImage(video, 0, 0);
+                                    const rawUrl = bCanvas.toDataURL('image/png');
+                                    await new Promise<void>((resolve, reject) => {
+                                        tmpImg.onload = () => resolve();
+                                        tmpImg.onerror = () => reject(new Error('fail'));
+                                        tmpImg.src = rawUrl;
+                                    });
+                                    raw = await tryZxingDecode(reader, tmpImg);
+                                    if (raw && (raw.length === 13 || raw.length === 10)) {
+                                        acceptZxingResult(raw);
                                     }
                                 }
                             } catch {
@@ -1254,10 +1300,29 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning })
                 ref={webcamRef}
                 screenshotFormat="image/jpeg"
                 videoConstraints={getVideoConstraints()}
-                onUserMedia={() => {
+                onUserMedia={(stream) => {
                     setCameraError(null);
                     setCameraReady(true);
                     setStatus('Scanning for barcodes automatically...');
+                    // Apply advanced camera constraints for barcode scanning
+                    try {
+                        const track = stream.getVideoTracks()[0];
+                        if (track) {
+                            const caps = track.getCapabilities?.() as Record<string, unknown> | undefined;
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const advanced: Record<string, any> = {};
+                            if (caps?.focusMode) advanced.focusMode = 'continuous';
+                            if (caps?.torch) advanced.torch = false; // can be enabled later
+                            if (Object.keys(advanced).length > 0) {
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                track.applyConstraints({ advanced: [advanced] } as any)
+                                    .then(() => addLog(`Camera constraints applied: ${Object.keys(advanced).join(', ')}`))
+                                    .catch(() => {/* best effort */});
+                            }
+                            const settings = track.getSettings();
+                            addLog(`Camera: ${settings.width}x${settings.height}${settings.facingMode ? ` (${settings.facingMode})` : ''}`);
+                        }
+                    } catch { /* best effort */ }
                 }}
                 onUserMediaError={(err) => {
                     const msg = err instanceof Error ? err.message : 'Camera access denied';
