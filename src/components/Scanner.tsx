@@ -59,8 +59,6 @@ const OCR_TOTAL_TIMEOUT = 35000;
 const BARCODE_SCAN_INTERVAL = 250;
 /** Decode fallback frames less frequently when native detector is active. */
 const ZXING_FALLBACK_EVERY_N_FRAMES = 3;
-/** Reduced target width for live scans to keep decode latency low. */
-const LIVE_SCAN_MAX_WIDTH = 960;
 /** Require repeated detection to reduce one-frame false positives. */
 const LIVE_DETECTION_CONFIRMATIONS = 2;
 /** Prevent repeated triggers of the same live code in quick succession. */
@@ -584,7 +582,8 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning })
         };
         setLiveTelemetry({ ...liveTelemetryRef.current });
         setContinuousActive(true);
-        addLog('Continuous barcode scanning started');
+        const hasNativeDetector = 'BarcodeDetector' in window;
+        addLog(`Continuous barcode scanning started (native: ${hasNativeDetector ? 'yes' : 'no'}, ZXing: yes)`);
 
         const scan = async () => {
             if (!active) return;
@@ -606,15 +605,32 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning })
                     try {
                         const barcodes = await detector.detect(video);
                         for (const bc of barcodes) {
-                            const text = (bc.rawValue || '').replace(/[^0-9X]/g, '');
-                            if ((text.length === 13 || text.length === 10) && isValidIsbn(text)) {
-                                liveDetectedIsbn = text;
-                                bumpLiveTelemetry('nativeHits', 1, true);
-                                break;
+                            const raw = (bc.rawValue || '').replace(/[^0-9X]/g, '');
+                            if (raw.length === 13 || raw.length === 10) {
+                                if (isValidIsbn(raw)) {
+                                    liveDetectedIsbn = raw;
+                                    bumpLiveTelemetry('nativeHits', 1, true);
+                                    addLog(`Native detector: ${raw} ✓`);
+                                    break;
+                                } else {
+                                    // Try checksum repair
+                                    const repaired = tryFixChecksum(raw);
+                                    if (repaired) {
+                                        liveDetectedIsbn = repaired;
+                                        bumpLiveTelemetry('nativeHits', 1, true);
+                                        addLog(`Native detector: ${raw} → repaired to ${repaired} ✓`);
+                                        break;
+                                    } else {
+                                        addLog(`Native detector: ${raw} (invalid checksum, repair failed)`);
+                                    }
+                                }
                             }
                         }
-                    } catch {
+                    } catch (err) {
                         // BarcodeDetector.detect() failed — continue to ZXing
+                        if (scanCount === 1) {
+                            addLog(`Native detector error: ${err instanceof Error ? err.message : String(err)}`);
+                        }
                     }
                 }
 
@@ -623,36 +639,30 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning })
                 // When native exists, sample fallback less frequently for resiliency.
                 const shouldRunZxingFallback = !liveDetectedIsbn && (!detector || scanCount % ZXING_FALLBACK_EVERY_N_FRAMES === 0);
                 if (shouldRunZxingFallback) {
-                    const bCanvas = barcodeCanvasRef.current;
-                    if (bCanvas) {
-                        const ctx = bCanvas.getContext('2d');
-                        if (ctx) {
-                            const targetW = Math.min(video.videoWidth, LIVE_SCAN_MAX_WIDTH);
-                            const targetH = Math.round(targetW * (video.videoHeight / video.videoWidth));
-                            bCanvas.width = targetW;
-                            bCanvas.height = targetH;
-                            ctx.drawImage(video, 0, 0, targetW, targetH);
-
-                            try {
-                                const reader = await getBarcodeReader();
-                                const dataUrl = bCanvas.toDataURL('image/jpeg', 0.82);
-                                const tmpImg = liveZxingImageRef.current ?? new Image();
-                                liveZxingImageRef.current = tmpImg;
-                                await new Promise<void>((resolve, reject) => {
-                                    tmpImg.onload = () => resolve();
-                                    tmpImg.onerror = () => reject(new Error('fail'));
-                                    tmpImg.src = dataUrl;
-                                });
-                                const result = await reader.decodeFromImageElement(tmpImg);
-                                const text = result.getText().replace(/[^0-9X]/g, '');
-                                if ((text.length === 13 || text.length === 10) && isValidIsbn(text)) {
-                                    liveDetectedIsbn = text;
+                    try {
+                        const reader = await getBarcodeReader();
+                        // Try direct video decoding first (most efficient)
+                        const result = await reader.decodeFromVideoElement(video);
+                        const raw = result.getText().replace(/[^0-9X]/g, '');
+                        if (raw.length === 13 || raw.length === 10) {
+                            if (isValidIsbn(raw)) {
+                                liveDetectedIsbn = raw;
+                                bumpLiveTelemetry('zxingHits', 1, true);
+                                addLog(`ZXing: ${raw} ✓`);
+                            } else {
+                                // Try checksum repair
+                                const repaired = tryFixChecksum(raw);
+                                if (repaired) {
+                                    liveDetectedIsbn = repaired;
                                     bumpLiveTelemetry('zxingHits', 1, true);
+                                    addLog(`ZXing: ${raw} → repaired to ${repaired} ✓`);
+                                } else {
+                                    addLog(`ZXing: ${raw} (invalid checksum, repair failed)`);
                                 }
-                            } catch {
-                                // No barcode in this frame — normal
                             }
                         }
+                    } catch {
+                        // No barcode in this frame — normal
                     }
                 }
 
@@ -695,9 +705,10 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning })
             scanCount++;
             // Log periodically to show scanning is active
             if (scanCount === 1) {
-                addLog('Scanning for barcodes... point camera at ISBN barcode');
-            } else if (scanCount % 40 === 0) {
-                addLog(`Still scanning... (${scanCount} frames checked)`);
+                addLog(`Scanning for barcodes... point camera at ISBN barcode (${video.videoWidth}x${video.videoHeight})`);
+            } else if (scanCount % 30 === 0) {
+                const t = liveTelemetryRef.current;
+                addLog(`Scan #${scanCount}: native=${t.nativeHits}, zxing=${t.zxingHits}, confirmed=${t.confirmed}`);
             }
 
             if (active) {

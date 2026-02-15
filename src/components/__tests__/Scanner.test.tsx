@@ -131,6 +131,10 @@ vi.mock('@zxing/browser', () => ({
       if (barcodeResult === null) throw new Error('No barcode');
       return { getText: () => barcodeResult };
     }
+    async decodeFromVideoElement() {
+      if (barcodeResult === null) throw new Error('No barcode');
+      return { getText: () => barcodeResult };
+    }
   },
 }));
 
