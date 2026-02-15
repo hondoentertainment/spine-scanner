@@ -24,9 +24,10 @@ class MockImage {
 
   constructor() {
     // Auto-fire onload when src is set via microtask (faster than setTimeout)
-    const proxy = new Proxy(this, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const proxy = new Proxy(this as any, {
       set(target, prop, value) {
-        (target as any)[prop] = value;
+        target[prop] = value;
         if (prop === 'src' && value && target.onload) {
           // Use Promise.resolve().then for microtask scheduling —
           // much faster than setTimeout(0) which uses macrotask queue
@@ -58,7 +59,9 @@ beforeEach(() => {
   globalThis.Image = MockImage;
 
   // Plain function wrappers — immune to vi.restoreAllMocks()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   HTMLCanvasElement.prototype.getContext = (() => mockCtx) as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   HTMLCanvasElement.prototype.toDataURL = (() => 'data:image/png;base64,mockcanvas') as any;
 });
 
@@ -90,7 +93,8 @@ vi.mock('react-webcam', () => {
   // Reset via __setWebcamState (called in beforeEach) so each test starts fresh.
   let callbackFired = false;
 
-  const Webcam = React.forwardRef((props: any, ref) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const Webcam = React.forwardRef((props: Record<string, any>, ref) => {
     React.useEffect(() => {
       // Fire the media callback only once to prevent infinite re-render loops.
       // (State updates inside the callback trigger re-renders → new props → useEffect re-fires.)
@@ -136,7 +140,7 @@ let createWorkerShouldFail = false;
 let workerShouldFail = false;
 
 vi.mock('tesseract.js', () => ({
-  createWorker: async (..._args: any[]) => {
+  createWorker: async () => {
     if (createWorkerShouldFail) throw new Error('Worker creation failed');
     return {
       setParameters: async () => ({ data: null, jobId: '' }),
@@ -176,6 +180,7 @@ describe('Scanner', () => {
     createWorkerShouldFail = false;
     workerShouldFail = false;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mod = await import('react-webcam') as any;
     mod.__setWebcamState({
       readyState: 4,
@@ -192,6 +197,7 @@ describe('Scanner', () => {
   /* ── Camera readiness ──────────────────────────────────────── */
   describe('camera readiness', () => {
     it('shows camera error and upload fallback on permission failure', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mod = await import('react-webcam') as any;
       mod.__setWebcamState({
         autoUserMedia: false,
@@ -216,6 +222,7 @@ describe('Scanner', () => {
     });
 
     it('shows not-ready status if video readyState < 2', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mod = await import('react-webcam') as any;
       mod.__setWebcamState({ readyState: 1, autoUserMedia: true, autoError: null });
 
@@ -522,6 +529,7 @@ describe('Scanner', () => {
   /* ── Camera error fallback UI ─────────────────────────────── */
   describe('camera error fallback', () => {
     it('shows upload + manual entry when camera fails', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mod = await import('react-webcam') as any;
       mod.__setWebcamState({
         autoUserMedia: false,
@@ -539,6 +547,7 @@ describe('Scanner', () => {
     });
 
     it('hides capture and auto-scan buttons when camera fails', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mod = await import('react-webcam') as any;
       mod.__setWebcamState({
         autoUserMedia: false,
@@ -556,6 +565,7 @@ describe('Scanner', () => {
     });
 
     it('shows status message about alternatives', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mod = await import('react-webcam') as any;
       mod.__setWebcamState({
         autoUserMedia: false,
@@ -570,6 +580,7 @@ describe('Scanner', () => {
     });
 
     it('logs camera error to debug panel', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mod = await import('react-webcam') as any;
       mod.__setWebcamState({
         autoUserMedia: false,

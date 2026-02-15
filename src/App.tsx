@@ -121,6 +121,31 @@ function App() {
     await flushQueue();
   }, [user, flushQueue]);
 
+  const handlePhotoCapture = useCallback((imageDataUrl: string) => {
+    const id = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+    const photoIsbn = `photo-${id}`;
+    const newBook: BookEntry = {
+      id,
+      isbn: photoIsbn,
+      title: 'Unknown Title',
+      author: 'Unknown Author',
+      pageCount: 0,
+      amazonLink: '',
+      coverImg: imageDataUrl,
+      status: 'to-read',
+      notes: '',
+      dateAdded: new Date().toISOString(),
+      shelfIds: [],
+    };
+    addBook(newBook);
+    toast('Book added with photo. Edit details in your library.', 'success');
+    if (user && online) {
+      pushBooks(user.id, [...books, newBook]).catch(console.error);
+    }
+    setOpenBookIsbn(photoIsbn);
+    setView('library');
+  }, [addBook, books, user, online, toast]);
+
   const handleScan = async (isbn: string) => {
     console.log(`[App] Received scan for ISBN: ${isbn}`);
     if (!isValidIsbn(isbn)) {
@@ -170,7 +195,36 @@ function App() {
         }
       } else {
         console.log(`[App] No metadata found or lookup failed for ${isbn}.`);
-        toast('No metadata found for this ISBN.', 'error');
+        const addAnyway = await confirm({
+          title: 'No metadata found',
+          message: `Google Books and Open Library couldn't find details for ISBN ${isbn}. Add it anyway? You can edit the title and author manually in your library.`,
+          confirmLabel: 'Add anyway',
+          cancelLabel: 'Cancel',
+        });
+        if (addAnyway) {
+          const newBook: BookEntry = {
+            id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2),
+            isbn,
+            title: 'Unknown Title',
+            author: 'Unknown Author',
+            pageCount: 0,
+            amazonLink: generateAmazonLink(isbn),
+            coverImg: '',
+            status: 'to-read',
+            notes: '',
+            dateAdded: new Date().toISOString(),
+            shelfIds: [],
+          };
+          addBook(newBook);
+          toast('Added with ISBN only. Edit details in your library.', 'success');
+          if (user && online) {
+            pushBooks(user.id, [...books, newBook]).catch(console.error);
+          }
+          setOpenBookIsbn(isbn);
+          setView('library');
+        } else {
+          toast('No metadata found for this ISBN.', 'error');
+        }
       }
     } catch (err) {
       console.error('[App] Error during scan handler:', err);
@@ -242,10 +296,10 @@ function App() {
             <div className={styles.scanView}>
               <div className={styles.scanHeader}>
                 <h2 className={styles.scanTitle}>Scan Book Spine</h2>
-                <p className={styles.scanSubtitle}>Position the ISBN barcode or text within the viewfinder.</p>
+                <p className={styles.scanSubtitle}>Scan ISBN, capture a book photo, or enter manually.</p>
               </div>
 
-              <Scanner onScan={handleScan} isScanning={loading} />
+              <Scanner onScan={handleScan} onPhotoCapture={handlePhotoCapture} isScanning={loading} />
 
               {error && (
                 <div className={`glass ${styles.alertError}`}>

@@ -14,9 +14,10 @@ import { describe, it, expect } from 'vitest';
 
 // Re-implement the resolution logic here so we can test it in isolation
 // (the actual function lives in Scanner.tsx but is not exported)
-function resolveTesseractModule(mod: any): {
-  createWorker: any;
-  recognize: any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function resolveTesseractModule(mod: Record<string, any>): {
+  createWorker: unknown;
+  recognize: unknown;
   PSM: Record<string, string>;
 } {
   const root = mod.createWorker ? mod : mod.default ?? mod;

@@ -147,12 +147,14 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
                 <div className={s.info}>
                     <h3 className={s.bookTitle}>{book.title}</h3>
                     <p className={s.bookAuthor}>{book.author}</p>
-                    <div className={s.links}>
+                    {generateAmazonLink(book.isbn) && (
+                      <div className={s.links}>
                         <a href={generateAmazonLink(book.isbn)} target="_blank" rel="noopener noreferrer"
                            className={`glass ${s.amazonBtn}`} onClick={(e) => e.stopPropagation()}>
                             <ExternalLink size={12} /> Amazon
                         </a>
-                    </div>
+                      </div>
+                    )}
                 </div>
             </div>
 

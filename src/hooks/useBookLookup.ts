@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { isbn13To10, isbn10To13 } from '../utils/isbnValidation.ts';
 
 export interface BookMetadata {
     title: string;
@@ -93,6 +94,17 @@ export const useBookLookup = () => {
             // Fall back to Open Library if Google returns nothing
             if (!result) {
                 result = await lookupOpenLibrary(isbn);
+            }
+
+            // Try alternate ISBN format (13↔10) — some APIs have better coverage for one format
+            if (!result) {
+                const alt = isbn.length === 13 ? isbn13To10(isbn) : isbn10To13(isbn);
+                if (alt) {
+                    result = await lookupGoogleBooks(alt) ?? await lookupOpenLibrary(alt);
+                    if (result) {
+                        result = { ...result, isbn };
+                    }
+                }
             }
 
             if (!result) {

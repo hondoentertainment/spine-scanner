@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import BookDetail from '../BookDetail';
 import { ToastProvider } from '../Toast';
 import { useBookStore } from '../../store/useBookStore';

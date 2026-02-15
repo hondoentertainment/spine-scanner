@@ -19,10 +19,10 @@ vi.mock('../../lib/supabase', () => ({
   supabase: {
     auth: {
       getSession: () => mockGetSession(),
-      signUp: (creds: any) => mockSignUp(creds),
-      signInWithPassword: (creds: any) => mockSignInWithPassword(creds),
+      signUp: (creds: { email: string; password: string }) => mockSignUp(creds),
+      signInWithPassword: (creds: { email: string; password: string }) => mockSignInWithPassword(creds),
       signOut: () => mockSignOut(),
-      onAuthStateChange: (cb: any) => mockOnAuthStateChange(cb),
+      onAuthStateChange: (cb: (...args: unknown[]) => void) => mockOnAuthStateChange(cb),
     },
   },
 }));
@@ -146,6 +146,7 @@ describe('useAuthStore', () => {
   describe('signOut', () => {
     it('clears user and session on successful sign-out', async () => {
       // Start signed in
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       useAuthStore.setState({ user: fakeUser as any, session: fakeSession as any, loading: false });
       mockSignOut.mockResolvedValue({ error: null });
 
@@ -158,6 +159,7 @@ describe('useAuthStore', () => {
     });
 
     it('sets error on sign-out failure', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       useAuthStore.setState({ user: fakeUser as any, session: fakeSession as any, loading: false });
       mockSignOut.mockResolvedValue({ error: { message: 'Sign out failed' } });
 

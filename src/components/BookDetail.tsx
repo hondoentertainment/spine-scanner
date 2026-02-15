@@ -169,18 +169,20 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                 <h2 className={styles.title}>{book.title}</h2>
                 <p className={styles.author}>{book.author}</p>
                 <div className={styles.details}>
-                  <span>ISBN: {book.isbn}</span>
+                  {!book.isbn.startsWith('photo-') && <span>ISBN: {book.isbn}</span>}
                   {book.pageCount > 0 && <span>{book.pageCount} pages</span>}
                   <span>Added {new Date(book.dateAdded).toLocaleDateString()}</span>
                 </div>
-                <a
-                  href={generateAmazonLink(book.isbn)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={styles.amazonLink}
-                >
-                  <ExternalLink size={12} /> View on Amazon
-                </a>
+                {generateAmazonLink(book.isbn) && (
+                  <a
+                    href={generateAmazonLink(book.isbn)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.amazonLink}
+                  >
+                    <ExternalLink size={12} /> View on Amazon
+                  </a>
+                )}
               </>
             )}
           </div>

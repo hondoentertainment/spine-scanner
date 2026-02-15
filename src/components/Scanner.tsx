@@ -1,7 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import type { BrowserMultiFormatReader } from '@zxing/browser';
-import { Camera, Loader2, Edit3, Check, Terminal, Play, Square, ImagePlus, Zap } from 'lucide-react';
+import { Camera, Loader2, Edit3, Check, Terminal, Play, Square, ImagePlus, Zap, Image as ImageIcon } from 'lucide-react';
 import { isValidIsbn } from '../utils/isbnValidation.ts';
 import { extractIsbnCandidates, tryFixChecksum } from '../utils/ocr.ts';
 import { useToast } from './Toast.tsx';
@@ -13,6 +13,7 @@ import s from './Scanner.module.css';
 
 interface ScannerProps {
     onScan: (isbn: string) => void;
+    onPhotoCapture?: (imageDataUrl: string) => void;
     isScanning: boolean;
 }
 
@@ -20,6 +21,22 @@ interface CropRegion {
     widthFrac: number;
     heightFrac: number;
     label: string;
+}
+
+interface FrameQuality {
+    brightness: number;
+    blurVariance: number;
+    isDark: boolean;
+    isBlurry: boolean;
+}
+
+interface LiveScanTelemetry {
+    attempts: number;
+    nativeHits: number;
+    zxingHits: number;
+    confirmed: number;
+    cooldownSuppressed: number;
+    busySuppressed: number;
 }
 
 /* ================================================================
@@ -40,6 +57,18 @@ const OCR_TOTAL_TIMEOUT = 35000;
 
 /** Interval (ms) between continuous barcode scans. ~4fps */
 const BARCODE_SCAN_INTERVAL = 250;
+/** Decode fallback frames less frequently when native detector is active. */
+const ZXING_FALLBACK_EVERY_N_FRAMES = 3;
+/** Reduced target width for live scans to keep decode latency low. */
+const LIVE_SCAN_MAX_WIDTH = 960;
+/** Require repeated detection to reduce one-frame false positives. */
+const LIVE_DETECTION_CONFIRMATIONS = 2;
+/** Prevent repeated triggers of the same live code in quick succession. */
+const LIVE_SCAN_DUPLICATE_COOLDOWN_MS = 3000;
+
+/** OCR guidance thresholds tuned for 1080p-ish mobile captures. */
+const DARK_SCENE_THRESHOLD = 90;
+const BLUR_VARIANCE_THRESHOLD = 120;
 
 /**
  * Build local asset paths for Tesseract.js.
@@ -169,6 +198,73 @@ const detectBrightness = (
     }
 };
 
+const detectBlurVariance = (
+    img: HTMLImageElement,
+    canvas: HTMLCanvasElement,
+    crop: CropRegion,
+): number => {
+    try {
+        const ctx = canvas.getContext('2d');
+        if (!ctx || typeof ctx.getImageData !== 'function') return BLUR_VARIANCE_THRESHOLD;
+
+        const cropX = img.width * (1 - crop.widthFrac) / 2;
+        const cropY = img.height * (1 - crop.heightFrac) / 2;
+        const cropW = img.width * crop.widthFrac;
+        const cropH = img.height * crop.heightFrac;
+        const sampleW = Math.min(Math.floor(cropW), 320);
+        const sampleH = Math.min(Math.floor(cropH), 220);
+        if (sampleW < 3 || sampleH < 3) return BLUR_VARIANCE_THRESHOLD;
+
+        canvas.width = sampleW;
+        canvas.height = sampleH;
+        ctx.filter = 'grayscale(100%)';
+        ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, sampleW, sampleH);
+
+        const data = ctx.getImageData(0, 0, sampleW, sampleH).data;
+        const gray = new Float32Array(sampleW * sampleH);
+        for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+            gray[p] = data[i];
+        }
+
+        let sum = 0;
+        let sumSq = 0;
+        let count = 0;
+
+        // Variance of Laplacian approximation: robust blur signal for text edges.
+        for (let y = 1; y < sampleH - 1; y++) {
+            const row = y * sampleW;
+            for (let x = 1; x < sampleW - 1; x++) {
+                const idx = row + x;
+                const lap = 4 * gray[idx] - gray[idx - 1] - gray[idx + 1] - gray[idx - sampleW] - gray[idx + sampleW];
+                sum += lap;
+                sumSq += lap * lap;
+                count++;
+            }
+        }
+
+        if (count === 0) return BLUR_VARIANCE_THRESHOLD;
+        const mean = sum / count;
+        return sumSq / count - mean * mean;
+    } catch {
+        return BLUR_VARIANCE_THRESHOLD;
+    }
+};
+
+const assessFrameQuality = (
+    img: HTMLImageElement,
+    canvas: HTMLCanvasElement,
+    crop: CropRegion = CROP_MEDIUM,
+): FrameQuality => {
+    const brightness = detectBrightness(img, canvas, crop);
+    const blurVariance = detectBlurVariance(img, canvas, crop);
+    return {
+        brightness,
+        blurVariance,
+        isDark: brightness < DARK_SCENE_THRESHOLD,
+        isBlurry: blurVariance < BLUR_VARIANCE_THRESHOLD,
+    };
+};
+
 /** Crop for barcode — no filters. */
 const cropForBarcode = (
     img: HTMLImageElement,
@@ -228,7 +324,7 @@ function resolveTesseractModule(mod: TessModule): ResolvedTesseract {
  *  Component
  * ================================================================ */
 
-const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
+const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning }) => {
     const webcamRef = useRef<Webcam>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const barcodeCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -243,13 +339,36 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
     const [showDebug, setShowDebug] = useState(false);
     const [autoScan, setAutoScan] = useState(false);
     const [continuousActive, setContinuousActive] = useState(false);
+    const [liveTelemetry, setLiveTelemetry] = useState<LiveScanTelemetry>({
+        attempts: 0,
+        nativeHits: 0,
+        zxingHits: 0,
+        confirmed: 0,
+        cooldownSuppressed: 0,
+        busySuppressed: 0,
+    });
     const autoScanRef = useRef(false);
     const processingRef = useRef(false);
     const showManualRef = useRef(false);
     const continuousActiveRef = useRef(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const photoOnlyInputRef = useRef<HTMLInputElement>(null);
     const barcodeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const barcodeDetectorRef = useRef<any | null>(null);
+    const liveZxingImageRef = useRef<HTMLImageElement | null>(null);
+    const liveDetectedCandidateRef = useRef<string | null>(null);
+    const liveDetectedStreakRef = useRef(0);
+    const lastLiveAcceptedRef = useRef<{ isbn: string; at: number } | null>(null);
+    const liveTelemetryRef = useRef<LiveScanTelemetry>({
+        attempts: 0,
+        nativeHits: 0,
+        zxingHits: 0,
+        confirmed: 0,
+        cooldownSuppressed: 0,
+        busySuppressed: 0,
+    });
 
     // Tesseract state
     const tessModuleRef = useRef<ResolvedTesseract | null>(null);
@@ -272,12 +391,24 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
     useEffect(() => {
         const c = document.createElement('canvas');
         barcodeCanvasRef.current = c;
-        return () => { barcodeCanvasRef.current = null; };
+        liveZxingImageRef.current = new Image();
+        return () => {
+            barcodeCanvasRef.current = null;
+            liveZxingImageRef.current = null;
+        };
     }, []);
 
     const addLog = useCallback((msg: string) => {
         console.log(`[Scanner] ${msg}`);
         setDebugLogs(prev => [msg, ...prev].slice(0, 50));
+    }, []);
+
+    const bumpLiveTelemetry = useCallback((field: keyof LiveScanTelemetry, amount = 1, forceFlush = false) => {
+        liveTelemetryRef.current[field] += amount;
+        const shouldFlush = forceFlush || field !== 'attempts' || liveTelemetryRef.current.attempts % 20 === 0;
+        if (shouldFlush) {
+            setLiveTelemetry({ ...liveTelemetryRef.current });
+        }
     }, []);
 
     /* ── Load the tesseract.js module (once) ────────────────────── */
@@ -385,6 +516,20 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
         return reader;
     }, []);
 
+    const getBarcodeDetector = useCallback(() => {
+        if (!('BarcodeDetector' in window)) return null;
+        if (barcodeDetectorRef.current) return barcodeDetectorRef.current;
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            barcodeDetectorRef.current = new (window as any).BarcodeDetector({
+                formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'],
+            });
+            return barcodeDetectorRef.current;
+        } catch {
+            return null;
+        }
+    }, []);
+
     /* ── Try barcode decode on an image source ──────────────────── */
     const tryBarcodeDecode = useCallback(async (
         imageSource: HTMLImageElement | string,
@@ -429,6 +574,15 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
 
         let active = true;
         let scanCount = 0;
+        liveTelemetryRef.current = {
+            attempts: 0,
+            nativeHits: 0,
+            zxingHits: 0,
+            confirmed: 0,
+            cooldownSuppressed: 0,
+            busySuppressed: 0,
+        };
+        setLiveTelemetry({ ...liveTelemetryRef.current });
         setContinuousActive(true);
         addLog('Continuous barcode scanning started');
 
@@ -440,25 +594,23 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                 if (active) setTimeout(scan, 500);
                 return;
             }
+            bumpLiveTelemetry('attempts');
 
             try {
+                let liveDetectedIsbn: string | null = null;
+
                 // === Native BarcodeDetector API (fastest, GPU-accelerated) ===
                 // Available in Chrome 83+, Edge 83+, Opera 69+, Samsung Internet
-                if ('BarcodeDetector' in window) {
+                const detector = getBarcodeDetector();
+                if (detector) {
                     try {
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const detector = new (window as any).BarcodeDetector({
-                            formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'],
-                        });
                         const barcodes = await detector.detect(video);
                         for (const bc of barcodes) {
                             const text = (bc.rawValue || '').replace(/[^0-9X]/g, '');
                             if ((text.length === 13 || text.length === 10) && isValidIsbn(text)) {
-                                addLog(`Barcode (native BarcodeDetector): ${text} ✓`);
-                                setContinuousActive(false);
-                                active = false;
-                                onScan(text);
-                                return;
+                                liveDetectedIsbn = text;
+                                bumpLiveTelemetry('nativeHits', 1, true);
+                                break;
                             }
                         }
                     } catch {
@@ -467,40 +619,74 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                 }
 
                 // === ZXing fallback — decode from video frame ===
-                const bCanvas = barcodeCanvasRef.current;
-                if (bCanvas) {
-                    const ctx = bCanvas.getContext('2d');
-                    if (ctx) {
-                        // Use reduced resolution for speed (720p is enough for barcodes)
-                        const targetW = Math.min(video.videoWidth, 1280);
-                        const targetH = Math.round(targetW * (video.videoHeight / video.videoWidth));
-                        bCanvas.width = targetW;
-                        bCanvas.height = targetH;
-                        ctx.drawImage(video, 0, 0, targetW, targetH);
+                // Always run fallback when native detector is unavailable.
+                // When native exists, sample fallback less frequently for resiliency.
+                const shouldRunZxingFallback = !liveDetectedIsbn && (!detector || scanCount % ZXING_FALLBACK_EVERY_N_FRAMES === 0);
+                if (shouldRunZxingFallback) {
+                    const bCanvas = barcodeCanvasRef.current;
+                    if (bCanvas) {
+                        const ctx = bCanvas.getContext('2d');
+                        if (ctx) {
+                            const targetW = Math.min(video.videoWidth, LIVE_SCAN_MAX_WIDTH);
+                            const targetH = Math.round(targetW * (video.videoHeight / video.videoWidth));
+                            bCanvas.width = targetW;
+                            bCanvas.height = targetH;
+                            ctx.drawImage(video, 0, 0, targetW, targetH);
 
-                        try {
-                            const reader = await getBarcodeReader();
-                            // Create temp image from canvas for ZXing
-                            const dataUrl = bCanvas.toDataURL('image/jpeg', 0.85);
-                            const tmpImg = new Image();
-                            await new Promise<void>((resolve, reject) => {
-                                tmpImg.onload = () => resolve();
-                                tmpImg.onerror = () => reject(new Error('fail'));
-                                tmpImg.src = dataUrl;
-                            });
-                            const result = await reader.decodeFromImageElement(tmpImg);
-                            const text = result.getText().replace(/[^0-9X]/g, '');
-                            if ((text.length === 13 || text.length === 10) && isValidIsbn(text)) {
-                                addLog(`Barcode (ZXing continuous): ${text} ✓`);
-                                setContinuousActive(false);
-                                active = false;
-                                onScan(text);
-                                return;
+                            try {
+                                const reader = await getBarcodeReader();
+                                const dataUrl = bCanvas.toDataURL('image/jpeg', 0.82);
+                                const tmpImg = liveZxingImageRef.current ?? new Image();
+                                liveZxingImageRef.current = tmpImg;
+                                await new Promise<void>((resolve, reject) => {
+                                    tmpImg.onload = () => resolve();
+                                    tmpImg.onerror = () => reject(new Error('fail'));
+                                    tmpImg.src = dataUrl;
+                                });
+                                const result = await reader.decodeFromImageElement(tmpImg);
+                                const text = result.getText().replace(/[^0-9X]/g, '');
+                                if ((text.length === 13 || text.length === 10) && isValidIsbn(text)) {
+                                    liveDetectedIsbn = text;
+                                    bumpLiveTelemetry('zxingHits', 1, true);
+                                }
+                            } catch {
+                                // No barcode in this frame — normal
                             }
-                        } catch {
-                            // No barcode in this frame — normal
                         }
                     }
+                }
+
+                if (liveDetectedIsbn) {
+                    if (liveDetectedCandidateRef.current === liveDetectedIsbn) {
+                        liveDetectedStreakRef.current += 1;
+                    } else {
+                        liveDetectedCandidateRef.current = liveDetectedIsbn;
+                        liveDetectedStreakRef.current = 1;
+                    }
+
+                    const accepted = lastLiveAcceptedRef.current;
+                    const isDuplicateWithinCooldown = !!accepted
+                        && accepted.isbn === liveDetectedIsbn
+                        && Date.now() - accepted.at < LIVE_SCAN_DUPLICATE_COOLDOWN_MS;
+
+                    if (!isDuplicateWithinCooldown && liveDetectedStreakRef.current >= LIVE_DETECTION_CONFIRMATIONS) {
+                        if (processingRef.current || isScanning) {
+                            bumpLiveTelemetry('busySuppressed', 1, true);
+                        } else {
+                            bumpLiveTelemetry('confirmed', 1, true);
+                            addLog(`Barcode (live): ${liveDetectedIsbn} ✓`);
+                            lastLiveAcceptedRef.current = { isbn: liveDetectedIsbn, at: Date.now() };
+                            setContinuousActive(false);
+                            active = false;
+                            onScan(liveDetectedIsbn);
+                            return;
+                        }
+                    } else if (isDuplicateWithinCooldown && liveDetectedStreakRef.current >= LIVE_DETECTION_CONFIRMATIONS) {
+                        bumpLiveTelemetry('cooldownSuppressed', 1, true);
+                    }
+                } else {
+                    liveDetectedCandidateRef.current = null;
+                    liveDetectedStreakRef.current = 0;
                 }
             } catch {
                 // Scan error — continue
@@ -515,7 +701,8 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
             }
 
             if (active) {
-                setTimeout(scan, BARCODE_SCAN_INTERVAL);
+                const nextInterval = document.hidden ? 600 : BARCODE_SCAN_INTERVAL;
+                setTimeout(scan, nextInterval);
             }
         };
 
@@ -525,9 +712,11 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
         return () => {
             active = false;
             setContinuousActive(false);
+            liveDetectedCandidateRef.current = null;
+            liveDetectedStreakRef.current = 0;
             addLog('Continuous barcode scanning stopped');
         };
-    }, [cameraReady, cameraError, isScanning, onScan, getBarcodeReader, addLog]);
+    }, [cameraReady, cameraError, isScanning, onScan, getBarcodeReader, getBarcodeDetector, addLog, bumpLiveTelemetry]);
 
     /* ── Run OCR on a preprocessed image ────────────────────────── */
     const runOcr = useCallback(async (
@@ -687,9 +876,16 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
             /* ── Phase 2: OCR scan (focused, fast) ─────────────── */
             addLog('Phase 2: OCR scan (focused pipeline)...');
 
-            const brightness = detectBrightness(img, canvas, CROP_MEDIUM);
-            const isDark = brightness < 90;
-            addLog(`Scene brightness: ${brightness.toFixed(0)} (${isDark ? 'dark' : 'normal'})`);
+            const quality = assessFrameQuality(img, canvas, CROP_MEDIUM);
+            addLog(
+                `Scene quality: brightness=${quality.brightness.toFixed(0)} (${quality.isDark ? 'dark' : 'normal'}), `
+                + `blurVar=${quality.blurVariance.toFixed(0)} (${quality.isBlurry ? 'blurry' : 'sharp'})`
+            );
+            if (quality.isBlurry) {
+                setStatus('Image looks blurry. Hold steady and move slightly closer.');
+            } else if (quality.isDark) {
+                setStatus('Low light detected. Improve lighting for better OCR.');
+            }
 
             // Focused OCR passes — only the most effective combinations.
             // Each pass is run with a per-pass timeout to prevent hanging.
@@ -711,7 +907,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
 
                 // Tier 3: Aggressive or special modes
                 { crop: CROP_NARROW, rotation: 0,   mode: 'boost',    label: 'narrow-0-boost' },
-                ...(isDark ? [
+                ...(quality.isDark ? [
                     { crop: CROP_NARROW, rotation: 0, mode: 'invert' as PreprocessMode, label: 'narrow-0-inv' },
                 ] : []),
                 { crop: CROP_WIDE,   rotation: 0,   mode: 'clean',    label: 'wide-0' },
@@ -858,9 +1054,16 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
             /* ── Phase 2: OCR scan (focused) ──────── */
             addLog('Phase 2: OCR on photo...');
 
-            const photoBrightness = detectBrightness(img, canvas, CROP_MEDIUM);
-            const photoDark = photoBrightness < 90;
-            addLog(`Photo brightness: ${photoBrightness.toFixed(0)} (${photoDark ? 'dark' : 'normal'})`);
+            const photoQuality = assessFrameQuality(img, canvas, CROP_MEDIUM);
+            addLog(
+                `Photo quality: brightness=${photoQuality.brightness.toFixed(0)} (${photoQuality.isDark ? 'dark' : 'normal'}), `
+                + `blurVar=${photoQuality.blurVariance.toFixed(0)} (${photoQuality.isBlurry ? 'blurry' : 'sharp'})`
+            );
+            if (photoQuality.isBlurry) {
+                setStatus('Photo appears blurry. Try a sharper image or better focus.');
+            } else if (photoQuality.isDark) {
+                setStatus('Photo is dark. Better lighting can improve OCR.');
+            }
 
             const ocrPasses: Array<{
                 crop: CropRegion;
@@ -876,7 +1079,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                 { crop: CROP_NARROW, rotation: 90,  mode: 'clean',    label: 'photo-narrow-90' },
                 { crop: CROP_NARROW, rotation: 270, mode: 'clean',    label: 'photo-narrow-270' },
                 { crop: CROP_NARROW, rotation: 0,   mode: 'boost',    label: 'photo-narrow-boost' },
-                ...(photoDark ? [
+                ...(photoQuality.isDark ? [
                     { crop: CROP_NARROW, rotation: 0, mode: 'invert' as PreprocessMode, label: 'photo-narrow-inv' },
                 ] : []),
                 { crop: CROP_WIDE,   rotation: 0,   mode: 'clean',    label: 'photo-wide-0' },
@@ -940,6 +1143,50 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
             setProcessing(false);
         }
     }, [onScan, isScanning, tryBarcodeDecode, runOcr, addLog, toast]);
+
+    /* ── Photo-only capture (add book by image, no ISBN) ───────── */
+    const capturePhotoOnly = useCallback(() => {
+        if (!onPhotoCapture || processingRef.current || isScanning) return;
+
+        const video = webcamRef.current?.video as HTMLVideoElement | undefined;
+        const screenshot = webcamRef.current?.getScreenshot?.();
+
+        if (screenshot) {
+            addLog('Photo-only capture from camera');
+            onPhotoCapture(screenshot);
+            return;
+        }
+
+        if (video && video.readyState >= 2 && canvasRef.current) {
+            const canvas = canvasRef.current;
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.drawImage(video, 0, 0);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+                addLog('Photo-only capture from video frame');
+                onPhotoCapture(dataUrl);
+                return;
+            }
+        }
+
+        photoOnlyInputRef.current?.click();
+    }, [onPhotoCapture, isScanning, addLog]);
+
+    const handlePhotoOnlyFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file || !onPhotoCapture || processingRef.current || isScanning) return;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            addLog(`Photo-only upload: ${file.name}`);
+            onPhotoCapture(reader.result as string);
+        };
+        reader.onerror = () => toast('Failed to read image.', 'error');
+        reader.readAsDataURL(file);
+    }, [onPhotoCapture, isScanning, addLog, toast]);
 
     /* ── Auto-scan interval (OCR fallback) ─────────────────────── */
     useEffect(() => {
@@ -1030,6 +1277,15 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                             Copy
                         </button>
                     </div>
+                    <div className={s.debugLine}>
+                        {'> '}
+                        live telemetry: attempts={liveTelemetry.attempts}
+                        {' | '}native={liveTelemetry.nativeHits}
+                        {' | '}zxing={liveTelemetry.zxingHits}
+                        {' | '}confirmed={liveTelemetry.confirmed}
+                        {' | '}cooldownSuppressed={liveTelemetry.cooldownSuppressed}
+                        {' | '}busySuppressed={liveTelemetry.busySuppressed}
+                    </div>
                     {debugLogs.map((log, i) => (
                         <div key={i} className={s.debugLine}>&gt; {log}</div>
                     ))}
@@ -1071,13 +1327,23 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                     </div>
                 )}
 
-                {/* Hidden file input for photo upload */}
+                {/* Hidden file input for photo upload (ISBN scan) */}
                 <input
                     ref={fileInputRef}
                     type="file"
                     accept="image/*"
                     capture="environment"
                     onChange={handleFileUpload}
+                    style={{ display: 'none' }}
+                    aria-hidden="true"
+                />
+                {/* Hidden file input for photo-only (no ISBN scan) */}
+                <input
+                    ref={photoOnlyInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handlePhotoOnlyFileUpload}
                     style={{ display: 'none' }}
                     aria-hidden="true"
                 />
@@ -1092,6 +1358,16 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                             {processing ? <Loader2 className="animate-spin" size={20} /> : <ImagePlus size={20} />}
                             {processing ? 'Scanning...' : 'Take Photo / Upload'}
                         </button>
+                        {onPhotoCapture && (
+                            <button
+                                onClick={() => photoOnlyInputRef.current?.click()}
+                                disabled={processing || isScanning}
+                                className={`glass ${s.uploadBtn}`}
+                            >
+                                <ImageIcon size={20} />
+                                Add by photo
+                            </button>
+                        )}
                         {!showManual ? (
                             <button
                                 onClick={() => setShowManual(true)}
@@ -1153,6 +1429,17 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, isScanning }) => {
                         >
                             <Edit3 size={20} />
                         </button>
+                        {onPhotoCapture && (
+                            <button
+                                onClick={capturePhotoOnly}
+                                disabled={processing || isScanning}
+                                aria-label="Capture book photo"
+                                className={`glass ${s.roundBtn}`}
+                                title="Add book by photo (no ISBN scan)"
+                            >
+                                <ImageIcon size={20} />
+                            </button>
+                        )}
                     </div>
                 ) : (
                     <form onSubmit={handleManualSubmit} className={s.manualForm}>

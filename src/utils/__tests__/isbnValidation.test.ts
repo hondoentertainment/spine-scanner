@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isValidIsbn10, isValidIsbn13, isValidIsbn } from '../isbnValidation';
+import { isValidIsbn10, isValidIsbn13, isValidIsbn, isbn13To10, isbn10To13 } from '../isbnValidation';
 
 describe('isValidIsbn10', () => {
   it('validates correct ISBN-10', () => {
@@ -161,5 +161,29 @@ describe('ISBN edge cases', () => {
     it('rejects ISBN with spaces', () => {
       expect(isValidIsbn('978 0141036144')).toBe(false);
     });
+  });
+});
+
+describe('isbn13To10', () => {
+  it('converts valid ISBN-13 (978) to ISBN-10', () => {
+    const result = isbn13To10('9780141036144');
+    expect(result).toBe('0141036141');
+    expect(isValidIsbn10(result!)).toBe(true);
+  });
+  it('returns null for 979 prefix', () => {
+    expect(isbn13To10('9791032305690')).toBeNull();
+  });
+  it('returns null for wrong length', () => {
+    expect(isbn13To10('978014103614')).toBeNull();
+  });
+});
+
+describe('isbn10To13', () => {
+  it('converts valid ISBN-10 to ISBN-13', () => {
+    expect(isbn10To13('0141036144')).toBe('9780141036144');
+    expect(isValidIsbn13(isbn10To13('0141036144')!)).toBe(true);
+  });
+  it('returns null for wrong length', () => {
+    expect(isbn10To13('014103614')).toBeNull();
   });
 });
