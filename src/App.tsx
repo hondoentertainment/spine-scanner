@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import AuthPanel from './components/AuthPanel.tsx';
 import ThemeToggle from './components/ThemeToggle.tsx';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { useBookLookup } from './hooks/useBookLookup.ts';
 import { useBookStore } from './store/useBookStore.ts';
 import { useAuthStore } from './store/useAuthStore.ts';
@@ -111,6 +112,7 @@ function App() {
       }
     } catch (err) {
       console.error('[sync] Flush failed:', err);
+      toast('Sync failed. Will retry when online.', 'error');
     } finally {
       setFlushing(false);
     }
@@ -140,7 +142,7 @@ function App() {
     addBook(newBook);
     toast('Book added with photo. Edit details in your library.', 'success');
     if (user && online) {
-      pushBooks(user.id, [...books, newBook]).catch(console.error);
+      pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
     }
     setOpenBookIsbn(photoIsbn);
     setView('library');
@@ -191,7 +193,7 @@ function App() {
         toast(`Added "${metadata.title}" to library!`, 'success');
 
         if (user && online) {
-          pushBooks(user.id, [...books, newBook]).catch(console.error);
+          pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
         }
       } else {
         console.log(`[App] No metadata found or lookup failed for ${isbn}.`);
@@ -218,7 +220,7 @@ function App() {
           addBook(newBook);
           toast('Added with ISBN only. Edit details in your library.', 'success');
           if (user && online) {
-            pushBooks(user.id, [...books, newBook]).catch(console.error);
+            pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
           }
           setOpenBookIsbn(isbn);
           setView('library');
@@ -228,6 +230,7 @@ function App() {
       }
     } catch (err) {
       console.error('[App] Error during scan handler:', err);
+      toast('Something went wrong during book lookup. Please try again.', 'error');
     }
   };
 
@@ -286,55 +289,61 @@ function App() {
 
       <main>
         {view === 'scan' && (
-          <Suspense
-            fallback={
-              <div className={styles.lazyFallback}>
-                <span className={styles.lazyText}>Loading scanner...</span>
-              </div>
-            }
-          >
-            <div className={styles.scanView}>
-              <div className={styles.scanHeader}>
-                <h2 className={styles.scanTitle}>Scan Book Spine</h2>
-                <p className={styles.scanSubtitle}>Scan ISBN, capture a book photo, or enter manually.</p>
-              </div>
-
-              <Scanner onScan={handleScan} onPhotoCapture={handlePhotoCapture} isScanning={loading} />
-
-              {error && (
-                <div className={`glass ${styles.alertError}`}>
-                  <AlertCircle size={20} />
-                  <span>{error}</span>
+          <ErrorBoundary>
+            <Suspense
+              fallback={
+                <div className={styles.lazyFallback}>
+                  <span className={styles.lazyText}>Loading scanner...</span>
                 </div>
-              )}
-            </div>
-          </Suspense>
+              }
+            >
+              <div className={styles.scanView}>
+                <div className={styles.scanHeader}>
+                  <h2 className={styles.scanTitle}>Scan Book Spine</h2>
+                  <p className={styles.scanSubtitle}>Scan ISBN, capture a book photo, or enter manually.</p>
+                </div>
+
+                <Scanner onScan={handleScan} onPhotoCapture={handlePhotoCapture} isScanning={loading} />
+
+                {error && (
+                  <div className={`glass ${styles.alertError}`}>
+                    <AlertCircle size={20} />
+                    <span>{error}</span>
+                  </div>
+                )}
+              </div>
+            </Suspense>
+          </ErrorBoundary>
         )}
         {view === 'library' && (
-          <Suspense
-            fallback={
-              <div className={styles.lazyFallback}>
-                <span className={styles.lazyText}>Loading library...</span>
-              </div>
-            }
-          >
-            <LibraryList
-              onManageData={() => setView('data')}
-              initialOpenIsbn={openBookIsbn}
-              onOpenComplete={() => setOpenBookIsbn(null)}
-            />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense
+              fallback={
+                <div className={styles.lazyFallback}>
+                  <span className={styles.lazyText}>Loading library...</span>
+                </div>
+              }
+            >
+              <LibraryList
+                onManageData={() => setView('data')}
+                initialOpenIsbn={openBookIsbn}
+                onOpenComplete={() => setOpenBookIsbn(null)}
+              />
+            </Suspense>
+          </ErrorBoundary>
         )}
         {view === 'data' && (
-          <Suspense
-            fallback={
-              <div className={styles.lazyFallback}>
-                <span className={styles.lazyText}>Loading data tools...</span>
-              </div>
-            }
-          >
-            <DataManagement onClose={() => setView('library')} />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense
+              fallback={
+                <div className={styles.lazyFallback}>
+                  <span className={styles.lazyText}>Loading data tools...</span>
+                </div>
+              }
+            >
+              <DataManagement onClose={() => setView('library')} />
+            </Suspense>
+          </ErrorBoundary>
         )}
       </main>
 

@@ -138,6 +138,11 @@ vi.mock('@zxing/browser', () => ({
   },
 }));
 
+vi.mock('@zxing/library', () => ({
+  DecodeHintType: { POSSIBLE_FORMATS: 0, TRY_HARDER: 1 },
+  BarcodeFormat: { EAN_13: 0, EAN_8: 1, UPC_A: 2, UPC_E: 3 },
+}));
+
 // ── tesseract.js ──────────────────────────────────────────────
 let ocrText = '';
 let createWorkerShouldFail = false;
