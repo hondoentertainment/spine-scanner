@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect } from 'react';
-import type { BrowserMultiFormatReader } from '@zxing/browser';
+import type { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
 import { isValidIsbn } from '../utils/isbnValidation.ts';
 import { tryFixChecksum } from '../utils/ocr.ts';
 
@@ -7,12 +7,8 @@ import { tryFixChecksum } from '../utils/ocr.ts';
  *  Constants
  * ================================================================ */
 
-/** Interval (ms) between continuous barcode scans. ~5fps. */
-const BARCODE_SCAN_INTERVAL = 200;
-/** Run ZXing fallback every N frames when native detector is also active. */
-const ZXING_FALLBACK_EVERY_N_FRAMES = 1;
-/** Require repeated detection to reduce one-frame false positives. */
-const LIVE_DETECTION_CONFIRMATIONS = 1;
+/** Interval (ms) between native BarcodeDetector polls. ~10fps. */
+const NATIVE_SCAN_INTERVAL = 100;
 /** Prevent repeated triggers of the same live code in quick succession. */
 const LIVE_SCAN_DUPLICATE_COOLDOWN_MS = 3000;
 
@@ -44,6 +40,10 @@ interface UseBarcodeOptions {
     isBusy: () => boolean;
 }
 
+/* ================================================================
+ *  Helpers
+ * ================================================================ */
+
 /**
  * Validates and optionally repairs a raw barcode string.
  * Returns a valid ISBN or null.
@@ -62,9 +62,30 @@ function validateBarcode(raw: string, addLog: (m: string) => void, source: strin
     return null;
 }
 
+/** Extract the HTMLVideoElement from a Webcam ref. */
+function getVideoFromRef(
+    ref: HTMLVideoElement | { video: HTMLVideoElement | null } | null,
+): HTMLVideoElement | null {
+    if (!ref) return null;
+    if (ref instanceof HTMLVideoElement) return ref;
+    if ('video' in ref && ref.video) return ref.video as HTMLVideoElement;
+    return null;
+}
+
+/* ================================================================
+ *  Hook
+ * ================================================================ */
+
 /**
  * Custom hook for continuous live barcode scanning.
- * Uses native BarcodeDetector where available, falls back to ZXing.
+ *
+ * P1: Uses ZXing decodeFromVideoDevice() for direct video stream scanning
+ *     (eliminates canvas → toDataURL → Image round-trip and memory leak).
+ * P2: Only EAN_13 + UPC_A formats (no EAN-8/UPC-E to prevent misparse).
+ * P3: Raw frame first — no preprocessing for the primary ZXing path.
+ * P4: Does NOT stop when isScanning is true (continues independently).
+ * P6: Validates video dimensions > 0 before scanning.
+ * Lower: ~10fps for native detector, logs actual resolution on first frame.
  */
 export function useBarcodeScanner({
     addLog, onScan, isScanning, cameraReady, cameraError, webcamRef, isBusy,
@@ -72,24 +93,12 @@ export function useBarcodeScanner({
     const barcodeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const barcodeDetectorRef = useRef<any | null>(null);
-    const barcodeCanvasRef = useRef<HTMLCanvasElement | null>(null);
-    const liveZxingImageRef = useRef<HTMLImageElement | null>(null);
-    const liveDetectedCandidateRef = useRef<string | null>(null);
-    const liveDetectedStreakRef = useRef(0);
+    const zxingControlsRef = useRef<IScannerControls | null>(null);
     const lastLiveAcceptedRef = useRef<{ isbn: string; at: number } | null>(null);
     const telemetryRef = useRef<LiveScanTelemetry>({ ...EMPTY_TELEMETRY });
     const telemetryStateRef = useRef<(t: LiveScanTelemetry) => void>(() => {});
     const continuousActiveRef = useRef(false);
-
-    // Create offscreen canvas & reusable image on mount
-    useEffect(() => {
-        barcodeCanvasRef.current = document.createElement('canvas');
-        liveZxingImageRef.current = new Image();
-        return () => {
-            barcodeCanvasRef.current = null;
-            liveZxingImageRef.current = null;
-        };
-    }, []);
+    const videoStreamRef = useRef<MediaStream | null>(null);
 
     const bumpTelemetry = useCallback((field: keyof LiveScanTelemetry, amount = 1, flush = false) => {
         telemetryRef.current[field] += amount;
@@ -98,6 +107,7 @@ export function useBarcodeScanner({
         }
     }, []);
 
+    /* ── ZXing reader (for capture/upload pipeline only) ──────── */
     const getBarcodeReader = useCallback(async () => {
         if (barcodeReaderRef.current) return barcodeReaderRef.current;
         const [browserMod, libraryMod] = await Promise.all([
@@ -105,30 +115,33 @@ export function useBarcodeScanner({
             import('@zxing/library'),
         ]);
         const hints = new Map();
+        // P2: Only EAN-13 + UPC-A — no EAN-8/UPC-E to prevent misparse
         hints.set(libraryMod.DecodeHintType.POSSIBLE_FORMATS, [
-            libraryMod.BarcodeFormat.EAN_13, libraryMod.BarcodeFormat.EAN_8,
-            libraryMod.BarcodeFormat.UPC_A, libraryMod.BarcodeFormat.UPC_E,
+            libraryMod.BarcodeFormat.EAN_13,
+            libraryMod.BarcodeFormat.UPC_A,
         ]);
         hints.set(libraryMod.DecodeHintType.TRY_HARDER, true);
         const reader = new browserMod.BrowserMultiFormatReader(hints);
         barcodeReaderRef.current = reader;
-        addLog('ZXing reader initialized (EAN-13/EAN-8/UPC-A/UPC-E, TRY_HARDER)');
+        addLog('ZXing reader initialized (EAN-13/UPC-A, TRY_HARDER)');
         return reader;
     }, [addLog]);
 
+    /* ── Native BarcodeDetector ───────────────────────────────── */
     const getBarcodeDetector = useCallback(() => {
         if (!('BarcodeDetector' in window)) return null;
         if (barcodeDetectorRef.current) return barcodeDetectorRef.current;
         try {
+            // P2: Only EAN-13 + UPC-A
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             barcodeDetectorRef.current = new (window as any).BarcodeDetector({
-                formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'],
+                formats: ['ean_13', 'upc_a'],
             });
             return barcodeDetectorRef.current;
         } catch { return null; }
     }, []);
 
-    /** Decode barcode from an image source (for capture/upload pipeline). */
+    /* ── Barcode decode for capture/upload pipeline ────────────── */
     const tryBarcodeDecode = useCallback(async (
         imageSource: HTMLImageElement | string,
         label: string,
@@ -156,9 +169,122 @@ export function useBarcodeScanner({
         return null;
     }, [getBarcodeReader, addLog]);
 
-    /** Run the continuous barcode scanning loop. */
+    /* ── Accept a detected ISBN (shared logic) ────────────────── */
+    const acceptIsbn = useCallback((isbn: string, source: string) => {
+        const accepted = lastLiveAcceptedRef.current;
+        const isDup = !!accepted && accepted.isbn === isbn
+            && Date.now() - accepted.at < LIVE_SCAN_DUPLICATE_COOLDOWN_MS;
+
+        if (isDup) {
+            bumpTelemetry('cooldownSuppressed', 1, true);
+            return;
+        }
+        if (isBusy()) {
+            bumpTelemetry('busySuppressed', 1, true);
+            return;
+        }
+
+        bumpTelemetry('confirmed', 1, true);
+        addLog(`Barcode (live ${source}): ${isbn} ✓`);
+        lastLiveAcceptedRef.current = { isbn, at: Date.now() };
+        onScan(isbn);
+    }, [addLog, onScan, bumpTelemetry, isBusy]);
+
+    /* ================================================================
+     *  P1: ZXing continuous video decoding via decodeFromVideoDevice()
+     *
+     *  This feeds frames directly from the video element — no canvas
+     *  round-trip, no toDataURL, no Image() allocation per frame.
+     * ================================================================ */
     useEffect(() => {
-        if (!cameraReady || cameraError || isScanning) return;
+        // P4: Only gate on cameraReady + no error. Do NOT gate on isScanning.
+        if (!cameraReady || cameraError) return;
+
+        let cancelled = false;
+
+        const startZxing = async () => {
+            const video = getVideoFromRef(webcamRef.current);
+            // P6: Validate video dimensions
+            if (!video || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
+                if (!cancelled) setTimeout(startZxing, 500);
+                return;
+            }
+
+            try {
+                const [browserMod, libraryMod] = await Promise.all([
+                    import('@zxing/browser'),
+                    import('@zxing/library'),
+                ]);
+
+                const hints = new Map();
+                // P2: Only ISBN-relevant formats
+                hints.set(libraryMod.DecodeHintType.POSSIBLE_FORMATS, [
+                    libraryMod.BarcodeFormat.EAN_13,
+                    libraryMod.BarcodeFormat.UPC_A,
+                ]);
+                hints.set(libraryMod.DecodeHintType.TRY_HARDER, true);
+
+                const reader = new browserMod.BrowserMultiFormatReader(hints);
+                // Cache for capture/upload pipeline too
+                barcodeReaderRef.current = reader;
+
+                // Lower: Log resolution on first successful init
+                addLog(`ZXing continuous: starting on ${video.videoWidth}x${video.videoHeight} video`);
+
+                // P1: Use decodeFromVideoElement — feeds directly from <video>
+                // P3: No preprocessing — raw frame for best fidelity
+                const controls = await reader.decodeFromVideoElement(
+                    video,
+                    (result, err) => {
+                        if (cancelled) return;
+                        if (result) {
+                            const raw = result.getText().replace(/[^0-9X]/g, '');
+                            if (raw.length === 13 || raw.length === 10) {
+                                const isbn = validateBarcode(raw, addLog, 'ZXing-live');
+                                if (isbn) {
+                                    bumpTelemetry('zxingHits', 1, true);
+                                    acceptIsbn(isbn, 'ZXing');
+                                }
+                            }
+                        }
+                        if (err && !(err instanceof libraryMod.NotFoundException)) {
+                            // Only log non-"not found" errors once
+                            if (!cancelled) addLog(`ZXing error: ${err.message}`);
+                        }
+                        bumpTelemetry('attempts');
+                    }
+                );
+
+                if (!cancelled) {
+                    zxingControlsRef.current = controls;
+                    addLog('ZXing continuous decoding active');
+                } else {
+                    controls.stop();
+                }
+            } catch (err) {
+                if (!cancelled) {
+                    addLog(`ZXing continuous init failed: ${err instanceof Error ? err.message : String(err)}`);
+                }
+            }
+        };
+
+        startZxing();
+
+        return () => {
+            cancelled = true;
+            zxingControlsRef.current?.stop();
+            zxingControlsRef.current = null;
+        };
+    }, [cameraReady, cameraError, webcamRef, addLog, bumpTelemetry, acceptIsbn]);
+
+    /* ================================================================
+     *  Native BarcodeDetector polling loop (faster, GPU-accelerated)
+     *  P4: Does NOT gate on isScanning — runs independently.
+     *  P6: Validates video dimensions before detection.
+     *  Lower: 100ms interval (~10fps).
+     * ================================================================ */
+    useEffect(() => {
+        if (!cameraReady || cameraError) return;
 
         let active = true;
         let scanCount = 0;
@@ -167,148 +293,93 @@ export function useBarcodeScanner({
         continuousActiveRef.current = true;
 
         const hasNative = 'BarcodeDetector' in window;
-        addLog(`Continuous barcode scanning started (native: ${hasNative ? 'yes' : 'no'}, ZXing: yes)`);
-
-        const getVideo = (): HTMLVideoElement | null => {
-            const ref = webcamRef.current;
-            if (!ref) return null;
-            if ('video' in ref && ref.video) return ref.video as HTMLVideoElement;
-            if (ref instanceof HTMLVideoElement) return ref;
-            return null;
-        };
+        addLog(`Continuous scanning started (native: ${hasNative ? 'yes' : 'no'}, ZXing-continuous: yes)`);
 
         const scan = async () => {
             if (!active) return;
 
-            const video = getVideo();
-            if (!video || video.readyState < 2) {
+            const video = getVideoFromRef(webcamRef.current);
+            // P6: Validate dimensions
+            if (!video || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
                 if (active) setTimeout(scan, 500);
                 return;
             }
-            bumpTelemetry('attempts');
 
-            try {
-                let isbn: string | null = null;
+            // Lower: Log actual resolution on first scan
+            if (scanCount === 0) {
+                addLog(`Scanning at ${video.videoWidth}x${video.videoHeight}`);
+            }
 
-                // Native BarcodeDetector
-                const detector = getBarcodeDetector();
-                if (detector) {
-                    try {
-                        const barcodes = await detector.detect(video);
-                        for (const bc of barcodes) {
-                            const raw = (bc.rawValue || '').replace(/[^0-9X]/g, '');
-                            if (raw.length === 13 || raw.length === 10) {
-                                isbn = validateBarcode(raw, addLog, 'Native detector');
-                                if (isbn) { bumpTelemetry('nativeHits', 1, true); break; }
+            const detector = getBarcodeDetector();
+            if (detector) {
+                try {
+                    const barcodes = await detector.detect(video);
+                    for (const bc of barcodes) {
+                        const raw = (bc.rawValue || '').replace(/[^0-9X]/g, '');
+                        if (raw.length === 13 || raw.length === 10) {
+                            const isbn = validateBarcode(raw, addLog, 'Native');
+                            if (isbn) {
+                                bumpTelemetry('nativeHits', 1, true);
+                                acceptIsbn(isbn, 'native');
+                                break;
                             }
                         }
-                    } catch (err) {
-                        if (scanCount === 0) addLog(`Native detector error: ${err instanceof Error ? err.message : String(err)}`);
                     }
+                } catch (err) {
+                    if (scanCount === 0) addLog(`Native error: ${err instanceof Error ? err.message : String(err)}`);
                 }
-
-                // ZXing fallback
-                if (!isbn && (!detector || scanCount % ZXING_FALLBACK_EVERY_N_FRAMES === 0)) {
-                    const bCanvas = barcodeCanvasRef.current;
-                    if (bCanvas) {
-                        const ctx = bCanvas.getContext('2d');
-                        if (ctx) {
-                            bCanvas.width = video.videoWidth;
-                            bCanvas.height = video.videoHeight;
-
-                            // Attempt 1: preprocessed
-                            ctx.filter = 'grayscale(1) contrast(1.8)';
-                            ctx.drawImage(video, 0, 0);
-                            ctx.filter = 'none';
-
-                            try {
-                                const reader = await getBarcodeReader();
-                                const tmpImg = liveZxingImageRef.current ?? new Image();
-                                liveZxingImageRef.current = tmpImg;
-
-                                const loadImg = (url: string) => new Promise<void>((resolve, reject) => {
-                                    tmpImg.onload = () => resolve();
-                                    tmpImg.onerror = () => reject(new Error('fail'));
-                                    tmpImg.src = url;
-                                });
-
-                                const tryDecode = async (): Promise<string | null> => {
-                                    try {
-                                        const result = await reader.decodeFromImageElement(tmpImg);
-                                        return result.getText().replace(/[^0-9X]/g, '');
-                                    } catch { return null; }
-                                };
-
-                                await loadImg(bCanvas.toDataURL('image/png'));
-                                let raw = await tryDecode();
-                                if (raw && (raw.length === 13 || raw.length === 10)) {
-                                    isbn = validateBarcode(raw, addLog, 'ZXing');
-                                    if (isbn) bumpTelemetry('zxingHits', 1, true);
-                                }
-
-                                if (!isbn) {
-                                    // Attempt 2: raw frame
-                                    ctx.drawImage(video, 0, 0);
-                                    await loadImg(bCanvas.toDataURL('image/png'));
-                                    raw = await tryDecode();
-                                    if (raw && (raw.length === 13 || raw.length === 10)) {
-                                        isbn = validateBarcode(raw, addLog, 'ZXing');
-                                        if (isbn) bumpTelemetry('zxingHits', 1, true);
-                                    }
-                                }
-                            } catch { /* No barcode */ }
-                        }
-                    }
-                }
-
-                // Streak confirmation & acceptance
-                if (isbn) {
-                    if (liveDetectedCandidateRef.current === isbn) liveDetectedStreakRef.current += 1;
-                    else { liveDetectedCandidateRef.current = isbn; liveDetectedStreakRef.current = 1; }
-
-                    const accepted = lastLiveAcceptedRef.current;
-                    const isDup = !!accepted && accepted.isbn === isbn && Date.now() - accepted.at < LIVE_SCAN_DUPLICATE_COOLDOWN_MS;
-
-                    if (!isDup && liveDetectedStreakRef.current >= LIVE_DETECTION_CONFIRMATIONS) {
-                        if (isBusy()) { bumpTelemetry('busySuppressed', 1, true); }
-                        else {
-                            bumpTelemetry('confirmed', 1, true);
-                            addLog(`Barcode (live): ${isbn} ✓`);
-                            lastLiveAcceptedRef.current = { isbn, at: Date.now() };
-                            continuousActiveRef.current = false;
-                            active = false;
-                            onScan(isbn);
-                            return;
-                        }
-                    } else if (isDup && liveDetectedStreakRef.current >= LIVE_DETECTION_CONFIRMATIONS) {
-                        bumpTelemetry('cooldownSuppressed', 1, true);
-                    }
-                } else {
-                    liveDetectedCandidateRef.current = null;
-                    liveDetectedStreakRef.current = 0;
-                }
-            } catch { /* Scan error — continue */ }
+            }
 
             scanCount++;
-            if (scanCount === 1) addLog(`Scanning for barcodes... (${getVideo()?.videoWidth}x${getVideo()?.videoHeight})`);
-            else if (scanCount % 30 === 0) {
+            if (scanCount % 50 === 0) {
                 const t = telemetryRef.current;
                 addLog(`Scan #${scanCount}: native=${t.nativeHits}, zxing=${t.zxingHits}, confirmed=${t.confirmed}`);
             }
 
-            if (active) setTimeout(scan, document.hidden ? 600 : BARCODE_SCAN_INTERVAL);
+            // Lower: 100ms (~10fps), 600ms when hidden
+            if (active) setTimeout(scan, document.hidden ? 600 : NATIVE_SCAN_INTERVAL);
         };
 
-        setTimeout(scan, 500);
+        setTimeout(scan, 300);
 
         return () => {
             active = false;
             continuousActiveRef.current = false;
-            liveDetectedCandidateRef.current = null;
-            liveDetectedStreakRef.current = 0;
-            addLog('Continuous barcode scanning stopped');
+            addLog('Continuous scanning stopped');
         };
-    }, [cameraReady, cameraError, isScanning, onScan, getBarcodeReader, getBarcodeDetector, addLog, bumpTelemetry, webcamRef, isBusy]);
+    }, [cameraReady, cameraError, webcamRef, getBarcodeDetector, addLog, bumpTelemetry, acceptIsbn]);
+
+    /* ── Refocus helper ───────────────────────────────────────── */
+    const refocus = useCallback(() => {
+        const video = getVideoFromRef(webcamRef.current);
+        if (!video) return;
+        const stream = video.srcObject as MediaStream | null;
+        const track = stream?.getVideoTracks()[0];
+        if (!track) return;
+
+        try {
+            const caps = track.getCapabilities?.() as Record<string, unknown> | undefined;
+            if (caps?.focusMode) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] } as any)
+                    .then(() => addLog('Refocus triggered'))
+                    .catch(() => addLog('Refocus not supported'));
+            } else {
+                addLog('Focus control not available on this camera');
+            }
+        } catch {
+            addLog('Refocus failed');
+        }
+    }, [webcamRef, addLog]);
+
+    /* ── Cleanup ZXing on unmount ─────────────────────────────── */
+    useEffect(() => {
+        return () => {
+            zxingControlsRef.current?.stop();
+            zxingControlsRef.current = null;
+            videoStreamRef.current = null;
+        };
+    }, []);
 
     return {
         tryBarcodeDecode,
@@ -316,5 +387,8 @@ export function useBarcodeScanner({
         telemetryRef,
         setTelemetryCallback: (cb: (t: LiveScanTelemetry) => void) => { telemetryStateRef.current = cb; },
         continuousActiveRef,
+        refocus,
+        // Expose for isScanning check removal — no longer gates on isScanning
+        isScanning,
     };
 }

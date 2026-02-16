@@ -131,16 +131,33 @@ vi.mock('@zxing/browser', () => ({
       if (barcodeResult === null) throw new Error('No barcode');
       return { getText: () => barcodeResult };
     }
-    async decodeFromVideoElement() {
-      if (barcodeResult === null) throw new Error('No barcode');
-      return { getText: () => barcodeResult };
+    async decodeFromVideoElement(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      _video: any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      callback?: (result: any, error: any) => void,
+    ) {
+      // Simulate ZXing continuous mode: call callback once, then return controls
+      if (callback) {
+        setTimeout(() => {
+          if (barcodeResult !== null) {
+            callback({ getText: () => barcodeResult }, null);
+          } else {
+            callback(null, new Error('No barcode'));
+          }
+        }, 50);
+      }
+      return { stop: vi.fn() };
     }
   },
 }));
 
 vi.mock('@zxing/library', () => ({
   DecodeHintType: { POSSIBLE_FORMATS: 0, TRY_HARDER: 1 },
-  BarcodeFormat: { EAN_13: 0, EAN_8: 1, UPC_A: 2, UPC_E: 3 },
+  BarcodeFormat: { EAN_13: 0, UPC_A: 2 },
+  NotFoundException: class NotFoundException extends Error {
+    constructor() { super('Not found'); }
+  },
 }));
 
 // ── tesseract.js ──────────────────────────────────────────────

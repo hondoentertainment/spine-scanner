@@ -1,6 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
-import { Camera, Loader2, Edit3, Check, Play, Square, ImagePlus, Zap, Image as ImageIcon } from 'lucide-react';
+import { Camera, Loader2, Edit3, Check, Play, Square, ImagePlus, Zap, Image as ImageIcon, Focus } from 'lucide-react';
 import { isValidIsbn } from '../utils/isbnValidation.ts';
 import { useToast } from './Toast.tsx';
 import { useOcrEngine } from '../hooks/useOcrEngine.ts';
@@ -77,7 +77,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning })
 
     /* ── Barcode scanner hook ─────────────────────────────────── */
     const isBusy = useCallback(() => processingRef.current || isScanning, [isScanning]);
-    const { tryBarcodeDecode, continuousActiveRef, setTelemetryCallback } = useBarcodeScanner({
+    const { tryBarcodeDecode, continuousActiveRef, setTelemetryCallback, refocus } = useBarcodeScanner({
         addLog, onScan, isScanning, cameraReady, cameraError,
         webcamRef: webcamRef as React.RefObject<Webcam | null>,
         isBusy,
@@ -333,7 +333,18 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning })
                 playsInline
             />
             <canvas ref={canvasRef} style={{ display: 'none' }} />
-            <div className="viewfinder"></div>
+
+            {/* P5: Barcode targeting guide */}
+            <div className={s.viewfinderOverlay}>
+                <div className={s.barcodeGuide}>
+                    <div className={`${s.guideCorner} ${s.guideTopLeft}`} />
+                    <div className={`${s.guideCorner} ${s.guideTopRight}`} />
+                    <div className={`${s.guideCorner} ${s.guideBottomLeft}`} />
+                    <div className={`${s.guideCorner} ${s.guideBottomRight}`} />
+                    <div className={s.scanLine} />
+                </div>
+                <p className={s.guideHint}>Align barcode within the frame</p>
+            </div>
 
             {continuousActiveRef.current && !processing && (
                 <div className={s.scanIndicator}>
@@ -437,6 +448,11 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning })
                         <button onClick={() => setShowManual(true)} aria-label="Manual ISBN entry"
                             className={`glass ${s.roundBtn}`} title="Manual ISBN entry">
                             <Edit3 size={20} />
+                        </button>
+                        <button onClick={refocus}
+                            aria-label="Refocus camera" className={`glass ${s.roundBtn}`}
+                            title="Tap to refocus camera">
+                            <Focus size={20} />
                         </button>
                         {onPhotoCapture && (
                             <button onClick={capturePhotoOnly} disabled={processing || isScanning}
