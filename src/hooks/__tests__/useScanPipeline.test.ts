@@ -5,11 +5,13 @@ import {
   preprocessImage,
   cropForBarcode,
   assessFrameQuality,
+  hasLowOcrResolution,
   CROP_NARROW,
   CROP_MEDIUM,
   CROP_WIDE,
   CROP_FULL,
   CROP_CENTER,
+  type ScanProgress,
 } from '../useScanPipeline';
 
 /* ================================================================
@@ -374,4 +376,136 @@ describe('useScanPipeline — runPipeline', () => {
     expect(runOcr).not.toHaveBeenCalled();
     expect(pipelineResult?.suggestions.length).toBeGreaterThanOrEqual(0);
   });
+
+  it('includes lowResolution in diagnostics when image is too small for OCR', async () => {
+    const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
+    const runOcr = vi.fn().mockResolvedValue({ isbn: null, allCandidates: [] });
+
+    const { result } = renderHook(() =>
+      useScanPipeline({
+        addLog: vi.fn(),
+        setStatus: vi.fn(),
+        runOcr,
+        tryBarcodeDecode,
+      }),
+    );
+
+    // CROP_MEDIUM on 400x150: cropH = 75 < MIN_OCR_PIXELS (200) => lowRes = true
+    const img = new Image();
+    img.width = 400;
+    img.height = 150;
+    const canvas = document.createElement('canvas');
+
+    let pipelineResult: { diagnostics?: { lowResolution?: boolean } } | null = null;
+    await act(async () => {
+      pipelineResult = await result.current.runPipeline(img, canvas, 'test');
+    });
+
+    expect(hasLowOcrResolution(400, 150, CROP_MEDIUM)).toBe(true);
+    expect(pipelineResult?.diagnostics?.lowResolution).toBe(true);
+  });
+
+  it('invokes onProgress with barcode and ocr phases', async () => {
+    const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
+    const runOcr = vi.fn().mockResolvedValue({ isbn: null, allCandidates: [] });
+
+    const progressCalls: ScanProgress[] = [];
+    const onProgress = vi.fn((p: ScanProgress) => progressCalls.push(p));
+
+    const { result } = renderHook(() =>
+      useScanPipeline({
+        addLog: vi.fn(),
+        setStatus: vi.fn(),
+        runOcr,
+        tryBarcodeDecode,
+        onProgress,
+      }),
+    );
+
+    const img = new Image();
+    img.width = 640;
+    img.height = 480;
+    const canvas = document.createElement('canvas');
+
+    await act(async () => {
+      await result.current.runPipeline(img, canvas, 'test');
+    });
+
+    expect(progressCalls.length).toBeGreaterThanOrEqual(2);
+    expect(progressCalls[0].phase).toBe('barcode');
+    expect(progressCalls.some((p) => p.phase === 'ocr')).toBe(true);
+    // Pipeline completes; suggestions and done may appear depending on code path
+    expect(progressCalls.some((p) => p.phase === 'suggestions' || p.phase === 'done')).toBe(true);
+  });
+
+  it('onProgress includes currentPass and totalPasses during OCR', async () => {
+    const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
+    const runOcr = vi.fn().mockResolvedValue({
+      isbn: null,
+      allCandidates: [],
+    }); // No ISBN so we run multiple passes
+
+    const progressCalls: ScanProgress[] = [];
+    const onProgress = vi.fn((p: ScanProgress) => progressCalls.push(p));
+
+    const { result } = renderHook(() =>
+      useScanPipeline({
+        addLog: vi.fn(),
+        setStatus: vi.fn(),
+        runOcr,
+        tryBarcodeDecode,
+        onProgress,
+      }),
+    );
+
+    const img = new Image();
+    img.width = 640;
+    img.height = 480;
+    const canvas = document.createElement('canvas');
+
+    await act(async () => {
+      await result.current.runPipeline(img, canvas, 'test');
+    });
+
+    const ocrProgress = progressCalls.filter((p) => p.phase === 'ocr' || p.phase === 'ocr-multilang');
+    expect(ocrProgress.length).toBeGreaterThan(0);
+    const withPass = ocrProgress.find((p) => p.currentPass != null && p.totalPasses != null);
+    expect(withPass).toBeDefined();
+    expect(withPass?.totalPasses).toBeGreaterThan(0);
+  });
+
+  it('calls runOcrWithLang with eng+deu when ocrLanguage is both', async () => {
+    const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
+    const runOcr = vi.fn().mockResolvedValue({ isbn: null, allCandidates: [] });
+    const runOcrWithLang = vi.fn().mockResolvedValue({ isbn: null, allCandidates: [] });
+
+    const { result } = renderHook(() =>
+      useScanPipeline({
+        addLog: vi.fn(),
+        setStatus: vi.fn(),
+        runOcr,
+        runOcrWithLang,
+        tryBarcodeDecode,
+        ocrLanguage: 'both',
+      }),
+    );
+
+    const img = new Image();
+    img.width = 640;
+    img.height = 480;
+    const canvas = document.createElement('canvas');
+
+    await act(async () => {
+      await result.current.runPipeline(img, canvas, 'test');
+    });
+
+    expect(runOcrWithLang).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.stringContaining('deu'),
+      'eng+deu',
+      expect.any(Function),
+      expect.any(Function),
+    );
+  });
+
 });

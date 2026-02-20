@@ -315,11 +315,23 @@ describe('extractIsbnCandidates', () => {
       expect(c[0]).toBe('9780141036144');
     });
 
-    it('handles line breaks within ISBN', () => {
+    it('handles line breaks within ISBN (Pass 5: cross-line detection)', () => {
       const c = extractIsbnCandidates('978-0-14-\n103614-4');
-      // May or may not find this depending on line break handling
-      // But should not crash
-      expect(Array.isArray(c)).toBe(true);
+      expect(c).toContain('9780141036144');
+    });
+
+    it('extracts ISBN spanning two adjacent lines', () => {
+      const text = '978-0-14-\n103614-4';
+      const c = extractIsbnCandidates(text);
+      expect(c.length).toBeGreaterThanOrEqual(1);
+      expect(c).toContain('9780141036144');
+    });
+
+    it('extracts ISBN-13 with 978 prefix split across three lines', () => {
+      const text = '978\n-0-14\n-103614-4';
+      const c = extractIsbnCandidates(text);
+      // Joining 3 lines: 978-0-14-103614-4
+      expect(c.some(x => x === '9780141036144')).toBe(true);
     });
   });
 });

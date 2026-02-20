@@ -111,47 +111,36 @@ test.describe('SpineScanner App', () => {
     await expect(page.getByRole('heading', { name: /Your Library/ })).toBeVisible();
   });
 
-  test('full ISBN scan flow: manual entry → add book to library', async ({ page }) => {
+  test('full ISBN scan flow: manual entry → add book to library', async ({ page, context }) => {
     const testIsbn = '9780141036144';
     const mockTitle = 'The Great Gatsby';
 
-    // Mock Google Books API response
-    await page.route('**/googleapis.com/books/v1/**', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          totalItems: 1,
-          items: [
-            {
-              volumeInfo: {
-                title: mockTitle,
-                authors: ['F. Scott Fitzgerald'],
-                pageCount: 180,
-                imageLinks: { thumbnail: 'https://example.com/cover.jpg' },
-              },
-            },
-          ],
-        }),
-      });
-    });
+    // Mock APIs at context level so they're in place before any request
+    const mockPayload = {
+      totalItems: 1,
+      items: [{ volumeInfo: { title: mockTitle, authors: ['F. Scott Fitzgerald'], pageCount: 180, imageLinks: { thumbnail: 'https://example.com/cover.jpg' } } }],
+    };
+    await context.route(/googleapis\.com\/books\/v1\/volumes/, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(mockPayload) }));
+    await context.route(/openlibrary\.org\/api\/books/, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) }));
 
     // Open manual ISBN entry
     const manualBtn = page.getByRole('button', { name: /manual isbn entry|enter isbn manually/i }).first();
     await manualBtn.click();
     await expect(page.getByRole('textbox', { name: /enter isbn/i })).toBeVisible();
 
-    // Enter ISBN and submit
+    // Enter ISBN and submit; wait for API request before asserting toast
     const input = page.getByRole('textbox', { name: /enter isbn/i });
     await input.fill(testIsbn);
+    const responsePromise = page.waitForResponse(/googleapis\.com\/books\/v1\/volumes/, { timeout: 5000 });
     await page.getByRole('button', { name: /submit isbn/i }).click();
+    await responsePromise;
 
-    // Wait for lookup and add; toast shows "Added "Title" to library!"
+    // Toast shows "Added "Title" to library!"
     await expect(page.getByText(new RegExp(`Added.*${mockTitle}.*library`, 'i'))).toBeVisible({ timeout: 10000 });
 
     // Navigate to library and verify book is there
     await page.getByRole('button', { name: /library/i }).click();
     await expect(page.getByRole('heading', { name: /Your Library/ })).toBeVisible();
-    await expect(page.getByText(mockTitle)).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(`h2, h3`).filter({ hasText: mockTitle }).first()).toBeVisible({ timeout: 5000 });
   });
 });

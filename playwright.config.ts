@@ -1,6 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:4173';
+/** Dedicated port to avoid conflicts with other apps (e.g. Vite dev on 5173, other previews) */
+const E2E_PORT = 4174;
+/** App uses base /spine-scanner/ when not on Vercel (see vite.config.ts) */
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${E2E_PORT}/spine-scanner/`;
 const useWebServer = !process.env.PLAYWRIGHT_BASE_URL;
 
 export default defineConfig({
@@ -34,8 +37,8 @@ export default defineConfig({
   ],
   webServer: useWebServer
     ? {
-        command: 'npm run preview',
-        url: 'http://localhost:4173',
+        command: `npx vite preview --port ${E2E_PORT}`,
+        url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
       }

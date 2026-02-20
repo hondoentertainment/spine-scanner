@@ -111,12 +111,22 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 | `npm run dev` | Start development server |
 | `npm run build` | Type-check and build for production |
 | `npm run preview` | Preview production build |
-| `npm run test` | Run tests once |
+| `npm run test` | Run unit tests |
 | `npm run test:watch` | Run tests in watch mode |
-| `npm run test:e2e` | Run Playwright end-to-end tests |
+| `npm run test:integration` | Run unit tests + Tesseract OCR integration (requires network for first run) |
+| `npm run test:all` | Run unit tests then integration tests |
+| `npm run generate-ocr-fixture` | Generate `e2e/fixtures/book-spine-isbn.png` for E2E OCR tests |
+| `npm run test:e2e` | Generate OCR fixture (if needed) and run Playwright E2E tests |
+| `npm run test:e2e:ui` | Run Playwright with UI |
 | `npm run test:e2e:mobile` | Run mobile Playwright matrix projects |
 | `npm run test:e2e:desktop` | Run desktop Playwright baseline |
 | `npm run lint` | Lint with ESLint |
+
+### E2E Setup
+
+1. **Build first**: `npm run build` (E2E serves the built app on port 4174)
+2. **Port isolation**: Playwright uses port **4174** by default to avoid conflicts with `npm run preview` (4173) or other apps
+3. **OCR fixture**: `test:e2e` runs `generate-ocr-fixture` before tests to ensure `e2e/fixtures/book-spine-isbn.png` exists — commit this file for reliable CI
 
 ## Deployment
 

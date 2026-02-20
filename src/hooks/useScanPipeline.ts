@@ -320,6 +320,13 @@ function buildOcrPasses(quality: FrameQuality, prefix: string): OcrPassConfig[] 
  *  Shared scan pipeline result
  * ================================================================ */
 
+/** Progress info for OCR UX (progress bar, "Pass X of Y"). */
+export interface ScanProgress {
+    phase: 'barcode' | 'ocr' | 'ocr-multilang' | 'suggestions' | 'done';
+    currentPass?: number;
+    totalPasses?: number;
+}
+
 /** Diagnostics for troubleshooting when scan fails or finds no ISBN. */
 export interface ScanDiagnostics {
     quality: FrameQuality;
@@ -344,19 +351,26 @@ export interface ScanPipelineResult {
     diagnostics?: ScanDiagnostics;
 }
 
+/** OCR language preference: en=English only, de=German fallback, both=English+German. */
+export type OcrLanguage = 'en' | 'de' | 'both';
+
 interface UseScanPipelineOptions {
     addLog: (msg: string) => void;
     setStatus: (msg: string) => void;
     runOcr: (image: string, label: string, extract: typeof extractIsbnCandidates, validate: typeof isValidIsbn, opts?: { psm?: string; charWhitelist?: string }) => Promise<OcrResult>;
     runOcrWithLang?: (image: string, label: string, lang: string, extract: typeof extractIsbnCandidates, validate: typeof isValidIsbn) => Promise<OcrResult>;
     tryBarcodeDecode: (source: HTMLImageElement | string, label: string) => Promise<string | null>;
+    /** Optional progress callback for progress bar UX. */
+    onProgress?: (progress: ScanProgress) => void;
+    /** Language for multi-language OCR fallback. 'en' skips; 'de' uses deu; 'both' uses eng+deu. */
+    ocrLanguage?: OcrLanguage;
 }
 
 /**
  * Hook that provides a unified scan pipeline for both camera capture and photo upload.
  * Eliminates the duplicated barcode + OCR logic.
  */
-export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, tryBarcodeDecode }: UseScanPipelineOptions) {
+export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, tryBarcodeDecode, onProgress, ocrLanguage = 'both' }: UseScanPipelineOptions) {
 
     /**
      * Run the full barcode + OCR scan pipeline on an image.
@@ -370,10 +384,12 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
         const allCandidates = new Set<string>();
         const ocrStartTime = Date.now();
         let ocrPassesAttempted = 0;
+        const reportProgress = (p: ScanProgress) => onProgress?.(p);
 
         /* ── Phase 1: Barcode scan (fast, multiple crops) ──── */
         addLog(`Phase 1: Barcode scan (${prefix})...`);
         setStatus('Scanning barcode...');
+        reportProgress({ phase: 'barcode' });
 
         let isbn: string | null = null;
         try {
@@ -389,6 +405,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
         if (isbn && isValidIsbn(isbn)) {
             addLog(`ISBN via barcode: ${isbn}`);
             setStatus(`Found ISBN: ${isbn}`);
+            reportProgress({ phase: 'done' });
             return { isbn, suggestions: [] };
         }
         if (isbn) {
@@ -397,6 +414,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
             if (repaired) {
                 addLog(`ISBN via barcode (repaired): ${isbn} → ${repaired}`);
                 setStatus(`Found ISBN: ${repaired}`);
+                reportProgress({ phase: 'done' });
                 return { isbn: repaired, suggestions: [] };
             }
         }
@@ -412,6 +430,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
         if (skipOcr) {
             addLog('Skipping OCR: image too blurry and dark. Unlikely to succeed.');
             setStatus('Image too blurry and dark. Hold steady, improve lighting, and try again.');
+            reportProgress({ phase: 'done' });
             return {
                 isbn: null,
                 suggestions: allCandidates.size > 0 ? Array.from(allCandidates).slice(0, 6) : [],
@@ -431,7 +450,10 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
         else if (lowRes) setStatus('Move closer so ISBN fills the frame for better OCR.');
 
         const ocrPasses = buildOcrPasses(quality, `${prefix}`);
-        const totalPasses = ocrPasses.length + (runOcrWithLang ? 1 : 0);
+        const useMultilang = runOcrWithLang && (ocrLanguage === 'de' || ocrLanguage === 'both');
+        const totalPasses = ocrPasses.length + (useMultilang ? 1 : 0);
+
+        reportProgress({ phase: 'ocr', currentPass: 0, totalPasses });
 
         for (let i = 0; i < ocrPasses.length; i++) {
             const pass = ocrPasses[i];
@@ -441,6 +463,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
             }
             try {
                 setStatus(`OCR: pass ${i + 1} of ${totalPasses}...`);
+                reportProgress({ phase: 'ocr', currentPass: i + 1, totalPasses });
                 const processed = preprocessImage(img, canvas, pass.rotation, pass.crop, pass.mode);
                 const result = await runOcr(processed, pass.label, extractIsbnCandidates, isValidIsbn, {
                     psm: pass.psm,
@@ -475,6 +498,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                 if (result.isbn) {
                     addLog(`ISBN via OCR [multi-lang eng+deu]: ${result.isbn}`);
                     setStatus(`Found ISBN: ${result.isbn}`);
+                    reportProgress({ phase: 'done' });
                     return { isbn: result.isbn, suggestions: [] };
                 }
             } catch (err) {
@@ -483,6 +507,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
         }
 
         /* ── Phase 3: Build suggestions (include near-miss candidates) ──── */
+        reportProgress({ phase: 'suggestions' });
         const candidateList = Array.from(allCandidates);
         const repaired: string[] = [];
         const repairedMap: Record<string, string> = {}; // repaired → original
@@ -517,7 +542,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                 lowResolution: lowRes,
             },
         };
-    }, [addLog, setStatus, runOcr, runOcrWithLang, tryBarcodeDecode]);
+    }, [addLog, setStatus, runOcr, runOcrWithLang, tryBarcodeDecode, onProgress, ocrLanguage]);
 
     return { runPipeline };
 }
