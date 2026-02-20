@@ -4,6 +4,8 @@ import { useBookLookup } from '../hooks/useBookLookup.ts';
 import { useToast } from './Toast.tsx';
 import { parseCSV, extractISBNs } from '../utils/importLogic.ts';
 import type { ImportResult } from '../utils/importLogic.ts';
+import { normalizeToIsbn13 } from '../utils/isbnValidation.ts';
+import { isbnExistsInLibrary, isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { exportToGoodreadsCSV } from '../utils/goodreadsExport.ts';
 import { exportToJSON, importFromJSON, exportToLibraryThingTSV, exportToStoryGraphCSV } from '../utils/exportFormats.ts';
 import { Download, Upload, Trash2, Globe, CheckCircle, Loader2, X } from 'lucide-react';
@@ -53,12 +55,19 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                         setShelves(mergedShelves);
                     }
                     const knownShelfIds = new Set(mergedShelves.map((shelf) => shelf.id));
+                    const addedInThisImport: BookEntry[] = [];
                     for (const book of jsonBooks) {
-                        if (books.find(b => b.isbn === book.isbn)) res.duplicates++;
-                        else {
-                            const safeShelfIds = (book.shelfIds || []).filter((id) => knownShelfIds.has(id));
-                            addBook({ ...book, id: crypto.randomUUID(), shelfIds: safeShelfIds });
+                        const isPhoto = isBookPhotoOnly(book);
+                        const normalizedIsbn = isPhoto ? book.isbn : normalizeToIsbn13(book.isbn);
+                        const toAdd: BookEntry = { ...book, id: crypto.randomUUID(), shelfIds: (book.shelfIds || []).filter((id: string) => knownShelfIds.has(id)), ...(isPhoto && { isPhotoOnly: true }) } as BookEntry;
+                        if (!isPhoto) toAdd.isbn = normalizedIsbn;
+                        const combinedBooks = [...books, ...addedInThisImport];
+                        if (isPhoto || !isbnExistsInLibrary(normalizedIsbn, combinedBooks)) {
+                            addBook(toAdd);
+                            addedInThisImport.push(toAdd);
                             res.added++;
+                        } else {
+                            res.duplicates++;
                         }
                     }
                     setResult(res);
@@ -99,24 +108,30 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
 
     const processEntries = async (entries: Partial<BookEntry>[]) => {
         const res: ImportResult = { added: 0, duplicates: 0, errors: [] };
+        const addedInThisImport: BookEntry[] = [];
         for (const entry of entries) {
             if (!entry.isbn) continue;
-            if (books.find(b => b.isbn === entry.isbn)) { res.duplicates++; continue; }
+            const normalizedEntryIsbn = normalizeToIsbn13(entry.isbn);
+            const combinedBooks = [...books, ...addedInThisImport];
+            if (isbnExistsInLibrary(normalizedEntryIsbn, combinedBooks)) { res.duplicates++; continue; }
             const metadata = await lookupByIsbn(entry.isbn);
             if (metadata) {
-                addBook({
+                const storedIsbn = normalizeToIsbn13(metadata.isbn);
+                const newBook: BookEntry = {
                     id: crypto.randomUUID(),
-                    isbn: metadata.isbn,
+                    isbn: storedIsbn,
                     title: metadata.title,
                     author: metadata.authors.join(', '),
                     pageCount: metadata.pageCount,
-                    amazonLink: `https://www.amazon.com/s?k=${metadata.isbn}`,
+                    amazonLink: `https://www.amazon.com/s?k=${storedIsbn}`,
                     coverImg: metadata.thumbnail,
                     status: (entry.status as BookEntry['status']) || 'read',
                     notes: entry.notes || '',
                     dateAdded: new Date().toISOString(),
                     shelfIds: [],
-                });
+                };
+                addBook(newBook);
+                addedInThisImport.push(newBook);
                 res.added++;
             } else {
                 res.errors.push(`Metadata not found for ISBN ${entry.isbn}`);

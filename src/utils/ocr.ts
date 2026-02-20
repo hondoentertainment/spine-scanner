@@ -67,6 +67,31 @@ export const tryFixChecksum = (candidate: string): string | null => {
 };
 
 /**
+ * Get all near-miss ISBN variants (single-digit substitutions that validate).
+ * Used to surface "Try 978-0-14-103614-4?" when OCR returns a close-but-invalid candidate.
+ */
+export const getNearMissCandidates = (candidate: string): string[] => {
+  if (isValidIsbn(candidate)) return []; // No fixes needed for valid ISBN
+
+  const results: string[] = [];
+  const ambiguous: Record<string, string[]> = {
+    '0': ['6', '8', '9'], '1': ['7', '4'], '3': ['8'], '5': ['6', '8', '9'],
+    '6': ['0', '5', '8'], '7': ['1'], '8': ['0', '3', '6', '9'], '9': ['0', '7'],
+  };
+
+  for (let i = 0; i < candidate.length; i++) {
+    const ch = candidate[i];
+    const alternatives = ambiguous[ch];
+    if (!alternatives) continue;
+    for (const alt of alternatives) {
+      const variant = candidate.substring(0, i) + alt + candidate.substring(i + 1);
+      if (isValidIsbn(variant) && !results.includes(variant)) results.push(variant);
+    }
+  }
+  return results;
+};
+
+/**
  * Extract ISBN candidates from raw OCR text.
  *
  * This function is designed for FULL TEXT output (no character whitelist).

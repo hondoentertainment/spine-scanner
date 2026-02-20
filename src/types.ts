@@ -1,6 +1,8 @@
 export interface BookEntry {
   id: string;
   isbn: string;
+  /** True when the book was added by photo only (no ISBN). isbn will be photo-{uuid}. */
+  isPhotoOnly?: boolean;
   title: string;
   author: string;
   pageCount: number;

@@ -142,13 +142,12 @@ export function useBarcodeScanner({
     }, []);
 
     /* ── Barcode decode for capture/upload pipeline ────────────── */
+    /* Industry std: prefer Native BarcodeDetector when available (faster, GPU-accelerated). */
     const tryBarcodeDecode = useCallback(async (
         imageSource: HTMLImageElement | string,
         label: string,
     ): Promise<string | null> => {
-        try {
-            const reader = await getBarcodeReader();
-            let result;
+        const getImg = async (): Promise<HTMLImageElement> => {
             if (typeof imageSource === 'string') {
                 const tempImg = new Image();
                 await new Promise<void>((resolve, reject) => {
@@ -156,10 +155,27 @@ export function useBarcodeScanner({
                     tempImg.onerror = () => reject(new Error('img load fail'));
                     tempImg.src = imageSource;
                 });
-                result = await reader.decodeFromImageElement(tempImg);
-            } else {
-                result = await reader.decodeFromImageElement(imageSource);
+                return tempImg;
             }
+            return imageSource;
+        };
+        const img = await getImg();
+
+        const detector = getBarcodeDetector();
+        if (detector) {
+            try {
+                const barcodes = await detector.detect(img);
+                const raw = barcodes[0]?.rawValue?.replace(/[^0-9X]/g, '');
+                if (raw && (raw.length === 13 || raw.length === 10)) {
+                    addLog(`Barcode [${label}] native: ${raw}${isValidIsbn(raw) ? ' ✓' : ' (bad checksum)'}`);
+                    return raw;
+                }
+            } catch { /* fall through to ZXing */ }
+        }
+
+        try {
+            const reader = await getBarcodeReader();
+            const result = await reader.decodeFromImageElement(img);
             const text = result.getText().replace(/[^0-9X]/g, '');
             if (text.length === 13 || text.length === 10) {
                 addLog(`Barcode [${label}]: ${text}${isValidIsbn(text) ? ' ✓' : ' (bad checksum)'}`);
@@ -167,7 +183,7 @@ export function useBarcodeScanner({
             }
         } catch { /* No barcode — normal */ }
         return null;
-    }, [getBarcodeReader, addLog]);
+    }, [getBarcodeReader, getBarcodeDetector, addLog]);
 
     /* ── Accept a detected ISBN (shared logic) ────────────────── */
     const acceptIsbn = useCallback((isbn: string, source: string) => {

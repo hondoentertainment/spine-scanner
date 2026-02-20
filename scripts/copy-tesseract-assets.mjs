@@ -30,7 +30,9 @@ const WORKER_FILE = 'worker.min.js';
 
 mkdirSync(targetDir, { recursive: true });
 
+const expectedCount = CORE_FILES.length + 1;
 let copied = 0;
+const missing = [];
 
 // Copy WASM core files
 for (const file of CORE_FILES) {
@@ -41,7 +43,8 @@ for (const file of CORE_FILES) {
     console.log(`  ✓ ${file}`);
     copied++;
   } else {
-    console.warn(`  ⚠ ${file} not found in node_modules`);
+    console.error(`  ✗ ${file} not found in node_modules`);
+    missing.push(`tesseract.js-core/${file}`);
   }
 }
 
@@ -53,7 +56,14 @@ if (existsSync(workerSrc)) {
   console.log(`  ✓ ${WORKER_FILE}`);
   copied++;
 } else {
-  console.warn(`  ⚠ ${WORKER_FILE} not found in node_modules/tesseract.js/dist/`);
+  console.error(`  ✗ ${WORKER_FILE} not found in node_modules/tesseract.js/dist/`);
+  missing.push(`tesseract.js/dist/${WORKER_FILE}`);
 }
 
-console.log(`Copied ${copied}/${CORE_FILES.length + 1} tesseract assets to public/tesseract/`);
+console.log(`Copied ${copied}/${expectedCount} tesseract assets to public/tesseract/`);
+
+if (missing.length > 0) {
+  console.error(`\nERROR: Missing ${missing.length} Tesseract assets. OCR will not work.`);
+  console.error('Missing:', missing.join(', '));
+  process.exit(1);
+}

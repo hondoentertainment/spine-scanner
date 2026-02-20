@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
-import { CheckCircle, AlertCircle, Info, X, AlertTriangle } from 'lucide-react';
+import { CheckCircle, AlertCircle, Info, X, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import styles from './Toast.module.css';
 
 type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -9,6 +9,7 @@ interface Toast {
   message: string;
   type: ToastType;
   duration: number;
+  details?: string;
 }
 
 interface ConfirmOptions {
@@ -19,8 +20,18 @@ interface ConfirmOptions {
   danger?: boolean;
 }
 
+export interface ToastOptions {
+  message: string;
+  type?: ToastType;
+  duration?: number;
+  details?: string;
+}
+
 interface ToastContextValue {
-  toast: (message: string, type?: ToastType, duration?: number) => void;
+  /** Show a toast. Pass message + optional type/duration, or use toastDetail for diagnostic info. */
+  toast: (message: string, type?: ToastType, duration?: number, details?: string) => void;
+  /** Show a diagnostic toast with expandable details for OCR/scanner troubleshooting. */
+  toastDetail: (options: ToastOptions) => void;
   confirm: (options: ConfirmOptions) => Promise<boolean>;
 }
 
@@ -42,6 +53,7 @@ const icons: Record<ToastType, React.ReactNode> = {
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [expandedDetails, setExpandedDetails] = useState<Set<string>>(new Set());
   const [confirmState, setConfirmState] = useState<{
     options: ConfirmOptions;
     resolve: (value: boolean) => void;
@@ -50,6 +62,11 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
+    setExpandedDetails((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     const timer = timersRef.current.get(id);
     if (timer) {
       clearTimeout(timer);
@@ -57,15 +74,36 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, []);
 
-  const toast = useCallback(
-    (message: string, type: ToastType = 'info', duration = 3500) => {
-      const id = crypto.randomUUID();
-      setToasts((prev) => [...prev, { id, message, type, duration }]);
+  const toggleDetails = useCallback((id: string) => {
+    setExpandedDetails((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
-      const timer = setTimeout(() => removeToast(id), duration);
+  const toast = useCallback(
+    (message: string, type: ToastType = 'info', duration = 3500, details?: string) => {
+      const id = crypto.randomUUID();
+      const d = details ? (type === 'error' ? 12000 : 6000) : duration;
+      setToasts((prev) => [...prev, { id, message, type, duration: d, details }]);
+      if (details && (type === 'error' || type === 'warning')) {
+        setExpandedDetails((prev) => new Set(prev).add(id));
+      }
+
+      const timer = setTimeout(() => removeToast(id), d);
       timersRef.current.set(id, timer);
     },
     [removeToast],
+  );
+
+  const toastDetail = useCallback(
+    (options: ToastOptions) => {
+      const { message, type = 'error', duration = 12000, details } = options;
+      toast(message, type, duration, details);
+    },
+    [toast],
   );
 
   const confirm = useCallback(
@@ -88,22 +126,43 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   return (
-    <ToastContext.Provider value={{ toast, confirm }}>
+    <ToastContext.Provider value={{ toast, confirm, toastDetail }}>
       {children}
 
       {/* Toast stack */}
       <div className={styles.container} role="status" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`${styles.toast} ${styles[t.type]}`}>
-            <span className={styles.icon}>{icons[t.type]}</span>
-            <span className={styles.message}>{t.message}</span>
-            <button
-              onClick={() => removeToast(t.id)}
-              className={styles.dismiss}
-              aria-label="Dismiss"
-            >
-              <X size={14} />
-            </button>
+          <div key={t.id} className={`${styles.toast} ${styles[t.type]} ${t.details ? styles.toastWithDetails : ''}`}>
+            <div className={styles.toastHeader}>
+              <span className={styles.icon}>{icons[t.type]}</span>
+              <span className={styles.message}>{t.message}</span>
+              <button
+                onClick={() => removeToast(t.id)}
+                className={styles.dismiss}
+                aria-label="Dismiss"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            {t.details && (
+              <div className={styles.detailsSection}>
+                <button
+                  type="button"
+                  onClick={() => toggleDetails(t.id)}
+                  className={styles.detailsToggle}
+                  aria-expanded={expandedDetails.has(t.id)}
+                  aria-controls={`toast-details-${t.id}`}
+                >
+                  {expandedDetails.has(t.id) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  <span>{expandedDetails.has(t.id) ? 'Hide diagnosis' : 'Show diagnosis'}</span>
+                </button>
+                {expandedDetails.has(t.id) && (
+                  <pre id={`toast-details-${t.id}`} className={styles.detailsContent}>
+                    {t.details}
+                  </pre>
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>

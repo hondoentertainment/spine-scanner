@@ -108,6 +108,31 @@
   background: rgba(56, 189, 248, 0.2);
 }
 
+.linkRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.shareBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent-blue);
+  background: rgba(56, 189, 248, 0.1);
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.5rem;
+  border: none;
+  cursor: pointer;
+}
+
+.shareBtn:hover {
+  background: rgba(56, 189, 248, 0.2);
+}
+
 /* ---- Edit mode ---- */
 .editFields {
   display: flex;

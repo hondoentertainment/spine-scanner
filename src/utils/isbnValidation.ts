@@ -73,3 +73,19 @@ export const isbn10To13 = (isbn: string): string | null => {
   const check = (10 - (sum % 10)) % 10;
   return twelve + String(check);
 };
+
+/**
+ * Normalize a valid ISBN to canonical ISBN-13 format for storage.
+ * - ISBN-13: returns digits-only form
+ * - ISBN-10: converts to ISBN-13 via isbn10To13
+ * Use only for validated ISBN strings; do not call on photo IDs.
+ */
+export const normalizeToIsbn13 = (isbn: string): string => {
+  const digits = isbn.replace(/[^0-9X]/g, '');
+  if (digits.length === 13) return digits;
+  if (digits.length === 10) {
+    const converted = isbn10To13(digits);
+    return converted ?? digits;
+  }
+  return digits || isbn;
+};

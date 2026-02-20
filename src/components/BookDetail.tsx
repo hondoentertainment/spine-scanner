@@ -3,9 +3,11 @@ import { useBookStore } from '../store/useBookStore.ts';
 import { useToast } from './Toast.tsx';
 import type { BookEntry } from '../types.ts';
 import { generateAmazonLink } from '../utils/amazonLink.ts';
+import { shareBook } from '../utils/shareBook.ts';
+import { isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import {
   X, ExternalLink, BookOpen, CheckCircle, Clock, XCircle,
-  Pencil, Save, Tag, Trash2
+  Pencil, Save, Tag, Trash2, Share2
 } from 'lucide-react';
 import styles from './BookDetail.module.css';
 
@@ -169,20 +171,33 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                 <h2 className={styles.title}>{book.title}</h2>
                 <p className={styles.author}>{book.author}</p>
                 <div className={styles.details}>
-                  {!book.isbn.startsWith('photo-') && <span>ISBN: {book.isbn}</span>}
+                  {!isBookPhotoOnly(book) && <span>ISBN: {book.isbn}</span>}
                   {book.pageCount > 0 && <span>{book.pageCount} pages</span>}
                   <span>Added {new Date(book.dateAdded).toLocaleDateString()}</span>
                 </div>
-                {generateAmazonLink(book.isbn) && (
-                  <a
-                    href={generateAmazonLink(book.isbn)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={styles.amazonLink}
+                <div className={styles.linkRow}>
+                  {generateAmazonLink(book.isbn) && (
+                    <a
+                      href={generateAmazonLink(book.isbn)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.amazonLink}
+                    >
+                      <ExternalLink size={12} /> View on Amazon
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const ok = await shareBook(book.isbn, book.title, book.author, () => toast('Link copied to clipboard', 'success'));
+                      if (!ok) toast('Could not share', 'error');
+                    }}
+                    className={styles.shareBtn}
+                    aria-label={`Share ${book.title}`}
                   >
-                    <ExternalLink size={12} /> View on Amazon
-                  </a>
-                )}
+                    <Share2 size={12} /> Share
+                  </button>
+                </div>
               </>
             )}
           </div>
@@ -208,7 +223,8 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
           {bookShelves.map((shelf) => (
             <span key={shelf.id} className={styles.shelfChip} style={{ background: `${shelf.color}20`, color: shelf.color }}>
               {shelf.name}
-              <button onClick={() => unassignShelf(book.id, shelf.id)} className={styles.chipRemove} style={{ color: shelf.color }}>
+              <button onClick={() => unassignShelf(book.id, shelf.id)} className={styles.chipRemove} style={{ color: shelf.color }}
+                aria-label={`Remove from ${shelf.name}`}>
                 <X size={10} />
               </button>
             </span>
@@ -230,6 +246,7 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                       onClick={() => { assignShelf(book.id, shelf.id); setShowShelfPicker(false); }}
                       className={styles.shelfOption}
                       style={{ color: shelf.color }}
+                      aria-label={`Add to ${shelf.name}`}
                     >
                       <span className={styles.shelfDot} style={{ background: shelf.color }} />
                       {shelf.name}

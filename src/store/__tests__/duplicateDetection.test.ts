@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useBookStore } from '../useBookStore';
 import type { BookEntry } from '../../types';
+import { isbnExistsInLibrary as checkIsbnExists } from '../../utils/libraryUtils';
 
 /**
  * ─── 2b. The Duplicate Scan ──────────────────────────────────────
@@ -8,11 +9,8 @@ import type { BookEntry } from '../../types';
  * Test: Accidentally scan the same book twice during a session.
  *
  * Success: The app recognizes the duplicate ISBN and prevents adding
- * it again. The existing book's data (status, notes, shelves) is
- * preserved intact.
- *
- * This test validates the duplicate detection logic that mirrors
- * App.tsx's handleScan: `books.find(b => b.isbn === isbn)`
+ * it again. Uses canonical ISBN-13 comparison so ISBN-10 and ISBN-13
+ * for the same book are treated as duplicates.
  */
 
 const makeBook = (overrides: Partial<BookEntry> = {}): BookEntry => ({
@@ -30,13 +28,8 @@ const makeBook = (overrides: Partial<BookEntry> = {}): BookEntry => ({
   ...overrides,
 });
 
-/**
- * Helper: simulates the duplicate check from App.tsx handleScan.
- * Returns true if the ISBN already exists in the library.
- */
-const isbnExistsInLibrary = (isbn: string): boolean => {
-  return !!useBookStore.getState().books.find(b => b.isbn === isbn);
-};
+const isbnExistsInLibrary = (isbn: string): boolean =>
+  checkIsbnExists(isbn, useBookStore.getState().books);
 
 describe('Duplicate Scan Detection', () => {
   beforeEach(() => {
@@ -118,12 +111,11 @@ describe('Duplicate Scan Detection', () => {
     expect(useBookStore.getState().books[0].id).toBe('b2');
   });
 
-  it('distinguishes ISBN-10 from ISBN-13 for the same book', () => {
-    // ISBN-10 and ISBN-13 are different string values
+  it('treats ISBN-10 and ISBN-13 for the same book as duplicates (canonical comparison)', () => {
     useBookStore.getState().addBook(makeBook({ isbn: '0141036141' })); // ISBN-10
 
-    // ISBN-13 for the same book is a different string
-    expect(isbnExistsInLibrary('9780141036144')).toBe(false);
+    // ISBN-13 for the same book should be detected as duplicate
+    expect(isbnExistsInLibrary('9780141036144')).toBe(true);
     expect(isbnExistsInLibrary('0141036141')).toBe(true);
   });
 

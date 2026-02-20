@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isValidIsbn10, isValidIsbn13, isValidIsbn, isbn13To10, isbn10To13 } from '../isbnValidation';
+import { isValidIsbn10, isValidIsbn13, isValidIsbn, isbn13To10, isbn10To13, normalizeToIsbn13 } from '../isbnValidation';
 
 describe('isValidIsbn10', () => {
   it('validates correct ISBN-10', () => {
@@ -185,5 +185,21 @@ describe('isbn10To13', () => {
   });
   it('returns null for wrong length', () => {
     expect(isbn10To13('014103614')).toBeNull();
+  });
+});
+
+describe('normalizeToIsbn13', () => {
+  it('keeps ISBN-13 as digits-only', () => {
+    expect(normalizeToIsbn13('9780141036144')).toBe('9780141036144');
+    expect(normalizeToIsbn13('978-0-14-103614-4')).toBe('9780141036144');
+  });
+
+  it('converts ISBN-10 to ISBN-13', () => {
+    expect(normalizeToIsbn13('0141036141')).toBe('9780141036144');
+    expect(normalizeToIsbn13('0141036144')).toBe('9780141036144');
+  });
+
+  it('handles 979 prefix (no ISBN-10 equivalent)', () => {
+    expect(normalizeToIsbn13('9791032305690')).toBe('9791032305690');
   });
 });

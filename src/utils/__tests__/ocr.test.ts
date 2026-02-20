@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractIsbnCandidates, fixOcrDigits, tryFixChecksum } from '../ocr';
+import { extractIsbnCandidates, fixOcrDigits, tryFixChecksum, getNearMissCandidates } from '../ocr';
 import { isValidIsbn } from '../isbnValidation';
 
 /* ================================================================
@@ -22,6 +22,22 @@ describe('fixOcrDigits', () => {
 
   it('handles empty string', () => {
     expect(fixOcrDigits('')).toBe('');
+  });
+
+  it('fixes $ as 5 (common OCR misread)', () => {
+    expect(fixOcrDigits('9780$41')).toBe('9780541');
+  });
+
+  it('fixes ! as 1 (vertical bar confusion)', () => {
+    expect(fixOcrDigits('!23')).toBe('123');
+  });
+
+  it('fixes Q/q as 9', () => {
+    expect(fixOcrDigits('97Q0141036144')).toBe('9790141036144');
+  });
+
+  it('fixes D as 0', () => {
+    expect(fixOcrDigits('97D0141036144')).toBe('9700141036144');
   });
 });
 
@@ -80,6 +96,17 @@ describe('extractIsbnCandidates', () => {
     it('handles compact ISBN label (no space)', () => {
       const c = extractIsbnCandidates('ISBN9780141036144');
       expect(c[0]).toBe('9780141036144');
+    });
+
+    it('handles I.S.B.N. dotted format', () => {
+      const c = extractIsbnCandidates('I.S.B.N. 978-0-14-103614-4');
+      expect(c[0]).toBe('9780141036144');
+    });
+
+    it('handles I.S.B.N. with colon separator', () => {
+      const c = extractIsbnCandidates('I.S.B.N:-9780141036144');
+      expect(c.length).toBeGreaterThanOrEqual(1);
+      expect(c).toContain('9780141036144');
     });
   });
 
@@ -335,5 +362,25 @@ describe('tryFixChecksum', () => {
     // 9780306406151 invalid; 0→6 at position 7 yields valid 9780306466151
     const repaired = tryFixChecksum('9780306406151');
     expect(repaired).toBe('9780306466151');
+  });
+});
+
+/* ================================================================
+ *  getNearMissCandidates — All fixable variants for suggestions
+ * ================================================================ */
+
+describe('getNearMissCandidates', () => {
+  it('returns empty for valid ISBN (no fixes needed)', () => {
+    expect(getNearMissCandidates('9780141036144')).toEqual([]);
+  });
+
+  it('returns all valid single-digit fix variants', () => {
+    const missed = getNearMissCandidates('9780306406151');
+    expect(missed).toContain('9780306466151');
+    expect(missed.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('returns empty when no fix exists', () => {
+    expect(getNearMissCandidates('1111111111111')).toEqual([]);
   });
 });

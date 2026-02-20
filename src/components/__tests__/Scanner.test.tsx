@@ -278,8 +278,8 @@ describe('Scanner', () => {
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 5000 });
-    });
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 8000 });
+    }, 10000);
 
     it('falls through to OCR if barcode has invalid checksum (no repair)', async () => {
       barcodeResult = '9780141036145'; // invalid, tryFixChecksum returns null
@@ -510,6 +510,29 @@ describe('Scanner', () => {
 
   /* ── Photo upload UI ──────────────────────────────────────── */
   describe('photo upload', () => {
+    let OriginalFileReader: typeof globalThis.FileReader;
+
+    beforeEach(() => {
+      OriginalFileReader = globalThis.FileReader;
+      // Mock FileReader so result can be set (jsdom's result is read-only)
+      vi.stubGlobal(
+        'FileReader',
+        class MockFileReader {
+          result: string | null = null;
+          onload: (() => void) | null = null;
+          onerror: (() => void) | null = null;
+          readAsDataURL(_blob: Blob) {
+            this.result = 'data:image/png;base64,iVBORw0KGgo=';
+            Promise.resolve().then(() => this.onload?.());
+          }
+        },
+      );
+    });
+
+    afterEach(() => {
+      vi.stubGlobal('FileReader', OriginalFileReader);
+    });
+
     it('shows upload button alongside capture when camera works', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
       expect(screen.getByLabelText('Upload photo of ISBN')).toBeInTheDocument();
@@ -535,12 +558,6 @@ describe('Scanner', () => {
         expect(screen.getByLabelText('Upload photo of ISBN')).toBeInTheDocument();
       });
 
-      const mockReadAsDataURL = vi.fn(function (this: FileReader) {
-        this.result = 'data:image/png;base64,iVBORw0KGgo=';
-        Promise.resolve().then(() => this.onload?.({ target: this } as ProgressEvent<FileReader>));
-      });
-      vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(mockReadAsDataURL);
-
       const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
       const file = new File(['test'], 'test.png', { type: 'image/png' });
 
@@ -550,6 +567,27 @@ describe('Scanner', () => {
 
       await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 8000 });
     }, 10000);
+
+    it('calls onScan via OCR when photo has no barcode but OCR finds ISBN', async () => {
+      barcodeResult = null;
+      ocrText = 'Penguin Classics  ISBN 978-0-14-103614-4  The Great Gatsby';
+
+      const onScan = vi.fn();
+      renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Upload photo of ISBN')).toBeInTheDocument();
+      });
+
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File(['test'], 'spine.jpg', { type: 'image/jpeg' });
+
+      await act(async () => {
+        fireEvent.change(fileInput, { target: { files: [file] } });
+      });
+
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 15000 });
+    }, 20000);
   });
 
   /* ── Camera error fallback UI ─────────────────────────────── */

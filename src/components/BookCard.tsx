@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useToast } from './Toast.tsx';
 import type { BookEntry } from '../types.ts';
-import { Trash2, ExternalLink, BookOpen, CheckCircle, Clock, XCircle, Pencil, X, Save, Tag } from 'lucide-react';
+import { Trash2, ExternalLink, BookOpen, CheckCircle, Clock, XCircle, Pencil, X, Save, Tag, Share2 } from 'lucide-react';
 import { generateAmazonLink } from '../utils/amazonLink.ts';
+import { shareBook } from '../utils/shareBook.ts';
 import s from './BookCard.module.css';
 
 interface BookCardProps {
@@ -147,14 +148,22 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
                 <div className={s.info}>
                     <h3 className={s.bookTitle}>{book.title}</h3>
                     <p className={s.bookAuthor}>{book.author}</p>
-                    {generateAmazonLink(book.isbn) && (
-                      <div className={s.links}>
-                        <a href={generateAmazonLink(book.isbn)} target="_blank" rel="noopener noreferrer"
-                           className={`glass ${s.amazonBtn}`} onClick={(e) => e.stopPropagation()}>
-                            <ExternalLink size={12} /> Amazon
-                        </a>
-                      </div>
-                    )}
+                    <div className={s.links}>
+                        {generateAmazonLink(book.isbn) && (
+                            <a href={generateAmazonLink(book.isbn)} target="_blank" rel="noopener noreferrer"
+                               className={`glass ${s.amazonBtn}`} onClick={(e) => e.stopPropagation()}>
+                                <ExternalLink size={12} /> Amazon
+                            </a>
+                        )}
+                        <button type="button" onClick={async (e) => {
+                            e.stopPropagation();
+                            const ok = await shareBook(book.isbn, book.title, book.author, () => toast('Link copied to clipboard', 'success'));
+                            if (!ok) toast('Could not share', 'error');
+                        }} className={`glass ${s.amazonBtn}`}
+                            aria-label={`Share ${book.title}`} title="Share book">
+                            <Share2 size={12} /> Share
+                        </button>
+                    </div>
                 </div>
             </div>
 

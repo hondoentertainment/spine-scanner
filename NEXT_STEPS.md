@@ -21,20 +21,21 @@ Status of recommended improvements. Items marked ✅ are implemented.
 | 11 | Duplicate scan "Update notes" | ✅ Confirm dialog → Open in library |
 | 12 | PWA icons (192, 512) | ✅ Generated from SVG |
 | 13 | LibraryThing TSV, StoryGraph CSV | ✅ Export formats |
+| 14 | Accessibility: aria-labels, focus ring | ✅ Icon buttons, nav, shelf chips |
+| 15 | Amazon affiliate tag | ✅ `VITE_AMAZON_AFFILIATE_TAG` in .env |
+| 16 | Individual book sharing | ✅ Share button, Web Share API, copy link, deep links `#book-ISBN` |
+| 17 | Camera torch | ✅ Flashlight toggle for low light (mobile) |
+| 18 | Scanner UX | ✅ Haptics on buttons, faster auto-scan (2s), OCR pre-warm on mount |
 
 ---
 
 ## Remaining (lower priority)
 
 ### Accessibility
-- Audit icon-only buttons for `aria-label`
-- Visible focus indicators beyond browser defaults
 - Screen reader testing (VoiceOver / NVDA)
 
 ### Optional polish
-- Amazon affiliate tag (env config) if desired
-- Individual book sharing (copy link / card image)
-- Camera torch for low light on mobile
+- Individual book sharing: card image export (future)
 
 ---
 

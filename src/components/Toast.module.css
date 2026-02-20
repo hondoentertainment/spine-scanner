@@ -14,8 +14,9 @@
 .toast {
   pointer-events: auto;
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
   padding: 0.75rem 1rem;
   border-radius: 0.75rem;
   font-size: 0.85rem;
@@ -25,6 +26,16 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
   animation: slideIn 0.3s ease-out;
+}
+
+.toastHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.toastWithDetails {
+  max-width: min(420px, calc(100vw - 2rem));
 }
 
 .success {
@@ -75,6 +86,49 @@
 
 .dismiss:hover {
   opacity: 1;
+}
+
+/* ---- Toast details (diagnostic) ---- */
+.detailsSection {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.detailsToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.9;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-family: inherit;
+  padding: 0.2rem 0;
+  transition: opacity 0.15s;
+}
+
+.detailsToggle:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.detailsContent {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.7rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  max-height: 12rem;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
 }
 
 /* ---- Confirm Dialog ---- */
