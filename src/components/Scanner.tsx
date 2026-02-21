@@ -6,7 +6,7 @@ import { getNearMissCandidates } from '../utils/ocr.ts';
 import { useToast } from './Toast.tsx';
 import { useOcrEngine } from '../hooks/useOcrEngine.ts';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner.ts';
-import { useScanPipeline, isLowResolution, assessVideoFrameQuality, CROP_MEDIUM } from '../hooks/useScanPipeline.ts';
+import { useScanPipeline, isLowResolution, assessVideoFrameQuality, CROP_MEDIUM, type OcrLanguage, type ScanProgress } from '../hooks/useScanPipeline.ts';
 import { buildErrorDiagnostics, formatDiagnostics } from '../utils/ocrDiagnostics.ts';
 import type { LiveScanTelemetry } from '../hooks/useBarcodeScanner.ts';
 import { hapticSuccess, hapticFailure, hapticHoldSteady } from '../utils/haptics.ts';
@@ -70,6 +70,8 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const [scanMode, setScanMode] = useState<ScanMode>('auto');
     const [torchWarningShown, setTorchWarningShown] = useState(false);
     const [ocrReady, setOcrReady] = useState(false);
+    const [ocrLanguage, setOcrLanguage] = useState<OcrLanguage>('both');
+    const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
     const videoTrackRef = useRef<MediaStreamTrack | null>(null);
 
     /* ── Refs for async closures ──────────────────────────────── */
@@ -111,6 +113,8 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     /* ── Scan pipeline hook (shared by capture + upload) ──────── */
     const { runPipeline } = useScanPipeline({
         addLog, setStatus, runOcr, runOcrWithLang, tryBarcodeDecode,
+        onProgress: useCallback((p: ScanProgress) => setScanProgress(p), []),
+        ocrLanguage,
     });
 
     /* ── Pre-warm OCR on mount and when camera ready (mobile: load before first capture) ─ */
@@ -174,6 +178,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
 
         processingRef.current = true;
         setProcessing(true);
+        setScanProgress(null);
         setStatus('Scanning...');
         setIsbnSuggestions([]);
         setRepairedMap({});
@@ -272,6 +277,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
         addLog(`Photo upload: ${file.name} (${(file.size / 1024).toFixed(0)} KB)`);
         processingRef.current = true;
         setProcessing(true);
+        setScanProgress(null);
         setStatus('Processing uploaded photo...');
         setIsbnSuggestions([]);
         setRepairedMap({});
@@ -537,6 +543,18 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                     )}
                 </div>
 
+                {/* OCR progress bar: Pass X of Y */}
+                {processing && scanProgress && (scanProgress.phase === 'ocr' || scanProgress.phase === 'ocr-multilang') && scanProgress.totalPasses != null && scanProgress.totalPasses > 0 && (
+                    <div className={s.progressContainer} role="progressbar" aria-valuenow={scanProgress.currentPass ?? 0} aria-valuemin={0} aria-valuemax={scanProgress.totalPasses} aria-label={`OCR pass ${scanProgress.currentPass ?? 0} of ${scanProgress.totalPasses}`}>
+                        <div className={s.progressLabel}>
+                            <span>OCR pass {scanProgress.currentPass ?? 0} of {scanProgress.totalPasses}</span>
+                        </div>
+                        <div className={s.progressBarTrack}>
+                            <div className={s.progressBarFill} style={{ width: `${((scanProgress.currentPass ?? 0) / scanProgress.totalPasses) * 100}%` }} />
+                        </div>
+                    </div>
+                )}
+
                 {cameraError && (
                     <div className={s.cameraError}>
                         {cameraError}
@@ -604,9 +622,25 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                             <Zap size={16} /> Auto
                         </button>
                     </div>
+                    <div className={s.languageRow}>
+                        <span className={s.languageLabel}>Language:</span>
+                        <button type="button" onClick={() => setOcrLanguage('en')} aria-pressed={ocrLanguage === 'en'}
+                            className={`${s.languageBtn} ${ocrLanguage === 'en' ? s.languageBtnActive : ''}`} title="English only">
+                            English
+                        </button>
+                        <button type="button" onClick={() => setOcrLanguage('de')} aria-pressed={ocrLanguage === 'de'}
+                            className={`${s.languageBtn} ${ocrLanguage === 'de' ? s.languageBtnActive : ''}`} title="German fallback">
+                            German
+                        </button>
+                        <button type="button" onClick={() => setOcrLanguage('both')} aria-pressed={ocrLanguage === 'both'}
+                            className={`${s.languageBtn} ${ocrLanguage === 'both' ? s.languageBtnActive : ''}`} title="English and German">
+                            Both
+                        </button>
+                    </div>
                     <div className={s.btnRow}>
                         <button onClick={capture} disabled={processing || isScanning || !cameraReady || liveQualityHint === 'blurry'}
                             aria-label={processing ? 'Scanning in progress' : liveQualityHint === 'blurry' ? 'Hold steady to enable capture' : 'Capture and scan'}
+                            aria-describedby="status-text"
                             className={`glass ${s.captureBtn}`}
                             style={{ background: processing ? 'rgba(255,255,255,0.1)' : 'var(--primary)' }}
                             title="Capture frame for OCR text recognition">

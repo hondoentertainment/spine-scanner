@@ -6,31 +6,19 @@
  */
 
 import { PNG } from 'pngjs';
-import { createWriteStream, mkdirSync } from 'fs';
+import { createWriteStream, mkdirSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
-const DIGIT_FONT = {
-  '0': ['01110', '10001', '10011', '10101', '11001', '10001', '01110'],
-  '1': ['00100', '01100', '00100', '00100', '00100', '00100', '01110'],
-  '2': ['01110', '10001', '00001', '00010', '00100', '01000', '11111'],
-  '3': ['11110', '00001', '00001', '01110', '00001', '00001', '11110'],
-  '4': ['00010', '00110', '01010', '10010', '11111', '00010', '00010'],
-  '5': ['11111', '10000', '10000', '11110', '00001', '00001', '11110'],
-  '6': ['01110', '10000', '10000', '11110', '10001', '10001', '01110'],
-  '7': ['11111', '00001', '00010', '00100', '01000', '01000', '01000'],
-  '8': ['01110', '10001', '10001', '01110', '10001', '10001', '01110'],
-  '9': ['01110', '10001', '10001', '01111', '00001', '00001', '01110'],
-};
+const DIGIT_FONT = JSON.parse(readFileSync(join(__dirname, '..', 'src', 'utils', 'digitFont.json'), 'utf-8'));
 
 const ISBN = '9780306406157';
-const SCALE = 16;
-const PAD = 20;
 const GLYPH_W = 5;
 const GLYPH_H = 7;
-
+/** Larger scale improves Tesseract recognition; 24+ recommended for consistent OCR */
+const SCALE = 24;
+const PAD = 24;
 const width = PAD * 2 + ISBN.length * (GLYPH_W * SCALE + SCALE) - SCALE;
 const height = PAD * 2 + GLYPH_H * SCALE;
 

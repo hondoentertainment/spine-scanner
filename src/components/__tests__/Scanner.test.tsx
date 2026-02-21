@@ -667,4 +667,66 @@ describe('Scanner', () => {
       });
     });
   });
+
+  /* ── OCR enhancements: progress, language, accessibility ──── */
+  describe('OCR enhancements', () => {
+    it('capture button has aria-describedby linking to status text', async () => {
+      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /capture and scan/i })).toBeInTheDocument();
+      });
+
+      const captureBtn = screen.getByRole('button', { name: /capture and scan/i });
+      expect(captureBtn).toHaveAttribute('aria-describedby', 'status-text');
+    });
+
+    it('status text has id for aria-describedby reference', async () => {
+      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /capture and scan/i })).toBeInTheDocument();
+      });
+
+      const statusText = document.getElementById('status-text');
+      expect(statusText).toBeInTheDocument();
+    });
+
+    it('renders language selector with English, German, Both', async () => {
+      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /capture and scan/i })).toBeInTheDocument();
+      });
+
+      expect(screen.getByRole('button', { name: /^English$/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^German$/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Both$/ })).toBeInTheDocument();
+    });
+
+    it('Both is selected by default for language', async () => {
+      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /capture and scan/i })).toBeInTheDocument();
+      });
+
+      const bothBtn = screen.getByRole('button', { name: /^Both$/ });
+      expect(bothBtn).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('selecting German updates language button state', async () => {
+      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /capture and scan/i })).toBeInTheDocument();
+      });
+
+      const germanBtn = screen.getByRole('button', { name: /^German$/ });
+      fireEvent.click(germanBtn);
+
+      expect(germanBtn).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: /^Both$/ })).toHaveAttribute('aria-pressed', 'false');
+    });
+  });
 });
