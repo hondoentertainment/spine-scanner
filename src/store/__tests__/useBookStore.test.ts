@@ -63,6 +63,52 @@ describe('useBookStore', () => {
     expect(useBookStore.getState().books[0].status).toBe('reading');
   });
 
+  it('auto-sets dateStarted when status changes to reading', () => {
+    useBookStore.getState().addBook(makeBook({ id: '1', status: 'to-read' }));
+    useBookStore.getState().updateBookStatus('1', 'reading');
+    expect(useBookStore.getState().books[0].dateStarted).toBeDefined();
+  });
+
+  it('does not overwrite existing dateStarted when status changes to reading again', () => {
+    const existingDate = '2026-01-01T00:00:00.000Z';
+    useBookStore.getState().addBook(makeBook({ id: '1', status: 'reading', dateStarted: existingDate }));
+    useBookStore.getState().updateBookStatus('1', 'to-read');
+    useBookStore.getState().updateBookStatus('1', 'reading');
+    expect(useBookStore.getState().books[0].dateStarted).toBe(existingDate);
+  });
+
+  it('auto-sets dateFinished when status changes to read', () => {
+    useBookStore.getState().addBook(makeBook({ id: '1', status: 'reading' }));
+    useBookStore.getState().updateBookStatus('1', 'read');
+    expect(useBookStore.getState().books[0].dateFinished).toBeDefined();
+  });
+
+  it('auto-sets dateFinished when status changes to dnf', () => {
+    useBookStore.getState().addBook(makeBook({ id: '1', status: 'reading' }));
+    useBookStore.getState().updateBookStatus('1', 'dnf');
+    expect(useBookStore.getState().books[0].dateFinished).toBeDefined();
+  });
+
+  it('sets and clears rating via updateBookRating', () => {
+    useBookStore.getState().addBook(makeBook({ id: '1' }));
+    useBookStore.getState().updateBookRating('1', 4);
+    expect(useBookStore.getState().books[0].rating).toBe(4);
+    useBookStore.getState().updateBookRating('1', undefined);
+    expect(useBookStore.getState().books[0].rating).toBeUndefined();
+  });
+
+  it('stamps updatedAt on every mutation', () => {
+    const before = new Date().toISOString();
+    useBookStore.getState().addBook(makeBook({ id: '1' }));
+    const afterAdd = useBookStore.getState().books[0].updatedAt;
+    expect(afterAdd).toBeDefined();
+    expect(afterAdd! >= before).toBe(true);
+
+    useBookStore.getState().updateBookNotes('1', 'test');
+    const afterNote = useBookStore.getState().books[0].updatedAt;
+    expect(afterNote! >= afterAdd!).toBe(true);
+  });
+
   it('updates book notes', () => {
     useBookStore.getState().addBook(makeBook({ id: '1', notes: '' }));
     useBookStore.getState().updateBookNotes('1', 'Great book!');

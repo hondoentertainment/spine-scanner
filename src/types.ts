@@ -9,8 +9,16 @@ export interface BookEntry {
   amazonLink: string;
   coverImg: string;
   status: 'to-read' | 'reading' | 'read' | 'dnf';
+  /** Star rating 1–5 set by the user. */
+  rating?: 1 | 2 | 3 | 4 | 5;
   notes: string;
   dateAdded: string;
+  /** ISO string set automatically when status changes to 'reading'. Can be edited manually. */
+  dateStarted?: string;
+  /** ISO string set automatically when status changes to 'read' or 'dnf'. Can be edited manually. */
+  dateFinished?: string;
+  /** ISO string updated on every local mutation; used for timestamp-based sync conflict resolution. */
+  updatedAt?: string;
   shelfIds: string[];
 }
 

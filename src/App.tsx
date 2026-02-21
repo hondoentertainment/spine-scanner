@@ -40,6 +40,7 @@ function App() {
   const initialSyncDone = useRef(false);
   const prevBooksRef = useRef(books);
   const prevShelvesRef = useRef(shelves);
+  const autoSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Initialize auth on mount
   useEffect(() => {
@@ -135,8 +136,27 @@ function App() {
 
   const handleSyncNow = useCallback(async () => {
     if (!user) return;
+    if (autoSyncTimerRef.current) {
+      clearTimeout(autoSyncTimerRef.current);
+      autoSyncTimerRef.current = null;
+    }
     await flushQueue();
   }, [user, flushQueue]);
+
+  // Auto-sync: flush 30 s after the last local mutation (debounced)
+  useEffect(() => {
+    if (!user || !online || flushing || pendingChanges === 0) return;
+    if (autoSyncTimerRef.current) clearTimeout(autoSyncTimerRef.current);
+    autoSyncTimerRef.current = setTimeout(flushQueue, 30_000);
+    return () => {
+      if (autoSyncTimerRef.current) {
+        clearTimeout(autoSyncTimerRef.current);
+        autoSyncTimerRef.current = null;
+      }
+    };
+  // flushQueue captures the latest books/shelves so the flush always has current data
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingChanges, user, online, flushing, flushQueue]);
 
   const handlePhotoCapture = useCallback((imageDataUrl: string) => {
     const id = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2);
@@ -155,6 +175,7 @@ function App() {
       dateAdded: new Date().toISOString(),
       shelfIds: [],
     };
+    // updatedAt is stamped by useBookStore.addBook
     addBook(newBook);
     toast('Book added with photo. Edit details in your library.', 'success');
     if (user && online) {

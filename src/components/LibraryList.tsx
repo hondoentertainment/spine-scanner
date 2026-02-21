@@ -6,12 +6,14 @@ import ShelfManager from './ShelfManager.tsx';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   Search, Settings, ArrowUpDown, Filter, BookOpen, Clock, CheckCircle, XCircle,
-  BarChart3, Tag, LayoutGrid, List
+  BarChart3, Tag, LayoutGrid, List, Share2
 } from 'lucide-react';
 import type { BookEntry } from '../types.ts';
+import { shareBookList } from '../utils/shareBook.ts';
+import { useToast } from './Toast.tsx';
 import s from './LibraryList.module.css';
 
-type SortField = 'title' | 'author' | 'dateAdded' | 'pageCount';
+type SortField = 'title' | 'author' | 'dateAdded' | 'pageCount' | 'rating';
 type StatusFilter = BookEntry['status'] | 'all';
 type ViewMode = 'grid' | 'list';
 
@@ -25,6 +27,7 @@ interface LibraryListProps {
 
 const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn, onOpenComplete }) => {
     const { books, shelves } = useBookStore();
+    const { toast } = useToast();
     const [searchTerm, setSearchTerm] = useState('');
     const [sortBy, setSortBy] = useState<SortField>('dateAdded');
     const [sortAsc, setSortAsc] = useState(false);
@@ -34,6 +37,10 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
     const [showShelves, setShowShelves] = useState(false);
     const [viewMode, setViewMode] = useState<ViewMode>('grid');
     const [selectedBook, setSelectedBook] = useState<BookEntry | null>(null);
+    const [annualGoal, setAnnualGoal] = useState<number>(() => {
+        const stored = localStorage.getItem('spine-scanner-annual-goal');
+        return stored ? Math.max(0, parseInt(stored, 10)) : 0;
+    });
 
     const listParentRef = useRef<HTMLDivElement>(null);
 
@@ -44,7 +51,41 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
         const dnf = books.filter(b => b.status === 'dnf').length;
         const totalPages = books.reduce((sum, b) => sum + (b.pageCount || 0), 0);
         const readPages = books.filter(b => b.status === 'read').reduce((sum, b) => sum + (b.pageCount || 0), 0);
-        return { total: books.length, toRead, reading, read, dnf, totalPages, readPages };
+
+        // Avg rating
+        const ratedBooks = books.filter(b => b.rating != null);
+        const avgRating = ratedBooks.length > 0
+            ? ratedBooks.reduce((sum, b) => sum + (b.rating ?? 0), 0) / ratedBooks.length
+            : null;
+
+        // Books finished this year (using dateFinished or dateAdded for legacy read books)
+        const currentYear = new Date().getFullYear();
+        const booksFinishedThisYear = books.filter(b => {
+            const dateStr = b.dateFinished ?? (b.status === 'read' ? b.dateAdded : null);
+            return dateStr && new Date(dateStr).getFullYear() === currentYear;
+        }).length;
+
+        // Avg reading pace in days (books with both dateStarted and dateFinished)
+        const paced = books.filter(b => b.dateStarted && b.dateFinished);
+        const avgPaceDays = paced.length > 0
+            ? paced.reduce((sum, b) => {
+                const start = new Date(b.dateStarted!).getTime();
+                const end = new Date(b.dateFinished!).getTime();
+                return sum + Math.max(1, (end - start) / 86_400_000);
+            }, 0) / paced.length
+            : null;
+
+        // Monthly finished breakdown for current year (index 0=Jan)
+        const monthlyBreakdown = Array.from({ length: 12 }, (_, month) =>
+            books.filter(b => {
+                const dateStr = b.dateFinished ?? (b.status === 'read' ? b.dateAdded : null);
+                if (!dateStr) return false;
+                const d = new Date(dateStr);
+                return d.getFullYear() === currentYear && d.getMonth() === month;
+            }).length
+        );
+
+        return { total: books.length, toRead, reading, read, dnf, totalPages, readPages, avgRating, booksFinishedThisYear, avgPaceDays, monthlyBreakdown };
     }, [books]);
 
     const filteredAndSorted = useMemo(() => {
@@ -64,6 +105,7 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
                 case 'author': cmp = a.author.localeCompare(b.author); break;
                 case 'dateAdded': cmp = a.dateAdded.localeCompare(b.dateAdded); break;
                 case 'pageCount': cmp = (a.pageCount || 0) - (b.pageCount || 0); break;
+                case 'rating': cmp = (a.rating ?? 0) - (b.rating ?? 0); break;
             }
             return sortAsc ? cmp : -cmp;
         });
@@ -84,6 +126,22 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
         if (sortBy === field) setSortAsc(!sortAsc);
         else { setSortBy(field); setSortAsc(field === 'title' || field === 'author'); }
     };
+
+    const handleGoalChange = (val: number) => {
+        const clamped = Math.max(0, val);
+        setAnnualGoal(clamped);
+        localStorage.setItem('spine-scanner-annual-goal', String(clamped));
+    };
+
+    const handleCopyList = useCallback(async () => {
+        const listTitle = shelfFilter
+            ? `${shelves.find(sh => sh.id === shelfFilter)?.name ?? 'Shelf'} (${filteredAndSorted.length} books)`
+            : statusFilter !== 'all'
+            ? `${statusFilter.replace('-', ' ')} (${filteredAndSorted.length} books)`
+            : `My Library (${filteredAndSorted.length} books)`;
+        const ok = await shareBookList(filteredAndSorted, listTitle, () => toast('Reading list copied to clipboard', 'success'));
+        if (!ok) toast('Could not share list', 'error');
+    }, [filteredAndSorted, shelfFilter, statusFilter, shelves, toast]);
 
     const countBooksOnShelf = (shelfId: string) =>
         books.filter(b => (b.shelfIds || []).includes(shelfId)).length;
@@ -135,11 +193,17 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
                     </button>
                     <button onClick={() => setShowStats(!showStats)} className={`glass ${s.iconBtn}`}
                         aria-label="Toggle reading statistics"
+                        aria-pressed={showStats}
                         style={{
                             color: showStats ? 'var(--accent-blue)' : 'var(--text-muted)',
                             background: showStats ? 'rgba(56, 189, 248, 0.1)' : undefined,
                         }}>
                         <BarChart3 size={20} />
+                    </button>
+                    <button onClick={handleCopyList} className={`glass ${s.iconBtn}`}
+                        aria-label="Share / copy reading list"
+                        title="Share or copy reading list">
+                        <Share2 size={20} />
                     </button>
                     <button onClick={onManageData} className={`glass ${s.manageBtn}`} aria-label="Manage library data">
                         <Settings size={20} />
@@ -151,6 +215,7 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
 
             {showStats && (
                 <div className={`glass ${s.stats}`}>
+                    {/* Core counts */}
                     {[
                         { value: stats.total, label: 'Total Books' },
                         { value: stats.read, label: 'Read', color: '#22c55e' },
@@ -158,12 +223,56 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
                         { value: stats.toRead, label: 'To Read', color: '#38bdf8' },
                         { value: stats.readPages.toLocaleString(), label: 'Pages Read' },
                         { value: stats.totalPages.toLocaleString(), label: 'Total Pages' },
+                        ...(stats.avgRating != null ? [{ value: `${stats.avgRating.toFixed(1)} ★`, label: 'Avg Rating', color: '#f59e0b' }] : []),
+                        ...(stats.avgPaceDays != null ? [{ value: `${Math.round(stats.avgPaceDays)}d`, label: 'Avg Pace' }] : []),
                     ].map((item) => (
                         <div key={item.label} className={s.statItem}>
                             <div className={s.statValue} style={item.color ? { color: item.color } : undefined}>{item.value}</div>
                             <div className={s.statLabel}>{item.label}</div>
                         </div>
                     ))}
+
+                    {/* Annual goal */}
+                    <div className={s.goalSection}>
+                        <span className={s.goalLabel}>{new Date().getFullYear()} goal:</span>
+                        <input
+                            type="number"
+                            className={s.goalInput}
+                            value={annualGoal || ''}
+                            onChange={(e) => handleGoalChange(parseInt(e.target.value) || 0)}
+                            placeholder="0"
+                            min={0}
+                            aria-label="Annual reading goal (number of books)"
+                        />
+                        {annualGoal > 0 && (
+                            <div className={s.goalProgress}>
+                                <div className={s.goalBar}>
+                                    <div className={s.goalBarFill} style={{ width: `${Math.min(100, (stats.booksFinishedThisYear / annualGoal) * 100)}%` }} />
+                                </div>
+                                <div className={s.goalText}>{stats.booksFinishedThisYear} / {annualGoal} books</div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Monthly chart */}
+                    {stats.monthlyBreakdown.some(n => n > 0) && (
+                        <div className={s.monthChart}>
+                            <div className={s.monthChartTitle}>Books finished by month ({new Date().getFullYear()})</div>
+                            <div className={s.monthBars}>
+                                {['J','F','M','A','M','J','J','A','S','O','N','D'].map((abbr, i) => {
+                                    const max = Math.max(...stats.monthlyBreakdown, 1);
+                                    const pct = (stats.monthlyBreakdown[i] / max) * 100;
+                                    return (
+                                        <div key={i} className={s.monthBarWrap} title={`${abbr}: ${stats.monthlyBreakdown[i]}`}>
+                                            <div className={s.monthBarCount}>{stats.monthlyBreakdown[i] > 0 ? stats.monthlyBreakdown[i] : ''}</div>
+                                            <div className={s.monthBar} style={{ height: `${Math.max(2, pct * 0.36)}rem` }} />
+                                            <div className={s.monthBarLabel}>{abbr}</div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -183,6 +292,7 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
                 {statusFilters.map(f => (
                     <button key={f.value} onClick={() => setStatusFilter(f.value)}
                         className={`glass ${s.filterBtn}`}
+                        aria-pressed={statusFilter === f.value}
                         style={{
                             color: statusFilter === f.value ? f.color : 'var(--text-muted)',
                             background: statusFilter === f.value ? `${f.color}20` : undefined,
@@ -202,6 +312,7 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
                 <div className={s.filterRow}>
                     <Tag size={16} style={{ color: 'var(--text-muted)' }} />
                     <button onClick={() => setShelfFilter(null)} className={`glass ${s.filterBtn}`}
+                        aria-pressed={shelfFilter === null}
                         style={{ opacity: shelfFilter === null ? 1 : 0.6 }}>
                         All Shelves
                     </button>
@@ -209,6 +320,7 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
                         <button key={shelf.id}
                             onClick={() => setShelfFilter(shelfFilter === shelf.id ? null : shelf.id)}
                             className={`glass ${s.filterBtn}`}
+                            aria-pressed={shelfFilter === shelf.id}
                             style={{
                                 color: shelfFilter === shelf.id ? shelf.color : 'var(--text-muted)',
                                 background: shelfFilter === shelf.id ? `${shelf.color}20` : undefined,
@@ -228,6 +340,7 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
                     ['title', 'Title'],
                     ['author', 'Author'],
                     ['pageCount', 'Pages'],
+                    ['rating', 'Rating'],
                 ] as [SortField, string][]).map(([field, label]) => (
                     <button key={field} onClick={() => handleSortToggle(field)}
                         className={`glass ${s.sortBtn}`}

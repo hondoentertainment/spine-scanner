@@ -34,9 +34,12 @@ const fetchWithRetry = async (url: string, retries = 2): Promise<Response> => {
     throw new Error('Max retries exceeded');
 };
 
+const GOOGLE_BOOKS_API_KEY = import.meta.env.VITE_GOOGLE_BOOKS_API_KEY as string | undefined;
+
 const lookupGoogleBooks = async (isbn: string): Promise<BookMetadata | null> => {
+    const keyParam = GOOGLE_BOOKS_API_KEY ? `&key=${encodeURIComponent(GOOGLE_BOOKS_API_KEY)}` : '';
     const response = await fetchWithRetry(
-        `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`
+        `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}${keyParam}`
     );
     const data = await response.json();
     if (data.totalItems === 0) return null;

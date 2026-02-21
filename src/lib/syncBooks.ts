@@ -15,6 +15,9 @@ interface BookRow {
   notes: string;
   date_added: string;
   shelf_ids: string[];
+  rating: number | null;
+  date_started: string | null;
+  date_finished: string | null;
   updated_at: string;
 }
 
@@ -41,10 +44,14 @@ export function toBookEntry(row: BookRow): BookEntry {
     notes: row.notes,
     dateAdded: row.date_added,
     shelfIds: row.shelf_ids || [],
+    rating: (row.rating as BookEntry['rating']) ?? undefined,
+    dateStarted: row.date_started ?? undefined,
+    dateFinished: row.date_finished ?? undefined,
+    updatedAt: row.updated_at || undefined,
   };
 }
 
-export function toBookRow(book: BookEntry, userId: string): Omit<BookRow, 'updated_at'> {
+export function toBookRow(book: BookEntry, userId: string): BookRow {
   return {
     id: book.id,
     user_id: userId,
@@ -58,6 +65,10 @@ export function toBookRow(book: BookEntry, userId: string): Omit<BookRow, 'updat
     notes: book.notes,
     date_added: book.dateAdded,
     shelf_ids: book.shelfIds || [],
+    rating: book.rating ?? null,
+    date_started: book.dateStarted ?? null,
+    date_finished: book.dateFinished ?? null,
+    updated_at: book.updatedAt ?? book.dateAdded,
   };
 }
 
@@ -111,15 +122,12 @@ export async function pullShelves(userId: string): Promise<Shelf[] | null> {
 
 /**
  * Push the full local library to Supabase (upsert strategy).
- * This overwrites the remote library with whatever is local — simple & conflict-free.
+ * Preserves each book's updatedAt so conflict resolution stays accurate.
  */
 export async function pushBooks(userId: string, books: BookEntry[]): Promise<boolean> {
   if (!supabase) return false;
 
-  const rows = books.map((b) => ({
-    ...toBookRow(b, userId),
-    updated_at: new Date().toISOString(),
-  }));
+  const rows = books.map((b) => toBookRow(b, userId));
 
   // Upsert all books (insert or update on conflict by primary key `id`)
   if (rows.length > 0) {
@@ -213,7 +221,9 @@ export async function pushShelves(userId: string, shelves: Shelf[]): Promise<boo
 }
 
 /**
- * Merge two book lists: combine all unique IDs, local wins on conflict.
+ * Merge two book lists: combine all unique IDs, picking the version with the
+ * newer `updatedAt` timestamp on conflict. Falls back to local-wins when both
+ * timestamps are equal or absent (preserves prior behaviour for legacy data).
  * This is a pure function — useful for testing independently of Supabase.
  */
 export function mergeBooksLists(localBooks: BookEntry[], remoteBooks: BookEntry[]): BookEntry[] {
@@ -227,7 +237,12 @@ export function mergeBooksLists(localBooks: BookEntry[], remoteBooks: BookEntry[
     const local = localMap.get(id);
     const remote = remoteMap.get(id);
 
-    if (local) {
+    if (local && remote) {
+      // Compare timestamps: pick the more recently updated version; local wins on tie
+      const localTs = local.updatedAt ?? local.dateAdded;
+      const remoteTs = remote.updatedAt ?? remote.dateAdded;
+      merged.push(remoteTs > localTs ? remote : local);
+    } else if (local) {
       merged.push(local);
     } else if (remote) {
       merged.push(remote);
@@ -261,7 +276,7 @@ export function mergeShelvesLists(localShelves: Shelf[], remoteShelves: Shelf[])
 }
 
 /**
- * Smart merge: pulls remote, merges with local (local wins on conflict),
+ * Smart merge: pulls remote, merges with local (newer updatedAt wins on conflict),
  * then pushes merged result back.
  */
 export async function mergeSync(

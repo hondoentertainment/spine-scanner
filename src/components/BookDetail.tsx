@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useToast } from './Toast.tsx';
 import type { BookEntry } from '../types.ts';
@@ -31,7 +31,7 @@ const statusIcons: Record<BookEntry['status'], React.ReactNode> = {
 };
 
 const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
-  const { updateBook, updateBookStatus, updateBookNotes, removeBook, shelves, assignShelf, unassignShelf } = useBookStore();
+  const { updateBook, updateBookStatus, updateBookNotes, updateBookRating, removeBook, shelves, assignShelf, unassignShelf } = useBookStore();
   const { toast, confirm } = useToast();
   const [editing, setEditing] = useState(false);
   const [showShelfPicker, setShowShelfPicker] = useState(false);
@@ -41,7 +41,40 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
     isbn: book.isbn,
     pageCount: book.pageCount,
     coverImg: book.coverImg,
+    dateStarted: book.dateStarted?.split('T')[0] ?? '',
+    dateFinished: book.dateFinished?.split('T')[0] ?? '',
   });
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  // Capture previously-focused element and restore focus on close
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement;
+    return () => { previousFocusRef.current?.focus(); };
+  }, []);
+
+  // Focus trap: keep Tab cycling inside the modal
+  useEffect(() => {
+    const modal = modalRef.current;
+    if (!modal) return;
+    const focusable = modal.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable.length > 0) focusable[0].focus();
+    const trap = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    modal.addEventListener('keydown', trap);
+    return () => modal.removeEventListener('keydown', trap);
+  }, [editing]);
 
   const bookShelfIds = book.shelfIds || [];
   const bookShelves = shelves.filter((s) => bookShelfIds.includes(s.id));
@@ -54,6 +87,8 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
       isbn: book.isbn,
       pageCount: book.pageCount,
       coverImg: book.coverImg,
+      dateStarted: book.dateStarted?.split('T')[0] ?? '',
+      dateFinished: book.dateFinished?.split('T')[0] ?? '',
     });
     setEditing(true);
   };
@@ -66,12 +101,18 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
       pageCount: draft.pageCount || 0,
       coverImg: draft.coverImg.trim(),
       amazonLink: generateAmazonLink(draft.isbn.trim() || book.isbn),
+      dateStarted: draft.dateStarted ? new Date(draft.dateStarted).toISOString() : book.dateStarted,
+      dateFinished: draft.dateFinished ? new Date(draft.dateFinished).toISOString() : book.dateFinished,
     });
     setEditing(false);
     toast('Book updated', 'success');
   };
 
   const handleCancel = () => setEditing(false);
+
+  const handleRating = (star: 1 | 2 | 3 | 4 | 5) => {
+    updateBookRating(book.id, book.rating === star ? undefined : star);
+  };
 
   const handleRemove = async () => {
     const yes = await confirm({
@@ -100,7 +141,15 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
 
   return (
     <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
+      <div
+        ref={modalRef}
+        className={styles.modal}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleKeyDown}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Book detail: ${book.title}`}
+      >
         {/* Close button */}
         <button onClick={onClose} className={styles.closeBtn} aria-label="Close detail view">
           <X size={20} />
@@ -157,6 +206,26 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                   onChange={(e) => setDraft({ ...draft, coverImg: e.target.value })}
                   placeholder="https://..."
                 />
+                <div className={styles.row}>
+                  <div style={{ flex: 1 }}>
+                    <label className={styles.label}>Date Started</label>
+                    <input
+                      className={styles.input}
+                      type="date"
+                      value={draft.dateStarted}
+                      onChange={(e) => setDraft({ ...draft, dateStarted: e.target.value })}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label className={styles.label}>Date Finished</label>
+                    <input
+                      className={styles.input}
+                      type="date"
+                      value={draft.dateFinished}
+                      onChange={(e) => setDraft({ ...draft, dateFinished: e.target.value })}
+                    />
+                  </div>
+                </div>
                 <div className={styles.editActions}>
                   <button onClick={handleSave} className={styles.saveBtn}>
                     <Save size={14} /> Save
@@ -174,6 +243,8 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                   {!isBookPhotoOnly(book) && <span>ISBN: {book.isbn}</span>}
                   {book.pageCount > 0 && <span>{book.pageCount} pages</span>}
                   <span>Added {new Date(book.dateAdded).toLocaleDateString()}</span>
+                  {book.dateStarted && <span>Started {new Date(book.dateStarted).toLocaleDateString()}</span>}
+                  {book.dateFinished && <span>Finished {new Date(book.dateFinished).toLocaleDateString()}</span>}
                 </div>
                 <div className={styles.linkRow}>
                   {generateAmazonLink(book.isbn) && (
@@ -203,6 +274,24 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
           </div>
         </div>
 
+        {/* Star rating */}
+        <div className={styles.ratingRow} aria-label="Your rating">
+          {([1, 2, 3, 4, 5] as const).map((star) => (
+            <button
+              key={star}
+              onClick={() => handleRating(star)}
+              className={`${styles.starBtn} ${(book.rating ?? 0) >= star ? styles.starFilled : styles.starEmpty}`}
+              aria-label={`Rate ${star} star${star !== 1 ? 's' : ''}`}
+              aria-pressed={(book.rating ?? 0) >= star}
+            >
+              ★
+            </button>
+          ))}
+          {book.rating != null && (
+            <span className={styles.ratingHint}>{book.rating}/5</span>
+          )}
+        </div>
+
         {/* Status buttons */}
         <div className={styles.statusRow}>
           {(['to-read', 'reading', 'read', 'dnf'] as const).map((s) => (
@@ -211,6 +300,7 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
               onClick={() => updateBookStatus(book.id, s)}
               className={`${styles.statusBtn} ${book.status === s ? styles[`status_${s.replace('-', '_')}`] : ''}`}
               aria-label={`Set status to ${statusLabels[s]}`}
+              aria-pressed={book.status === s}
             >
               {statusIcons[s]}
               <span className={styles.statusLabel}>{statusLabels[s]}</span>
@@ -235,6 +325,7 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                 onClick={() => setShowShelfPicker(!showShelfPicker)}
                 className={styles.addShelfBtn}
                 aria-label="Add to shelf"
+                aria-expanded={showShelfPicker}
               >
                 <Tag size={12} /> + Shelf
               </button>
@@ -264,6 +355,7 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
           value={book.notes}
           onChange={(e) => updateBookNotes(book.id, e.target.value)}
           className={styles.notes}
+          aria-label="Book notes"
         />
 
         {/* Actions */}

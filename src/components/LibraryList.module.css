@@ -65,6 +65,116 @@
   color: var(--text-muted);
 }
 
+/* ---- Annual goal ---- */
+.goalSection {
+  width: 100%;
+  padding-top: 1rem;
+  border-top: 1px solid var(--glass-border);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.goalLabel {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.goalInput {
+  width: 60px;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 0.4rem;
+  outline: none;
+  font-family: inherit;
+  text-align: center;
+}
+
+.goalInput:focus {
+  border-color: var(--accent-blue);
+}
+
+.goalProgress {
+  flex: 1;
+  min-width: 100px;
+}
+
+.goalBar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.goalBarFill {
+  height: 100%;
+  background: #22c55e;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.goalText {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+/* ---- Monthly chart ---- */
+.monthChart {
+  width: 100%;
+  padding-top: 1rem;
+  border-top: 1px solid var(--glass-border);
+}
+
+.monthChartTitle {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.monthBars {
+  display: flex;
+  gap: 0.25rem;
+  align-items: flex-end;
+  height: 60px;
+}
+
+.monthBarWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.2rem;
+  flex: 1;
+}
+
+.monthBar {
+  width: 100%;
+  background: rgba(56, 189, 248, 0.55);
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+}
+
+.monthBarLabel {
+  font-size: 0.55rem;
+  color: var(--text-muted);
+}
+
+.monthBarCount {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--accent-blue);
+  min-height: 0.9rem;
+}
+
 /* ---- Search ---- */
 .searchRow {
   display: flex;

@@ -1,7 +1,8 @@
 /**
- * Share/copy utilities for individual books.
+ * Share/copy utilities for individual books and reading lists.
  * Deep link format: #{base}#book-{isbn} opens library with that book in view.
  */
+import type { BookEntry } from '../types.ts';
 import { generateAmazonLink } from './amazonLink.ts';
 
 /** Base URL for shareable links (origin + base path). */
@@ -57,4 +58,44 @@ export async function shareBook(
   const ok = await copyBookLink(isbn, title, author);
   if (ok) onCopyFallback();
   return ok;
+}
+
+/**
+ * Share/copy the current filtered book list as plain text.
+ * Uses Web Share API if available, otherwise copies to clipboard.
+ */
+export async function shareBookList(
+  books: BookEntry[],
+  listTitle: string,
+  onCopyFallback: () => void,
+): Promise<boolean> {
+  const statusLabel = (s: BookEntry['status']) =>
+    s === 'to-read' ? 'to read' : s === 'dnf' ? 'DNF' : s;
+
+  const lines = books.map((b, i) => {
+    const stars = b.rating != null
+      ? ' ' + '★'.repeat(b.rating) + '☆'.repeat(5 - b.rating)
+      : '';
+    return `${i + 1}. ${b.title} by ${b.author}${stars} — ${statusLabel(b.status)}`;
+  });
+
+  const text = `${listTitle}\n\n${lines.join('\n')}`;
+  const shareData: ShareData = { title: listTitle, text };
+
+  if (navigator.share && navigator.canShare?.(shareData)) {
+    try {
+      await navigator.share(shareData);
+      return true;
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return false;
+    }
+  }
+
+  try {
+    await navigator.clipboard.writeText(text);
+    onCopyFallback();
+    return true;
+  } catch {
+    return false;
+  }
 }

@@ -148,7 +148,12 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
                 <div className={s.info}>
                     <h3 className={s.bookTitle}>{book.title}</h3>
                     <p className={s.bookAuthor}>{book.author}</p>
-                    <div className={s.links}>
+                    {book.rating != null && (
+                    <div className={s.rating} aria-label={`Rating: ${book.rating} out of 5`}>
+                        {'★'.repeat(book.rating)}{'☆'.repeat(5 - book.rating)}
+                    </div>
+                )}
+                <div className={s.links}>
                         {generateAmazonLink(book.isbn) && (
                             <a href={generateAmazonLink(book.isbn)} target="_blank" rel="noopener noreferrer"
                                className={`glass ${s.amazonBtn}`} onClick={(e) => e.stopPropagation()}>

@@ -11,8 +11,13 @@ export const exportToGoodreadsCSV = (books: BookEntry[]): string => {
         `"${book.title.replace(/"/g, '""')}"`,
         `"${book.author.replace(/"/g, '""')}"`,
         `"${book.isbn}"`,
-        '', '', '', '', '', '',
-        book.status === 'read' ? new Date().toISOString().split('T')[0] : '',
+        book.rating != null ? String(book.rating) : '',
+        '', '', '', '', '',
+        book.dateFinished
+            ? book.dateFinished.split('T')[0]
+            : book.status === 'read'
+            ? new Date().toISOString().split('T')[0]
+            : '',
         book.dateAdded.split('T')[0],
         book.status,
         `"${book.notes.replace(/"/g, '""')}"`
