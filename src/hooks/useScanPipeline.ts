@@ -477,9 +477,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                         addLog(`[OCR-ANALYTICS] pass=${pass.label} confidence=${result.confidence} imgWidth=${img.width} brightness=${quality.brightness.toFixed(0)} blur=${quality.blurVariance.toFixed(0)}`);
                     }
                     setStatus(`Found ISBN: ${result.isbn}`);
-                    if (result.confidence != null && result.confidence >= HIGH_CONFIDENCE_THRESHOLD) {
-                        addLog(`Early exit: high confidence (${result.confidence} >= ${HIGH_CONFIDENCE_THRESHOLD})`);
-                    }
+                    addLog(`Early exit: valid ISBN found${result.confidence != null ? ` (conf=${result.confidence}, threshold=${HIGH_CONFIDENCE_THRESHOLD})` : ''}`);
                     return { isbn: result.isbn, suggestions: [] };
                 }
             } catch (err) {
@@ -487,16 +485,19 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
             }
         }
 
-        /* ── Phase 2b: Multi-language fallback (eng+deu for German/non-English books) ──── */
-        if (runOcrWithLang && Date.now() - ocrStartTime < OCR_TOTAL_TIMEOUT) {
+        /* ── Phase 2b: Multi-language fallback (German/non-English books) ──── */
+        // Guarded by useMultilang so ocrLanguage='en' correctly skips this phase.
+        // 'de' uses Tesseract's German-only model; 'both' combines eng+deu for mixed spines.
+        if (useMultilang && Date.now() - ocrStartTime < OCR_TOTAL_TIMEOUT) {
+            const multilangStr = ocrLanguage === 'de' ? 'deu' : 'eng+deu';
             try {
-                setStatus('OCR: retrying with multi-language...');
+                setStatus(`OCR: retrying with multi-language (${multilangStr})...`);
                 const processed = preprocessImage(img, canvas, 0, CROP_FULL, 'clean');
-                const result = await runOcrWithLang(processed, `${prefix}full-deu`, 'eng+deu', extractIsbnCandidates, isValidIsbn);
+                const result = await runOcrWithLang(processed, `${prefix}full-${multilangStr}`, multilangStr, extractIsbnCandidates, isValidIsbn);
                 ocrPassesAttempted += 1;
                 result.allCandidates.forEach(c => allCandidates.add(c));
                 if (result.isbn) {
-                    addLog(`ISBN via OCR [multi-lang eng+deu]: ${result.isbn}`);
+                    addLog(`ISBN via OCR [multi-lang ${multilangStr}]: ${result.isbn}`);
                     setStatus(`Found ISBN: ${result.isbn}`);
                     reportProgress({ phase: 'done' });
                     return { isbn: result.isbn, suggestions: [] };
