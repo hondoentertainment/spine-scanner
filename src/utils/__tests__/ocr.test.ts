@@ -39,6 +39,10 @@ describe('fixOcrDigits', () => {
   it('fixes D as 0', () => {
     expect(fixOcrDigits('97D0141036144')).toBe('9700141036144');
   });
+
+  it('fixes lowercase d as 0 (consistent with uppercase D)', () => {
+    expect(fixOcrDigits('97d0141036144')).toBe('9700141036144');
+  });
 });
 
 /* ================================================================

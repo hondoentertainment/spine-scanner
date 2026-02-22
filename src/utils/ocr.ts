@@ -18,7 +18,7 @@ export const fixOcrDigits = (str: string): string =>
     .replace(/[Gg]/g, '9')
     .replace(/[Zz]/g, '2')
     .replace(/[Qq]/g, '9')
-    .replace(/[D]/g, '0');
+    .replace(/[Dd]/g, '0');
 
 /**
  * Aggressive OCR digit fixing — applies ALL letter→digit mappings.
@@ -103,8 +103,9 @@ export const getNearMissCandidates = (candidate: string): string[] => {
  *   Pass 3: Find any standalone 10 or 13-digit number-like sequences
  *   Pass 4: Sliding window for dense text (978/979 prefix only)
  *   Pass 5: Cross-line ISBN detection (ISBNs split by line breaks)
- *   Pass 6: Fuzzy checksum repair on near-valid candidates
  *   Deduplicate and rank by validity confidence.
+ *   Note: fuzzy checksum repair is applied in the scan pipeline (useScanPipeline),
+ *   not inside this function.
  */
 export const extractIsbnCandidates = (text: string): string[] => {
   if (!text || text.trim().length === 0) return [];

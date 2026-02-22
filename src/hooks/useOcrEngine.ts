@@ -224,7 +224,11 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
                 text = result.data.text;
                 confidence = typeof result.data?.confidence === 'number' ? result.data.confidence : undefined;
             } catch (err) {
-                addLog(`Worker recognize failed: ${err instanceof Error ? err.message : String(err)}`);
+                const msg = err instanceof Error ? err.message : String(err);
+                addLog(`Worker recognize failed: ${msg}`);
+                // Terminate the hanging worker to free Web Worker + WASM memory.
+                // A timed-out recognize() keeps running inside the worker until terminated.
+                worker.terminate?.().catch(() => {});
                 workerRef.current = null;
                 workerRetries.current = Math.max(0, workerRetries.current - 1);
             }

@@ -1,7 +1,5 @@
 import type { ScanDiagnostics } from '../hooks/useScanPipeline.ts';
-
-const DARK_THRESHOLD = 90;
-const BLUR_THRESHOLD = 120;
+import { DARK_SCENE_THRESHOLD as DARK_THRESHOLD, BLUR_VARIANCE_THRESHOLD as BLUR_THRESHOLD } from '../hooks/useScanPipeline.ts';
 
 /**
  * Format scan diagnostics into a readable string for the expandable toast details.

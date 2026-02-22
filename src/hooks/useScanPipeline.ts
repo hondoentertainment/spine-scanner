@@ -19,8 +19,8 @@ export const CROP_WIDE: CropRegion   = { widthFrac: 0.96, heightFrac: 0.75, labe
 export const CROP_FULL: CropRegion   = { widthFrac: 1.00, heightFrac: 1.00, label: 'full' };
 export const CROP_CENTER: CropRegion = { widthFrac: 0.70, heightFrac: 0.40, label: 'center' };
 
-const DARK_SCENE_THRESHOLD = 90;
-const BLUR_VARIANCE_THRESHOLD = 120;
+export const DARK_SCENE_THRESHOLD = 90;
+export const BLUR_VARIANCE_THRESHOLD = 120;
 /** Skip OCR when both blurry and dark — very unlikely to succeed. */
 const SKIP_OCR_BRIGHTNESS_THRESHOLD = 70;
 const OCR_TOTAL_TIMEOUT = 35000;
@@ -107,16 +107,19 @@ export const preprocessImage = (
     const outW = cropW * scale;
     const outH = cropH * scale;
 
-    if (rotateDeg === 90 || rotateDeg === 270 || rotateDeg === 85 || rotateDeg === 95) {
-        canvas.width = outH; canvas.height = outW;
-    } else {
-        canvas.width = outW; canvas.height = outH;
-    }
+    // Compute tight bounding box for arbitrary rotation angle.
+    // For 0° → outW×outH; for 90°/270° → outH×outW; for skew angles (85°/95°) the
+    // bounding box is larger than a simple swap — cos(5°)≈0.996, sin(5°)≈0.087.
+    const rad = (rotateDeg * Math.PI) / 180;
+    const cosA = Math.abs(Math.cos(rad));
+    const sinA = Math.abs(Math.sin(rad));
+    canvas.width  = Math.round(outW * cosA + outH * sinA);
+    canvas.height = Math.round(outW * sinA + outH * cosA);
 
     ctx.save();
     if (rotateDeg !== 0) {
         ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate((rotateDeg * Math.PI) / 180);
+        ctx.rotate(rad);
         ctx.translate(-outW / 2, -outH / 2);
     }
     ctx.filter = PREPROCESS_FILTERS[mode];
@@ -426,8 +429,8 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
         /* ── Phase 2: OCR scan ──── */
         addLog(`Phase 2: OCR scan (${prefix})...`);
 
-        const quality = assessFrameQuality(img, canvas, CROP_MEDIUM);
-        const lowRes = hasLowOcrResolution(img.width, img.height, CROP_MEDIUM);
+        const quality = assessFrameQuality(img, canvas, CROP_NARROW);
+        const lowRes = hasLowOcrResolution(img.width, img.height, CROP_NARROW);
         addLog(`Quality: brightness=${quality.brightness.toFixed(0)} (${quality.isDark ? 'dark' : 'normal'}), blur=${quality.blurVariance.toFixed(0)} (${quality.isBlurry ? 'blurry' : 'sharp'}), lowRes=${lowRes}`);
 
         const skipOcr = quality.isBlurry && quality.brightness < SKIP_OCR_BRIGHTNESS_THRESHOLD;
@@ -487,9 +490,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                         addLog(`[OCR-ANALYTICS] pass=${pass.label} confidence=${result.confidence} imgWidth=${img.width} brightness=${quality.brightness.toFixed(0)} blur=${quality.blurVariance.toFixed(0)}`);
                     }
                     setStatus(`Found ISBN: ${result.isbn}`);
-                    if (result.confidence != null && result.confidence >= HIGH_CONFIDENCE_THRESHOLD) {
-                        addLog(`Early exit: high confidence (${result.confidence} >= ${HIGH_CONFIDENCE_THRESHOLD})`);
-                    }
+                    addLog(`Early exit: valid ISBN found${result.confidence != null ? ` (conf=${result.confidence}, threshold=${HIGH_CONFIDENCE_THRESHOLD})` : ''}`);
                     return { isbn: result.isbn, suggestions: [] };
                 }
             } catch (err) {
@@ -497,16 +498,19 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
             }
         }
 
-        /* ── Phase 2b: Multi-language fallback (eng+deu for German/non-English books) ──── */
-        if (runOcrWithLang && Date.now() - ocrStartTime < OCR_TOTAL_TIMEOUT) {
+        /* ── Phase 2b: Multi-language fallback (German/non-English books) ──── */
+        // Guarded by useMultilang so ocrLanguage='en' correctly skips this phase.
+        // 'de' uses Tesseract's German-only model; 'both' combines eng+deu for mixed spines.
+        if (useMultilang && Date.now() - ocrStartTime < OCR_TOTAL_TIMEOUT) {
+            const multilangStr = ocrLanguage === 'de' ? 'deu' : 'eng+deu';
             try {
-                setStatus('OCR: retrying with multi-language...');
+                setStatus(`OCR: retrying with multi-language (${multilangStr})...`);
                 const processed = preprocessImage(img, canvas, 0, CROP_FULL, 'clean');
-                const result = await runOcrWithLang(processed, `${prefix}full-deu`, 'eng+deu', extractIsbnCandidates, isValidIsbn);
+                const result = await runOcrWithLang(processed, `${prefix}full-${multilangStr}`, multilangStr, extractIsbnCandidates, isValidIsbn);
                 ocrPassesAttempted += 1;
                 result.allCandidates.forEach(c => allCandidates.add(c));
                 if (result.isbn) {
-                    addLog(`ISBN via OCR [multi-lang eng+deu]: ${result.isbn}`);
+                    addLog(`ISBN via OCR [multi-lang ${multilangStr}]: ${result.isbn}`);
                     setStatus(`Found ISBN: ${result.isbn}`);
                     reportProgress({ phase: 'done' });
                     return { isbn: result.isbn, suggestions: [] };
