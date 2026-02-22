@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 
 /* ================================================================
  *  Tesseract.js module resolution
@@ -6,6 +6,9 @@ import { useRef, useCallback, useEffect } from 'react';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type TessModule = any;
+
+/** OCR engine state for UX feedback. */
+export type OcrEngineState = 'idle' | 'loading' | 'ready' | 'fallback';
 
 export interface ResolvedTesseract {
     createWorker: TessModule;
@@ -82,6 +85,8 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const workerPromise = useRef<Promise<any> | null>(null);
     const workerRetries = useRef(0);
+    const progressCallbackRef = useRef<((pct: number) => void) | null>(null);
+    const [ocrState, setOcrState] = useState<OcrEngineState>('idle');
 
     const loadTessModule = useCallback(async (): Promise<ResolvedTesseract> => {
         if (tessModuleRef.current) return tessModuleRef.current;
@@ -161,6 +166,7 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
 
     /** Pre-warm the OCR engine (call when camera is ready). Also prefetches eng traineddata for offline. */
     const preWarm = useCallback(async () => {
+        setOcrState('loading');
         addLog('Pre-warming OCR engine...');
         // Prefetch eng traineddata so it's cached before first scan (helps offline after first load)
         const langUrl = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz';
@@ -169,12 +175,16 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
             const w = await getWorker();
             if (w) {
                 addLog('OCR engine pre-warmed and ready');
+                setOcrState('ready');
                 onOcrReady?.();
             } else {
                 addLog('OCR worker unavailable — will use fallback on scan');
+                setOcrState('fallback');
+                onOcrReady?.();
             }
         } catch (err) {
             addLog(`Pre-warm failed: ${err instanceof Error ? err.message : String(err)}`);
+            setOcrState('fallback');
         }
     }, [getWorker, addLog, onOcrReady]);
 
@@ -189,12 +199,14 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
         label: string,
         extractIsbnCandidates: (text: string) => string[],
         isValidIsbn: (isbn: string) => boolean,
-        options?: { psm?: string; charWhitelist?: string },
+        options?: { psm?: string; charWhitelist?: string; onRecognizeProgress?: (pct: number) => void },
     ): Promise<OcrResult> => {
         const psmOverride = options?.psm;
         const charWhitelist = options?.charWhitelist;
+        progressCallbackRef.current = options?.onRecognizeProgress ?? null;
         let text = '';
 
+        try {
         // Path A: Persistent worker
         const worker = await getWorker();
         let confidence: number | undefined;
@@ -230,8 +242,9 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
                         workerPath: workerURL,
                         corePath: coreURL,
                         logger: (m: { status: string; progress?: number }) => {
-                            if (m.status === 'recognizing text' && m.progress) {
+                            if (m.status === 'recognizing text' && m.progress != null) {
                                 setStatus(`OCR (${label}): ${Math.round(m.progress * 100)}%`);
+                                progressCallbackRef.current?.(m.progress);
                             }
                         },
                     };
@@ -266,6 +279,9 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
                 ? validCandidates[0] // already ranked by extractIsbnCandidates; confidence applies to whole pass
                 : validCandidates[0];
         return { isbn: validIsbn, allCandidates: candidates, confidence };
+        } finally {
+            progressCallbackRef.current = null;
+        }
     }, [getWorker, loadTessModule, addLog, setStatus]);
 
     /** Run OCR with alternative language (e.g. eng+deu for German books). Uses one-shot recognize. */
@@ -309,5 +325,5 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
         return { isbn: validIsbn, allCandidates: candidates, confidence };
     }, [loadTessModule, addLog, setStatus]);
 
-    return { preWarm, runOcr, runOcrWithLang, getWorker };
+    return { preWarm, runOcr, runOcrWithLang, getWorker, ocrState };
 }

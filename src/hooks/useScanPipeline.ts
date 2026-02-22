@@ -286,7 +286,7 @@ const ISBN_CHAR_WHITELIST = '0123456789X -';
  *  Build OCR pass configurations (adaptive to quality)
  * ================================================================ */
 
-function buildOcrPasses(quality: FrameQuality, prefix: string): OcrPassConfig[] {
+export function buildOcrPasses(quality: FrameQuality, prefix: string): OcrPassConfig[] {
     const { isDark, isBlurry } = quality;
 
     const base: OcrPassConfig[] = [
@@ -320,11 +320,15 @@ function buildOcrPasses(quality: FrameQuality, prefix: string): OcrPassConfig[] 
  *  Shared scan pipeline result
  * ================================================================ */
 
-/** Progress info for OCR UX (progress bar, "Pass X of Y"). */
+/** Progress info for OCR UX (progress bar, "Pass X of Y — Z%"). */
 export interface ScanProgress {
     phase: 'barcode' | 'ocr' | 'ocr-multilang' | 'suggestions' | 'done';
     currentPass?: number;
     totalPasses?: number;
+    /** Within-pass recognition progress 0–100 (from Tesseract). */
+    passProgress?: number;
+    /** Near-valid candidates found so far (for "Possible: X" during scan). */
+    possibleCandidates?: string[];
 }
 
 /** Diagnostics for troubleshooting when scan fails or finds no ISBN. */
@@ -357,7 +361,7 @@ export type OcrLanguage = 'en' | 'de' | 'both';
 interface UseScanPipelineOptions {
     addLog: (msg: string) => void;
     setStatus: (msg: string) => void;
-    runOcr: (image: string, label: string, extract: typeof extractIsbnCandidates, validate: typeof isValidIsbn, opts?: { psm?: string; charWhitelist?: string }) => Promise<OcrResult>;
+    runOcr: (image: string, label: string, extract: typeof extractIsbnCandidates, validate: typeof isValidIsbn, opts?: { psm?: string; charWhitelist?: string; onRecognizeProgress?: (pct: number) => void }) => Promise<OcrResult>;
     runOcrWithLang?: (image: string, label: string, lang: string, extract: typeof extractIsbnCandidates, validate: typeof isValidIsbn) => Promise<OcrResult>;
     tryBarcodeDecode: (source: HTMLImageElement | string, label: string) => Promise<string | null>;
     /** Optional progress callback for progress bar UX. */
@@ -468,9 +472,15 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                 const result = await runOcr(processed, pass.label, extractIsbnCandidates, isValidIsbn, {
                     psm: pass.psm,
                     charWhitelist: pass.charWhitelist,
+                    onRecognizeProgress: (pct) => reportProgress({ phase: 'ocr', currentPass: i + 1, totalPasses, passProgress: Math.round(pct * 100) }),
                 });
                 ocrPassesAttempted += 1;
                 result.allCandidates.forEach(c => allCandidates.add(c));
+                const repairable = Array.from(allCandidates).filter(c => !isValidIsbn(c)).flatMap(c => {
+                    const fix = tryFixChecksum(c);
+                    return fix ? [fix] : [];
+                });
+                reportProgress({ phase: 'ocr', currentPass: i + 1, totalPasses, possibleCandidates: repairable.slice(0, 3) });
                 if (result.isbn) {
                     addLog(`ISBN via OCR [${pass.label}]: ${result.isbn}${result.confidence != null ? ` conf=${result.confidence}` : ''}`);
                     if (result.confidence != null) {

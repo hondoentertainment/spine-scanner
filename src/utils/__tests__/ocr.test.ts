@@ -333,6 +333,16 @@ describe('extractIsbnCandidates', () => {
       // Joining 3 lines: 978-0-14-103614-4
       expect(c.some(x => x === '9780141036144')).toBe(true);
     });
+
+    it('handles ISBN-10 with X check digit', () => {
+      const c = extractIsbnCandidates('ISBN 0-201-63361-X');
+      expect(c.some(x => x === '020163361X')).toBe(true);
+    });
+
+    it('extracts from dense barcode-style digits only', () => {
+      const c = extractIsbnCandidates('978014103614452499');
+      expect(c).toContain('9780141036144');
+    });
   });
 });
 
@@ -394,5 +404,15 @@ describe('getNearMissCandidates', () => {
 
   it('returns empty when no fix exists', () => {
     expect(getNearMissCandidates('1111111111111')).toEqual([]);
+  });
+
+  it('returns multiple variants when several single-digit fixes validate', () => {
+    const missed = getNearMissCandidates('9780306406151');
+    expect(missed.length).toBeGreaterThanOrEqual(1);
+    missed.forEach(m => expect(isValidIsbn(m)).toBe(true));
+  });
+
+  it('returns empty for wrong-length input', () => {
+    expect(getNearMissCandidates('12345')).toEqual([]);
   });
 });

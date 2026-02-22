@@ -79,9 +79,20 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const autoScanRef = useRef(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const photoOnlyInputRef = useRef<HTMLInputElement>(null);
+    const firstSuggestionRef = useRef<HTMLButtonElement | null>(null);
 
     useEffect(() => { processingRef.current = processing; }, [processing]);
     useEffect(() => { autoScanRef.current = autoScan; }, [autoScan]);
+    const liveQualityHintRef = useRef(liveQualityHint);
+    useEffect(() => { liveQualityHintRef.current = liveQualityHint; }, [liveQualityHint]);
+
+    const suggestionsCount = isbnSuggestions.length + Object.keys(repairedMap).length;
+    useEffect(() => {
+        if (suggestionsCount > 0) {
+            const t = setTimeout(() => firstSuggestionRef.current?.focus({ preventScroll: true }), 0);
+            return () => clearTimeout(t);
+        }
+    }, [suggestionsCount]);
 
     const { toast, toastDetail } = useToast();
 
@@ -92,7 +103,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     }, []);
 
     /* ── OCR engine hook ──────────────────────────────────────── */
-    const { preWarm, runOcr, runOcrWithLang } = useOcrEngine({
+    const { preWarm, runOcr, runOcrWithLang, ocrState } = useOcrEngine({
         addLog, setStatus,
         onOcrReady: useCallback(() => setOcrReady(true), []),
     });
@@ -388,7 +399,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
         addLog('Auto-scan (OCR) started');
         setStatus('Auto-scanning with OCR... align ISBN text in viewfinder');
         const interval = setInterval(() => {
-            if (!processingRef.current && autoScanRef.current) capture();
+            if (!processingRef.current && autoScanRef.current && liveQualityHintRef.current !== 'blurry') capture();
         }, 2000);
         return () => { clearInterval(interval); addLog('Auto-scan (OCR) stopped'); };
     }, [autoScan, capture, addLog]);
@@ -494,7 +505,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                     <div className={`${s.guideCorner} ${s.guideBottomRight}`} />
                     <div className={s.scanLine} />
                 </div>
-                <p className={`${s.guideHint} ${liveQualityHint === 'ready' ? s.guideHintReady : liveQualityHint === 'blurry' || liveQualityHint === 'dark' ? s.guideHintBlurry : ''}`} id="viewfinder-hint">
+                <p className={`${s.guideHint} ${liveQualityHint === 'ready' ? s.guideHintReady : liveQualityHint === 'blurry' || liveQualityHint === 'dark' ? s.guideHintBlurry : ''}`} id="viewfinder-hint" aria-live="polite" aria-atomic="true">
                     {liveQualityHint === 'ready'
                         ? (scanMode === 'barcode' ? 'Hold 5–10 cm away. Align barcode in frame — Ready' : scanMode === 'ocr' ? 'Hold 5–10 cm away. Fill frame with ISBN text — Ready' : 'Hold 5–10 cm away. Fill frame with barcode or ISBN — Ready')
                         : liveQualityHint === 'blurry'
@@ -528,31 +539,54 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                         </span>
                     </div>
                     <p className={s.statusText} id="status-text">{status}</p>
+                    {ocrState === 'loading' && (
+                        <span className={s.ocrReadyBadge} aria-live="polite" title="Downloading and initializing OCR engine">
+                            <Loader2 size={12} className="animate-spin" /> OCR loading…
+                        </span>
+                    )}
+                    {ocrState === 'fallback' && (
+                        <span className={s.ocrReadyBadge} title="Using fallback OCR mode — first scan may be slower">
+                            <Activity size={12} /> OCR (fallback)
+                        </span>
+                    )}
+                    {ocrState === 'ready' && (
+                        <span className={s.ocrReadyBadge} title="OCR ready for offline scan">
+                            <Activity size={12} /> OCR ready
+                        </span>
+                    )}
                     {cameraResolution && isLowResolution(cameraResolution.width) && !cameraError && (
                         <p className={s.resolutionHint} aria-live="polite">
                             Move closer for better scan quality
                         </p>
-                    )}
-                    {ocrReady && (
-                        <span className={s.ocrReadyBadge} title="OCR ready for offline scan">
-                            <Activity size={12} /> OCR ready
-                        </span>
                     )}
                     {(isScanning || processing) && (
                         <Loader2 size={16} className="animate-spin" style={{ color: 'var(--accent-blue)' }} />
                     )}
                 </div>
 
-                {/* OCR progress bar: Pass X of Y */}
+                {/* OCR progress bar: Pass X of Y — Z% */}
                 {processing && scanProgress && (scanProgress.phase === 'ocr' || scanProgress.phase === 'ocr-multilang') && scanProgress.totalPasses != null && scanProgress.totalPasses > 0 && (
-                    <div className={s.progressContainer} role="progressbar" aria-valuenow={scanProgress.currentPass ?? 0} aria-valuemin={0} aria-valuemax={scanProgress.totalPasses} aria-label={`OCR pass ${scanProgress.currentPass ?? 0} of ${scanProgress.totalPasses}`}>
+                    <div className={s.progressContainer} role="progressbar" aria-valuenow={scanProgress.currentPass ?? 0} aria-valuemin={0} aria-valuemax={scanProgress.totalPasses} aria-label={scanProgress.passProgress != null ? `OCR pass ${scanProgress.currentPass ?? 0} of ${scanProgress.totalPasses}, ${scanProgress.passProgress} percent` : `OCR pass ${scanProgress.currentPass ?? 0} of ${scanProgress.totalPasses}`}>
                         <div className={s.progressLabel}>
-                            <span>OCR pass {scanProgress.currentPass ?? 0} of {scanProgress.totalPasses}</span>
+                            <span>
+                                OCR pass {scanProgress.currentPass ?? 0} of {scanProgress.totalPasses}
+                                {scanProgress.passProgress != null && ` — ${scanProgress.passProgress}%`}
+                            </span>
                         </div>
                         <div className={s.progressBarTrack}>
-                            <div className={s.progressBarFill} style={{ width: `${((scanProgress.currentPass ?? 0) / scanProgress.totalPasses) * 100}%` }} />
+                            <div className={s.progressBarFill} style={{ width: `${(() => {
+                                const passFrac = (scanProgress.currentPass ?? 0) / scanProgress.totalPasses;
+                                const withinPass = (scanProgress.passProgress ?? 0) / 100;
+                                return Math.min(100, (passFrac - 1 / scanProgress.totalPasses + withinPass / scanProgress.totalPasses) * 100);
+                            })()}%` }} />
                         </div>
                     </div>
+                )}
+                {/* Possible matches during scan */}
+                {processing && scanProgress?.possibleCandidates && scanProgress.possibleCandidates.length > 0 && (
+                    <p className={s.statusText} aria-live="polite" style={{ marginTop: '0.25rem', fontSize: '0.9em', opacity: 0.9 }}>
+                        Possible: {scanProgress.possibleCandidates[0]}
+                    </p>
                 )}
 
                 {cameraError && (
@@ -699,9 +733,9 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 )}
 
                 {(isbnSuggestions.length > 0 || Object.keys(repairedMap).length > 0) && (
-                    <div className={s.suggestionRow}>
-                        {Object.entries(repairedMap).map(([repaired, original]) => (
-                            <button key={`rep-${repaired}`} type="button"
+                    <div className={s.suggestionRow} role="group" aria-label="ISBN suggestions" aria-live="polite">
+                        {Object.entries(repairedMap).map(([repaired, original], idx) => (
+                            <button key={`rep-${repaired}`} ref={idx === 0 ? firstSuggestionRef : undefined} type="button"
                                 onClick={() => onScan(repaired)}
                                 className={`glass ${s.suggestionBtn} ${s.repairBtn}`}
                                 title={`Try repaired: ${original} → ${repaired}`}
@@ -709,8 +743,8 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                                 Try <strong>{repaired}</strong> ✓
                             </button>
                         ))}
-                        {isbnSuggestions.filter(c => !Object.keys(repairedMap).includes(c)).map((candidate) => (
-                            <button key={candidate} type="button"
+                        {isbnSuggestions.filter(c => !Object.keys(repairedMap).includes(c)).map((candidate, idx) => (
+                            <button key={candidate} ref={Object.keys(repairedMap).length === 0 && idx === 0 ? firstSuggestionRef : undefined} type="button"
                                 onClick={() => {
                                     if (isValidIsbn(candidate)) onScan(candidate);
                                     else { setManualIsbn(candidate); setShowManual(true); }
