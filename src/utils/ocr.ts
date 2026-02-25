@@ -40,6 +40,7 @@ const fixOcrDigitsAggressive = (str: string): string =>
  */
 export const tryFixChecksum = (candidate: string): string | null => {
   if (isValidIsbn(candidate)) return candidate;
+  if (candidate.length !== 10 && candidate.length !== 13) return null;
 
   // Common OCR ambiguities: 0↔O↔D, 1↔I↔l, 5↔S, 8↔B, 9↔g, 2↔Z
   const ambiguous: Record<string, string[]> = {
@@ -72,6 +73,7 @@ export const tryFixChecksum = (candidate: string): string | null => {
  */
 export const getNearMissCandidates = (candidate: string): string[] => {
   if (isValidIsbn(candidate)) return []; // No fixes needed for valid ISBN
+  if (candidate.length !== 10 && candidate.length !== 13) return [];
 
   const results: string[] = [];
   const ambiguous: Record<string, string[]> = {
@@ -107,13 +109,21 @@ export const getNearMissCandidates = (candidate: string): string[] => {
  *   Note: fuzzy checksum repair is applied in the scan pipeline (useScanPipeline),
  *   not inside this function.
  */
+/** Max OCR text length to process (avoids slowdown/DoS from huge input). ~100KB is plenty for book text. */
+const MAX_OCR_TEXT_LENGTH = 100_000;
+
 export const extractIsbnCandidates = (text: string): string[] => {
   if (!text || text.trim().length === 0) return [];
+  let toProcess = text.trim();
+  if (toProcess.length > MAX_OCR_TEXT_LENGTH) {
+    // Process prefix to avoid slowdown/DoS; ISBNs are usually in the first portion of OCR output
+    toProcess = toProcess.substring(0, MAX_OCR_TEXT_LENGTH);
+  }
 
   const candidates: string[] = [];
 
   // Normalize: remove common OCR artifacts but keep structure
-  const normalized = text
+  const normalized = toProcess
     .replace(/\r/g, '\n')
     .replace(/[''`""\u201c\u201d]/g, '')  // curly quotes
     .replace(/[^\w\s\-:.X]/g, ' ');       // keep alphanumeric, hyphens, colons, X
@@ -139,7 +149,7 @@ export const extractIsbnCandidates = (text: string): string[] => {
   ];
 
   for (const pattern of isbnLabelPatterns) {
-    for (const source of [text, normalized, ocrFixed, ocrAggressive]) {
+    for (const source of [toProcess, normalized, ocrFixed, ocrAggressive]) {
       const matches = source.matchAll(pattern);
       for (const match of matches) {
         const raw = match[1];
@@ -166,7 +176,7 @@ export const extractIsbnCandidates = (text: string): string[] => {
   // Note: ocrAggressive is NOT used here — it converts too many letters
   // to digits, creating false 978-sequences from prose text.
   const isbn13Pattern = /(?:978|979)[- ]?\d[- 0-9]{7,12}\d/g;
-  for (const source of [text, normalized, ocrFixed]) {
+  for (const source of [toProcess, normalized, ocrFixed]) {
     const matches = source.match(isbn13Pattern);
     if (matches) {
       for (const m of matches) {
@@ -181,7 +191,7 @@ export const extractIsbnCandidates = (text: string): string[] => {
   // ── Pass 3: Standalone 10/13-digit numeric sequences ────────
   // Look for digit sequences with optional hyphens/spaces
   const numericSeqPattern = /\d[- 0-9]{8,17}\d/g;
-  for (const source of [text, normalized, ocrFixed]) {
+  for (const source of [toProcess, normalized, ocrFixed]) {
     const matches = source.match(numericSeqPattern);
     if (matches) {
       for (const m of matches) {
@@ -196,7 +206,7 @@ export const extractIsbnCandidates = (text: string): string[] => {
   // ── Pass 4: Sliding window for dense/concatenated text ──────
   // For ISBN-13 starting with 978/979.
   // ocrAggressive is excluded — too many false positives from prose.
-  for (const source of [text, normalized, ocrFixed]) {
+  for (const source of [toProcess, normalized, ocrFixed]) {
     const digitsOnly = source.replace(/[^0-9]/g, '');
     for (let i = 0; i <= digitsOnly.length - 13; i++) {
       const chunk = digitsOnly.substring(i, i + 13);
@@ -209,7 +219,7 @@ export const extractIsbnCandidates = (text: string): string[] => {
   // ── Pass 5: Cross-line ISBN detection ───────────────────────
   // ISBNs on book spines are sometimes split across multiple lines.
   // Join adjacent lines and look for ISBNs that span the break.
-  const lines = text.split(/\n/);
+  const lines = toProcess.split(/\n/);
   for (let i = 0; i < lines.length - 1; i++) {
     // Join pairs of adjacent lines (removing the line break)
     const joined = lines[i].trimEnd() + lines[i + 1].trimStart();

@@ -6,7 +6,7 @@ import { getNearMissCandidates } from '../utils/ocr.ts';
 import { useToast } from './Toast.tsx';
 import { useOcrEngine } from '../hooks/useOcrEngine.ts';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner.ts';
-import { useScanPipeline, isLowResolution, assessVideoFrameQuality, CROP_MEDIUM, type OcrLanguage, type ScanProgress } from '../hooks/useScanPipeline.ts';
+import { useScanPipeline, isLowResolution, assessVideoFrameQuality, CROP_MEDIUM, type OcrLanguage, type ScanProgress, type RunPipelineOptions } from '../hooks/useScanPipeline.ts';
 import { buildErrorDiagnostics, formatDiagnostics } from '../utils/ocrDiagnostics.ts';
 import type { LiveScanTelemetry } from '../hooks/useBarcodeScanner.ts';
 import { hapticSuccess, hapticFailure, hapticHoldSteady } from '../utils/haptics.ts';
@@ -75,6 +75,11 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const videoTrackRef = useRef<MediaStreamTrack | null>(null);
 
     /* ── Refs for async closures ──────────────────────────────── */
+    const abortControllerRef = useRef<AbortController | null>(null);
+    useEffect(() => {
+        abortControllerRef.current = new AbortController();
+        return () => { abortControllerRef.current?.abort(); };
+    }, []);
     const processingRef = useRef(false);
     const autoScanRef = useRef(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -203,7 +208,10 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
             });
 
             addLog(`Frame: ${img.width}x${img.height}`);
-            const result = await runPipeline(img, canvas, '');
+            const pipelineOpts: RunPipelineOptions = { signal: abortControllerRef.current?.signal };
+            const result = await runPipeline(img, canvas, '', pipelineOpts);
+
+            if (abortControllerRef.current?.signal.aborted) return;
 
             if (result.isbn) {
                 setAutoScan(false);
@@ -312,7 +320,10 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
             if (!canvas) { addLog('Error: Missing canvas'); return; }
 
             addLog(`Photo: ${img.width}x${img.height}`);
-            const result = await runPipeline(img, canvas, 'photo-');
+            const pipelineOpts: RunPipelineOptions = { signal: abortControllerRef.current?.signal };
+            const result = await runPipeline(img, canvas, 'photo-', pipelineOpts);
+
+            if (abortControllerRef.current?.signal.aborted) return;
 
             if (result.isbn) {
                 hapticSuccess();

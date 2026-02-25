@@ -116,10 +116,10 @@ describe('buildErrorDiagnostics', () => {
     expect(out).toContain('internet connection');
   });
 
-  it('returns worker/module tips when one-shot recognize failed (module not loaded)', () => {
+  it('returns fallback tips when one-shot recognize failed (module not loaded)', () => {
     const out = buildErrorDiagnostics('One-shot recognize failed: module not loaded', []);
-    expect(out).toContain('OCR engine may still be loading');
-    expect(out).toContain('internet connection');
+    expect(out).toContain('First scan may be slower');
+    expect(out).toContain('fallback');
   });
 
   it('returns failed to load tips for image errors', () => {

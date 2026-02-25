@@ -41,7 +41,7 @@ jobs:
       - name: Generate OCR fixture
         run: npm run generate-ocr-fixture
       - name: Test
-        run: npm run test
+        run: npm run test:coverage
         env:
           RUN_OCR_INTEGRATION: '1'
       - name: Build

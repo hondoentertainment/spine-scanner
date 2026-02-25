@@ -17,7 +17,7 @@ test.describe('OCR photo upload', () => {
   });
 
   test('extracts ISBN from uploaded OCR fixture image', async ({ page, context }) => {
-    test.skip(!!process.env.CI, 'OCR E2E is slow/flaky in CI; run locally with: npx playwright test ocr-upload');
+    test.setTimeout(process.env.CI ? 120000 : 60000);
     const mockTitle = 'Test Book via OCR';
 
     // Mock APIs at context level
@@ -47,9 +47,9 @@ test.describe('OCR photo upload', () => {
     await expect(fileInput).toHaveCount(1);
     await fileInput.setInputFiles(FIXTURE_PATH);
 
-    // OCR runs (can take 15–45s on first load); when ISBN found, onScan fires → Google Books lookup → "Added X to library"
+    // OCR runs (15–45s first load, up to 2 min in CI); when ISBN found, onScan fires → Google Books lookup → "Added X to library"
     await expect(page.getByText(new RegExp(`Added.*${mockTitle}.*library`, 'i'))).toBeVisible({
-      timeout: 60000,
+      timeout: process.env.CI ? 120000 : 60000,
     });
 
     // Verify book appears in library

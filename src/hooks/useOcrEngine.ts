@@ -49,15 +49,35 @@ const TESS_ASSET_BASE = (() => {
 const MAX_WORKER_RETRIES = 3;
 /** Base delay (ms) for exponential backoff between worker creation retries. */
 const RETRY_BASE_DELAY = 500;
+/** Max base64 image size (~5MB) to avoid Tesseract/memory issues. */
+const MAX_IMAGE_DATA_LENGTH = 7_000_000;
 
-/** Promise that rejects after a timeout. */
+/** Validate processedImage before passing to Tesseract. */
+function isValidOcrInput(processedImage: string, addLog: (m: string) => void): boolean {
+    if (typeof processedImage !== 'string' || processedImage.length === 0) {
+        addLog('OCR input: empty or invalid');
+        return false;
+    }
+    if (!processedImage.startsWith('data:image/')) {
+        addLog('OCR input: expected data:image/ URL');
+        return false;
+    }
+    if (processedImage.length > MAX_IMAGE_DATA_LENGTH) {
+        addLog(`OCR input: too large (${(processedImage.length / 1024 / 1024).toFixed(1)}MB, max ~5MB)`);
+        return false;
+    }
+    return true;
+}
+
+/** Promise that rejects after a timeout. Clears timer when promise settles to avoid leaks. */
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-    return Promise.race([
-        promise,
-        new Promise<T>((_, reject) =>
-            setTimeout(() => reject(new Error(`${label}: timed out after ${ms}ms`)), ms)
-        ),
-    ]);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label}: timed out after ${ms}ms`)), ms);
+    });
+    return Promise.race([promise, timeoutPromise]).finally(() => {
+        if (timer != null) clearTimeout(timer);
+    });
 }
 
 export interface OcrResult {
@@ -132,7 +152,10 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
                             if (m.status === 'loading tesseract core') setStatus('Loading OCR engine...');
                             else if (m.status === 'loading language traineddata') setStatus('Downloading language data...');
                             else if (m.status === 'initializing tesseract') setStatus('Initializing OCR...');
-                            else if (m.status === 'recognizing text' && m.progress) setStatus(`OCR: ${Math.round(m.progress * 100)}%`);
+                            else if (m.status === 'recognizing text' && m.progress != null) {
+                                setStatus(`OCR: ${Math.round(m.progress * 100)}%`);
+                                progressCallbackRef.current?.(m.progress);
+                            }
                         },
                     }),
                     WORKER_CREATION_TIMEOUT,
@@ -206,6 +229,10 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
         progressCallbackRef.current = options?.onRecognizeProgress ?? null;
         let text = '';
 
+        if (!isValidOcrInput(processedImage, addLog)) {
+            return { isbn: null, allCandidates: [], confidence: undefined };
+        }
+
         try {
         // Path A: Persistent worker
         const worker = await getWorker();
@@ -260,8 +287,8 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
                         OCR_PASS_TIMEOUT,
                         `OCR fallback ${label}`
                     );
-                    text = result.data.text;
-                    if (typeof result.data?.confidence === 'number') confidence = result.data.confidence;
+                    text = result?.data?.text ?? '';
+                    if (typeof result?.data?.confidence === 'number') confidence = result.data.confidence;
                 }
             } catch (err) {
                 addLog(`One-shot recognize failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -298,6 +325,9 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
     ): Promise<OcrResult> => {
         let text = '';
         let confidence: number | undefined;
+        if (!isValidOcrInput(processedImage, addLog)) {
+            return { isbn: null, allCandidates: [], confidence };
+        }
         try {
             const tess = await loadTessModule();
             if (!tess.recognize) return { isbn: null, allCandidates: [], confidence };
@@ -318,8 +348,8 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
                 OCR_PASS_TIMEOUT,
                 `OCR ${label} (${lang})`
             );
-            text = result.data.text;
-            if (typeof result.data?.confidence === 'number') confidence = result.data.confidence;
+            text = result?.data?.text ?? '';
+            if (typeof result?.data?.confidence === 'number') confidence = result.data.confidence;
         } catch (err) {
             addLog(`Multi-lang OCR (${lang}) failed: ${err instanceof Error ? err.message : String(err)}`);
         }

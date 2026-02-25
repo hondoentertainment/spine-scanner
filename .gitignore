@@ -27,6 +27,7 @@ dist-ssr
 # Test artifacts
 test-results/
 playwright-report/
+coverage/
 
 # Build debug output
 build_output.txt

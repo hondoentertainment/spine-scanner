@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { isValidIsbn } from '../utils/isbnValidation.ts';
 import { extractIsbnCandidates, tryFixChecksum, getNearMissCandidates } from '../utils/ocr.ts';
 import type { OcrResult } from './useOcrEngine.ts';
@@ -361,6 +361,11 @@ export interface ScanPipelineResult {
 /** OCR language preference: en=English only, de=German fallback, both=English+German. */
 export type OcrLanguage = 'en' | 'de' | 'both';
 
+export interface RunPipelineOptions {
+    /** When aborted, pipeline exits early and avoids callbacks after unmount. */
+    signal?: AbortSignal;
+}
+
 interface UseScanPipelineOptions {
     addLog: (msg: string) => void;
     setStatus: (msg: string) => void;
@@ -383,19 +388,40 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
      * Run the full barcode + OCR scan pipeline on an image.
      * Used by both camera capture and file upload handlers.
      */
+    const pipelineBusyRef = useRef(false);
+
     const runPipeline = useCallback(async (
         img: HTMLImageElement,
         canvas: HTMLCanvasElement,
         prefix: string,
+        options?: RunPipelineOptions,
     ): Promise<ScanPipelineResult> => {
+        const signal = options?.signal;
+
+        if (pipelineBusyRef.current) {
+            addLog('Pipeline already running, skipping concurrent scan');
+            return { isbn: null, suggestions: [], diagnostics: { quality: { brightness: 128, blurVariance: BLUR_VARIANCE_THRESHOLD, isDark: false, isBlurry: false }, phase: 'barcode', barcodeAttempted: false, ocrPassesAttempted: 0, lastError: 'Concurrent scan suppressed' } };
+        }
+        pipelineBusyRef.current = true;
+
+        const safeReportProgress = (p: ScanProgress) => { if (!signal?.aborted) onProgress?.(p); };
+        const safeSetStatus = (msg: string) => { if (!signal?.aborted) setStatus(msg); };
+
+        try {
         const allCandidates = new Set<string>();
         const ocrStartTime = Date.now();
         let ocrPassesAttempted = 0;
-        const reportProgress = (p: ScanProgress) => onProgress?.(p);
+        const reportProgress = safeReportProgress;
+
+        /* ── Zero-dimension guard ──── */
+        if (!img.width || !img.height) {
+            addLog('Image has zero dimensions, skipping OCR');
+            return { isbn: null, suggestions: [], diagnostics: { quality: { brightness: 128, blurVariance: BLUR_VARIANCE_THRESHOLD, isDark: false, isBlurry: false }, phase: 'ocr', barcodeAttempted: true, ocrPassesAttempted: 0, lastError: 'Image has zero width or height' } };
+        }
 
         /* ── Phase 1: Barcode scan (fast, multiple crops) ──── */
         addLog(`Phase 1: Barcode scan (${prefix})...`);
-        setStatus('Scanning barcode...');
+        safeSetStatus('Scanning barcode...');
         reportProgress({ phase: 'barcode' });
 
         let isbn: string | null = null;
@@ -411,7 +437,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
 
         if (isbn && isValidIsbn(isbn)) {
             addLog(`ISBN via barcode: ${isbn}`);
-            setStatus(`Found ISBN: ${isbn}`);
+            safeSetStatus(`Found ISBN: ${isbn}`);
             reportProgress({ phase: 'done' });
             return { isbn, suggestions: [] };
         }
@@ -436,7 +462,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
         const skipOcr = quality.isBlurry && quality.brightness < SKIP_OCR_BRIGHTNESS_THRESHOLD;
         if (skipOcr) {
             addLog('Skipping OCR: image too blurry and dark. Unlikely to succeed.');
-            setStatus('Image too blurry and dark. Hold steady, improve lighting, and try again.');
+            safeSetStatus('Image too blurry and dark. Hold steady, improve lighting, and try again.');
             reportProgress({ phase: 'done' });
             return {
                 isbn: null,
@@ -452,9 +478,9 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
             };
         }
 
-        if (quality.isBlurry) setStatus('Image looks blurry. Hold steady and move closer.');
-        else if (quality.isDark) setStatus('Low light. Improve lighting for better OCR.');
-        else if (lowRes) setStatus('Move closer so ISBN fills the frame for better OCR.');
+        if (quality.isBlurry) safeSetStatus('Image looks blurry. Hold steady and move closer.');
+        else if (quality.isDark) safeSetStatus('Low light. Improve lighting for better OCR.');
+        else if (lowRes) safeSetStatus('Move closer so ISBN fills the frame for better OCR.');
 
         const ocrPasses = buildOcrPasses(quality, `${prefix}`);
         const useMultilang = runOcrWithLang && (ocrLanguage === 'de' || ocrLanguage === 'both');
@@ -468,8 +494,9 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                 addLog(`OCR total timeout reached.`);
                 break;
             }
+            if (signal?.aborted) break;
             try {
-                setStatus(`OCR: pass ${i + 1} of ${totalPasses}...`);
+                safeSetStatus(`OCR: pass ${i + 1} of ${totalPasses}...`);
                 reportProgress({ phase: 'ocr', currentPass: i + 1, totalPasses });
                 const processed = preprocessImage(img, canvas, pass.rotation, pass.crop, pass.mode);
                 const result = await runOcr(processed, pass.label, extractIsbnCandidates, isValidIsbn, {
@@ -489,7 +516,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                     if (result.confidence != null) {
                         addLog(`[OCR-ANALYTICS] pass=${pass.label} confidence=${result.confidence} imgWidth=${img.width} brightness=${quality.brightness.toFixed(0)} blur=${quality.blurVariance.toFixed(0)}`);
                     }
-                    setStatus(`Found ISBN: ${result.isbn}`);
+                    safeSetStatus(`Found ISBN: ${result.isbn}`);
                     addLog(`Early exit: valid ISBN found${result.confidence != null ? ` (conf=${result.confidence}, threshold=${HIGH_CONFIDENCE_THRESHOLD})` : ''}`);
                     return { isbn: result.isbn, suggestions: [] };
                 }
@@ -501,17 +528,17 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
         /* ── Phase 2b: Multi-language fallback (German/non-English books) ──── */
         // Guarded by useMultilang so ocrLanguage='en' correctly skips this phase.
         // 'de' uses Tesseract's German-only model; 'both' combines eng+deu for mixed spines.
-        if (useMultilang && Date.now() - ocrStartTime < OCR_TOTAL_TIMEOUT) {
+        if (useMultilang && !signal?.aborted && Date.now() - ocrStartTime < OCR_TOTAL_TIMEOUT) {
             const multilangStr = ocrLanguage === 'de' ? 'deu' : 'eng+deu';
             try {
-                setStatus(`OCR: retrying with multi-language (${multilangStr})...`);
+                safeSetStatus(`OCR: retrying with multi-language (${multilangStr})...`);
                 const processed = preprocessImage(img, canvas, 0, CROP_FULL, 'clean');
                 const result = await runOcrWithLang(processed, `${prefix}full-${multilangStr}`, multilangStr, extractIsbnCandidates, isValidIsbn);
                 ocrPassesAttempted += 1;
                 result.allCandidates.forEach(c => allCandidates.add(c));
                 if (result.isbn) {
                     addLog(`ISBN via OCR [multi-lang ${multilangStr}]: ${result.isbn}`);
-                    setStatus(`Found ISBN: ${result.isbn}`);
+                    safeSetStatus(`Found ISBN: ${result.isbn}`);
                     reportProgress({ phase: 'done' });
                     return { isbn: result.isbn, suggestions: [] };
                 }
@@ -556,6 +583,9 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                 lowResolution: lowRes,
             },
         };
+        } finally {
+            pipelineBusyRef.current = false;
+        }
     }, [addLog, setStatus, runOcr, runOcrWithLang, tryBarcodeDecode, onProgress, ocrLanguage]);
 
     return { runPipeline };

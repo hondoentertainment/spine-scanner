@@ -111,6 +111,13 @@ function getErrorTips(errorMessage: string): string[] {
             '• Try capturing again with better lighting',
         ];
     }
+    if (msg.includes('fallback') || msg.includes('one-shot')) {
+        return [
+            '• First scan may be slower while using fallback OCR mode',
+            '• OCR worker failed to start — scans will still work',
+            '• Refresh the page to retry loading the full OCR engine',
+        ];
+    }
     if (msg.includes('tesseract') || msg.includes('worker') || msg.includes('module')) {
         return [
             '• OCR engine may still be loading — wait a moment and try again',

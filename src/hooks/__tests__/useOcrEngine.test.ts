@@ -261,7 +261,7 @@ describe('useOcrEngine', () => {
   });
 
   describe('preWarm', () => {
-    it('calls onOcrReady when worker is ready', async () => {
+    it('calls onOcrReady and sets ocrState to ready when worker is ready', async () => {
       const { result } = renderHook(() =>
         useOcrEngine({ addLog, setStatus, onOcrReady })
       );
@@ -273,9 +273,10 @@ describe('useOcrEngine', () => {
       expect(addLog).toHaveBeenCalledWith(expect.stringContaining('Pre-warming OCR engine'));
       expect(addLog).toHaveBeenCalledWith(expect.stringMatching(/OCR engine pre-warmed|OCR worker ready/));
       expect(onOcrReady).toHaveBeenCalled();
+      expect(result.current.ocrState).toBe('ready');
     });
 
-    it('logs fallback message when worker creation fails after retries', async () => {
+    it('sets ocrState to fallback and calls onOcrReady when worker creation fails after retries', async () => {
       createWorkerReject = new Error('createWorker failed');
 
       const { result } = renderHook(() =>
@@ -287,6 +288,8 @@ describe('useOcrEngine', () => {
       });
 
       expect(addLog).toHaveBeenCalledWith(expect.stringMatching(/OCR worker unavailable|Pre-warm failed|will use fallback/));
+      expect(result.current.ocrState).toBe('fallback');
+      expect(onOcrReady).toHaveBeenCalled();
     });
   });
 

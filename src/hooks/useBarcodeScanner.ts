@@ -98,7 +98,6 @@ export function useBarcodeScanner({
     const telemetryRef = useRef<LiveScanTelemetry>({ ...EMPTY_TELEMETRY });
     const telemetryStateRef = useRef<(t: LiveScanTelemetry) => void>(() => {});
     const continuousActiveRef = useRef(false);
-    const videoStreamRef = useRef<MediaStream | null>(null);
 
     const bumpTelemetry = useCallback((field: keyof LiveScanTelemetry, amount = 1, flush = false) => {
         telemetryRef.current[field] += amount;
@@ -290,6 +289,8 @@ export function useBarcodeScanner({
             cancelled = true;
             zxingControlsRef.current?.stop();
             zxingControlsRef.current = null;
+            // Release ZXing internal resources (streams, timers) per ZXING_BARCODE_DETECTION_REPORT
+            try { barcodeReaderRef.current?.reset(); } catch { /* no-op */ }
         };
     }, [cameraReady, cameraError, webcamRef, addLog, bumpTelemetry, acceptIsbn]);
 
@@ -393,7 +394,7 @@ export function useBarcodeScanner({
         return () => {
             zxingControlsRef.current?.stop();
             zxingControlsRef.current = null;
-            videoStreamRef.current = null;
+            try { barcodeReaderRef.current?.reset(); } catch { /* no-op */ }
         };
     }, []);
 

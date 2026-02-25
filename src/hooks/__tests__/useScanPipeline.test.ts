@@ -6,6 +6,7 @@ import {
   cropForBarcode,
   assessFrameQuality,
   hasLowOcrResolution,
+  buildOcrPasses,
   CROP_NARROW,
   CROP_MEDIUM,
   CROP_WIDE,
@@ -113,6 +114,67 @@ describe('useScanPipeline — crop regions', () => {
 });
 
 /* ================================================================
+ *  buildOcrPasses
+ * ================================================================ */
+
+describe('useScanPipeline — buildOcrPasses', () => {
+  it('puts unsharp and sharpen first when blurry', () => {
+    const quality = { brightness: 128, blurVariance: 80, isDark: false, isBlurry: true };
+    const passes = buildOcrPasses(quality, 'test-');
+    const labels = passes.map(p => p.label);
+    expect(labels[0]).toBe('test-narrow-unsharp');
+    expect(labels[1]).toBe('test-narrow-sharpen');
+  });
+
+  it('includes invert pass when dark', () => {
+    const quality = { brightness: 50, blurVariance: 150, isDark: true, isBlurry: false };
+    const passes = buildOcrPasses(quality, 'test-');
+    const labels = passes.map(p => p.label);
+    expect(labels).toContain('test-narrow-inv');
+  });
+
+  it('excludes invert when not dark', () => {
+    const quality = { brightness: 128, blurVariance: 150, isDark: false, isBlurry: false };
+    const passes = buildOcrPasses(quality, 'test-');
+    const labels = passes.map(p => p.label);
+    expect(labels).not.toContain('test-narrow-inv');
+  });
+
+  it('includes base passes for normal quality', () => {
+    const quality = { brightness: 128, blurVariance: 150, isDark: false, isBlurry: false };
+    const passes = buildOcrPasses(quality, 'p-');
+    expect(passes.length).toBeGreaterThan(10);
+    expect(passes.some(p => p.label === 'p-narrow-0')).toBe(true);
+    expect(passes.some(p => p.label === 'p-wide-sparse')).toBe(true);
+  });
+});
+
+/* ================================================================
+ *  hasLowOcrResolution (unit tests)
+ * ================================================================ */
+
+describe('useScanPipeline — hasLowOcrResolution', () => {
+  it('returns true when crop short dimension < 200px', () => {
+    // CROP_MEDIUM 0.5 height: 300*0.5=150 < 200
+    expect(hasLowOcrResolution(400, 300, CROP_MEDIUM)).toBe(true);
+  });
+
+  it('returns false when crop short dimension >= 200px', () => {
+    expect(hasLowOcrResolution(640, 480, CROP_MEDIUM)).toBe(false);
+  });
+
+  it('returns true for narrow crop on small image', () => {
+    // CROP_NARROW heightFrac 0.28: 300*0.28=84 < 200
+    expect(hasLowOcrResolution(400, 300, CROP_NARROW)).toBe(true);
+  });
+
+  it('returns false at exactly 200px boundary', () => {
+    // Need crop to yield 200px: 200/0.5=400 height for CROP_MEDIUM
+    expect(hasLowOcrResolution(500, 400, CROP_MEDIUM)).toBe(false);
+  });
+});
+
+/* ================================================================
  *  preprocessImage
  * ================================================================ */
 
@@ -161,6 +223,20 @@ describe('useScanPipeline — preprocessImage', () => {
 
     preprocessImage(img, canvas, 0, CROP_MEDIUM, 'boost');
     expect(lastContext?.filter).toContain('contrast');
+  });
+
+  it('calls putImageData for sharpen and unsharp modes', () => {
+    const img = new Image();
+    img.width = 640;
+    img.height = 480;
+    const canvas = document.createElement('canvas');
+
+    preprocessImage(img, canvas, 0, CROP_MEDIUM, 'sharpen');
+    expect(lastContext?.putImageData).toHaveBeenCalled();
+
+    lastContext?.putImageData.mockClear?.();
+    preprocessImage(img, canvas, 0, CROP_MEDIUM, 'unsharp');
+    expect(lastContext?.putImageData).toHaveBeenCalled();
   });
 });
 
@@ -472,6 +548,37 @@ describe('useScanPipeline — runPipeline', () => {
     const withPass = ocrProgress.find((p) => p.currentPass != null && p.totalPasses != null);
     expect(withPass).toBeDefined();
     expect(withPass?.totalPasses).toBeGreaterThan(0);
+  });
+
+  it('exits early on first OCR pass when high confidence ISBN found', async () => {
+    const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
+    const runOcr = vi.fn().mockResolvedValue({
+      isbn: '9780141036144',
+      allCandidates: ['9780141036144'],
+      confidence: 90,
+    });
+
+    const { result } = renderHook(() =>
+      useScanPipeline({
+        addLog: vi.fn(),
+        setStatus: vi.fn(),
+        runOcr,
+        tryBarcodeDecode,
+      }),
+    );
+
+    const img = new Image();
+    img.width = 640;
+    img.height = 480;
+    const canvas = document.createElement('canvas');
+
+    let pipelineResult: { isbn: string | null } | null = null;
+    await act(async () => {
+      pipelineResult = await result.current.runPipeline(img, canvas, 'test');
+    });
+
+    expect(pipelineResult?.isbn).toBe('9780141036144');
+    expect(runOcr).toHaveBeenCalledTimes(1);
   });
 
   it('calls runOcrWithLang with eng+deu when ocrLanguage is both', async () => {

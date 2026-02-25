@@ -26,6 +26,8 @@ Status of recommended improvements. Items marked ✅ are implemented.
 | 16 | Individual book sharing | ✅ Share button, Web Share API, copy link, deep links `#book-ISBN` |
 | 17 | Camera torch | ✅ Flashlight toggle for low light (mobile) |
 | 18 | Scanner UX | ✅ Haptics on buttons, faster auto-scan (2s), OCR pre-warm on mount |
+| 19 | Version 1.0.0 | ✅ package.json version bumped |
+| 20 | Vitest coverage | ✅ @vitest/coverage-v8, `npm run test:coverage`, CI reports coverage |
 
 ---
 
