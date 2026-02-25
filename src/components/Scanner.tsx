@@ -69,7 +69,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const [liveQualityHint, setLiveQualityHint] = useState<'ready' | 'blurry' | 'dark' | null>(null);
     const [scanMode, setScanMode] = useState<ScanMode>('auto');
     const [torchWarningShown, setTorchWarningShown] = useState(false);
-    const [ocrReady, setOcrReady] = useState(false);
+    const [, setOcrReady] = useState(false);
     const [ocrLanguage, setOcrLanguage] = useState<OcrLanguage>('both');
     const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
     const videoTrackRef = useRef<MediaStreamTrack | null>(null);
@@ -261,7 +261,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
             processingRef.current = false;
             setProcessing(false);
         }
-    }, [onScan, isScanning, runPipeline, addLog, toastDetail, debugLogs]);
+    }, [onScan, isScanning, runPipeline, addLog, toastDetail, debugLogs, batchModeProp]);
 
     /* ── Torch toggle (low light) ───────────────────────────────── */
     const toggleTorch = useCallback(() => {

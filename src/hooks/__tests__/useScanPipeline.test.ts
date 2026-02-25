@@ -45,7 +45,7 @@ class MockImage {
 }
 
 let mockBrightness = 128;
-let mockBlurVariance = 150;
+let mockBlurVariance: number = 150; // eslint-disable-line @typescript-eslint/no-unused-vars
 let lastContext: CanvasRenderingContext2D | null = null;
 
 beforeEach(() => {
@@ -58,7 +58,6 @@ beforeEach(() => {
   HTMLCanvasElement.prototype.toDataURL = vi.fn(() => 'data:image/png;base64,mock');
 
   const origGetContext = HTMLCanvasElement.prototype.getContext;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string) {
     if (type !== '2d') return origGetContext.call(this, type);
     lastContext = {

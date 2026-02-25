@@ -18,8 +18,8 @@ export default defineConfig({
         'src/test/**',
         'src/main.tsx',
       ],
-      // Thresholds disabled until baseline established; uncomment to enforce:
-      // thresholds: { lines: 45, branches: 40, functions: 45, statements: 45 },
+      // Baseline established 2026-02-25: stmts 66.5%, branch 54.1%, funcs 67.0%, lines 68.3%
+      thresholds: { statements: 63, branches: 50, functions: 63, lines: 65 },
     },
   },
 })

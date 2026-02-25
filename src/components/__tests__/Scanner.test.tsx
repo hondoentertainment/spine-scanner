@@ -521,7 +521,7 @@ describe('Scanner', () => {
           result: string | null = null;
           onload: (() => void) | null = null;
           onerror: (() => void) | null = null;
-          readAsDataURL(_blob: Blob) {
+          readAsDataURL() {
             this.result = 'data:image/png;base64,iVBORw0KGgo=';
             Promise.resolve().then(() => this.onload?.());
           }

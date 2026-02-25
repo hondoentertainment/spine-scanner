@@ -131,7 +131,7 @@ function App() {
     } finally {
       setFlushing(false);
     }
-  }, [user, books, shelves, flushing, setBooks, setShelves, markSynced, setFlushing]);
+  }, [user, books, shelves, flushing, setBooks, setShelves, markSynced, setFlushing, toast]);
 
   const handleSyncNow = useCallback(async () => {
     if (!user) return;
