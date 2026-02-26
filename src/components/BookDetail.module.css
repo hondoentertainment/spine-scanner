@@ -384,6 +384,17 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .modal {
+    animation: none !important;
+  }
+
+  .statusBtn {
+    transition: none;
+  }
+}
+
 @media (max-width: 480px) {
   .modal {
     padding: 1.25rem;

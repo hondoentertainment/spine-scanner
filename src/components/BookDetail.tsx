@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useToast } from './Toast.tsx';
+import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import type { BookEntry } from '../types.ts';
 import { generateAmazonLink } from '../utils/amazonLink.ts';
 import { shareBook } from '../utils/shareBook.ts';
@@ -33,6 +34,7 @@ const statusIcons: Record<BookEntry['status'], React.ReactNode> = {
 const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   const { updateBook, updateBookStatus, updateBookNotes, removeBook, shelves, assignShelf, unassignShelf } = useBookStore();
   const { toast, confirm } = useToast();
+  const focusTrapRef = useFocusTrap<HTMLDivElement>();
   const [editing, setEditing] = useState(false);
   const [showShelfPicker, setShowShelfPicker] = useState(false);
   const [draft, setDraft] = useState({
@@ -99,8 +101,8 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   };
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
+    <div className={styles.overlay} onClick={onClose} role="dialog" aria-modal="true" aria-label={`Details for ${book.title}`}>
+      <div ref={focusTrapRef} className={styles.modal} onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
         {/* Close button */}
         <button onClick={onClose} className={styles.closeBtn} aria-label="Close detail view">
           <X size={20} />

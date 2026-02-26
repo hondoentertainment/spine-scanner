@@ -28,16 +28,21 @@ Status of recommended improvements. Items marked ✅ are implemented.
 | 18 | Scanner UX | ✅ Haptics on buttons, faster auto-scan (2s), OCR pre-warm on mount |
 | 19 | Version 1.0.0 | ✅ package.json version bumped |
 | 20 | Vitest coverage | ✅ @vitest/coverage-v8, `npm run test:coverage`, CI reports coverage |
+| 21 | Accessibility: skip link, focus trap, reduced motion | ✅ Skip-to-content link, focus trap in BookDetail modal, `prefers-reduced-motion` support, screen reader view announcements |
+| 22 | Grid view virtualization | ✅ @tanstack/react-virtual for grid view (was only list view), handles 1000+ book libraries |
+| 23 | Client-side usage analytics | ✅ `useAnalyticsStore` (Zustand + localStorage), tracks scans/books/imports/exports with aggregated summary |
+| 24 | Error monitoring (Sentry) | ✅ Optional `@sentry/react` integration, env-gated via `VITE_SENTRY_DSN`, auto-captures ErrorBoundary exceptions |
 
 ---
 
 ## Remaining (lower priority)
 
 ### Accessibility
-- Screen reader testing (VoiceOver / NVDA)
+- Screen reader testing (VoiceOver / NVDA) on real devices
 
 ### Optional polish
 - Individual book sharing: card image export (future)
+- Analytics dashboard UI panel (data is tracked; display panel is future)
 
 ---
 

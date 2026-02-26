@@ -36,6 +36,23 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
     const [selectedBook, setSelectedBook] = useState<BookEntry | null>(null);
 
     const listParentRef = useRef<HTMLDivElement>(null);
+    const gridParentRef = useRef<HTMLDivElement>(null);
+
+    /** Number of columns in grid view. Uses a fixed estimate based on typical card width (~160px). */
+    const GRID_COL_WIDTH = 160;
+    const [gridColumns, setGridColumns] = useState(4);
+
+    // Measure grid container width to determine column count
+    useEffect(() => {
+        const container = gridParentRef.current;
+        if (!container || viewMode !== 'grid') return;
+        const observer = new ResizeObserver(([entry]) => {
+            const cols = Math.max(1, Math.floor(entry.contentRect.width / GRID_COL_WIDTH));
+            setGridColumns(cols);
+        });
+        observer.observe(container);
+        return () => observer.disconnect();
+    }, [viewMode]);
 
     const stats = useMemo(() => {
         const toRead = books.filter(b => b.status === 'to-read').length;
@@ -78,6 +95,16 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
         getScrollElement: () => listParentRef.current,
         estimateSize: () => 76, // approx row height
         overscan: 8,
+    });
+
+    // Virtualizer for grid view (virtualizes rows; each row has gridColumns items)
+    const gridRowCount = Math.ceil(filteredAndSorted.length / gridColumns);
+
+    const gridVirtualizer = useVirtualizer({
+        count: gridRowCount,
+        getScrollElement: () => gridParentRef.current,
+        estimateSize: () => 260, // approx card height
+        overscan: 4,
     });
 
     const handleSortToggle = (field: SortField) => {
@@ -261,10 +288,31 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
                         : 'Your library is empty. Scan a book to get started!'}
                 </div>
             ) : viewMode === 'grid' ? (
-                <div className="book-grid">
-                    {filteredAndSorted.map((book) => (
-                        <BookCard key={book.id} book={book} onClick={() => openDetail(book)} />
-                    ))}
+                /* Virtualized grid view */
+                <div ref={gridParentRef} className={s.virtualContainer}
+                     style={{ height: Math.min(gridRowCount * 260, 700) }}>
+                    <div className={s.virtualInner} style={{ height: gridVirtualizer.getTotalSize() }}>
+                        {gridVirtualizer.getVirtualItems().map((vRow) => {
+                            const startIdx = vRow.index * gridColumns;
+                            const rowBooks = filteredAndSorted.slice(startIdx, startIdx + gridColumns);
+                            return (
+                                <div key={vRow.index}
+                                    style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        width: '100%',
+                                        transform: `translateY(${vRow.start}px)`,
+                                    }}>
+                                    <div className={s.gridRow}>
+                                        {rowBooks.map((book) => (
+                                            <BookCard key={book.id} book={book} onClick={() => openDetail(book)} />
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
             ) : (
                 /* Virtualized list view */

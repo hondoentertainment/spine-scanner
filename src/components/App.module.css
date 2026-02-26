@@ -1,3 +1,43 @@
+/* ---- Skip link (accessibility) ---- */
+.skipLink {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 99999;
+  padding: 0.75rem 1.5rem;
+  background: var(--primary, #6366f1);
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 0 0 0.5rem 0;
+  text-decoration: none;
+}
+
+.skipLink:focus {
+  left: 0;
+}
+
+/* ---- Screen reader only (live region for view changes) ---- */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- Reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .scanView,
+  .lazyFallback {
+    animation: none !important;
+  }
+}
+
 /* ---- Header ---- */
 .header {
   display: flex;

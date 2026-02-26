@@ -242,6 +242,14 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .overlay,
+  .dialog {
+    animation: none !important;
+  }
+}
+
 @media (max-width: 480px) {
   .container {
     bottom: 1rem;

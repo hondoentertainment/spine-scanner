@@ -290,7 +290,7 @@ export function useBarcodeScanner({
             zxingControlsRef.current?.stop();
             zxingControlsRef.current = null;
             // Release ZXing internal resources (streams, timers) per ZXING_BARCODE_DETECTION_REPORT
-            try { barcodeReaderRef.current?.reset(); } catch { /* no-op */ }
+            try { (barcodeReaderRef.current as unknown as { reset?: () => void })?.reset?.(); } catch { /* no-op */ }
         };
     }, [cameraReady, cameraError, webcamRef, addLog, bumpTelemetry, acceptIsbn]);
 
@@ -394,7 +394,7 @@ export function useBarcodeScanner({
         return () => {
             zxingControlsRef.current?.stop();
             zxingControlsRef.current = null;
-            try { barcodeReaderRef.current?.reset(); } catch { /* no-op */ }
+            try { (barcodeReaderRef.current as unknown as { reset?: () => void })?.reset?.(); } catch { /* no-op */ }
         };
     }, []);
 

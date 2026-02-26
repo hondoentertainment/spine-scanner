@@ -15,6 +15,7 @@ import { BookOpen, Library, Scan, AlertCircle, Database, Layers } from 'lucide-r
 import { generateAmazonLink } from './utils/amazonLink.ts';
 import { isValidIsbn, normalizeToIsbn13 } from './utils/isbnValidation.ts';
 import { isbnExistsInLibrary } from './utils/libraryUtils.ts';
+import { useAnalyticsStore } from './store/useAnalyticsStore.ts';
 import styles from './components/App.module.css';
 
 const Scanner = lazy(() => import('./components/Scanner.tsx'));
@@ -33,6 +34,7 @@ function App() {
   const { online, justReconnected, clearReconnected } = useOnlineStatus();
   const { theme, toggleTheme } = useTheme();
   const { toast, confirm } = useToast();
+  const { track } = useAnalyticsStore();
   const [openBookIsbn, setOpenBookIsbn] = useState<string | null>(null);
   const [batchMode, setBatchMode] = useState(false);
 
@@ -156,13 +158,14 @@ function App() {
       shelfIds: [],
     };
     addBook(newBook);
+    track('book_added', { method: 'photo' });
     toast('Book added with photo. Edit details in your library.', 'success');
     if (user && online) {
       pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
     }
     setOpenBookIsbn(photoIsbn);
     setView('library');
-  }, [addBook, books, user, online, toast]);
+  }, [addBook, books, user, online, toast, track]);
 
   const handleScan = async (isbn: string) => {
     console.log(`[App] Received scan for ISBN: ${isbn}`);
@@ -211,6 +214,7 @@ function App() {
           shelfIds: [],
         };
         addBook(newBook);
+        track('book_added', { method: 'scan', isbn: storedIsbn });
         toast(batchMode ? `Added "${metadata.title}" — scan next` : `Added "${metadata.title}" to library!`, 'success');
 
         if (!batchMode) {
@@ -244,6 +248,7 @@ function App() {
             shelfIds: [],
           };
           addBook(newBook);
+          track('book_added', { method: 'scan_no_metadata', isbn: storedIsbn });
           toast(batchMode ? 'Added — scan next' : 'Added with ISBN only. Edit details in your library.', 'success');
           if (!batchMode) {
             setOpenBookIsbn(storedIsbn);
@@ -262,8 +267,23 @@ function App() {
     }
   };
 
+  // Screen reader announcement for view changes
+  const [srAnnouncement, setSrAnnouncement] = useState('');
+  const handleViewChange = useCallback((newView: 'scan' | 'library' | 'data') => {
+    const labels: Record<string, string> = { scan: 'Scanner view', library: 'Library view', data: 'Data management view' };
+    setView(newView);
+    setSrAnnouncement(labels[newView]);
+  }, []);
+
   return (
     <div className="app-container">
+      <a href="#main-content" className={styles.skipLink}>Skip to main content</a>
+
+      {/* Screen reader live region for view changes */}
+      <div className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">
+        {srAnnouncement}
+      </div>
+
       <header className={styles.header}>
         <div className={styles.branding}>
           <div className={styles.logoBox}>
@@ -288,7 +308,7 @@ function App() {
           />
         </div>
 
-        <nav className={`glass ${styles.nav}`}>
+        <nav className={`glass ${styles.nav}`} role="tablist" aria-label="Main navigation">
           {([
             ['scan', 'Scanner', <Scan key="s" size={18} />],
             ['library', 'Library', <Library key="l" size={18} />],
@@ -296,8 +316,10 @@ function App() {
           ] as [string, string, React.ReactNode][]).map(([key, label, icon]) => (
             <button
               key={key}
-              onClick={() => setView(key as 'scan' | 'library' | 'data')}
+              role="tab"
+              onClick={() => handleViewChange(key as 'scan' | 'library' | 'data')}
               aria-label={`${label} tab`}
+              aria-selected={view === key}
               aria-current={view === key ? 'page' : undefined}
               onMouseEnter={() => {
                 if (key === 'scan') void preloadScanner();
@@ -317,7 +339,7 @@ function App() {
         </nav>
       </header>
 
-      <main>
+      <main id="main-content">
         {view === 'scan' && (
           <ErrorBoundary>
             <Suspense
@@ -393,6 +415,10 @@ function App() {
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @media (prefers-reduced-motion: reduce) {
+          .app-container { opacity: 1; animation: none !important; }
+          .animate-spin { animation: none !important; }
+        }
       `}</style>
     </div>
   );

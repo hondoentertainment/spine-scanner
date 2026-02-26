@@ -1,7 +1,7 @@
 {
   "name": "spine-scanner",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "postinstall": "node scripts/copy-tesseract-assets.mjs",
@@ -22,6 +22,7 @@
     "test:e2e:desktop": "playwright test --project=chromium"
   },
   "dependencies": {
+    "@sentry/react": "^10.40.0",
     "@supabase/supabase-js": "^2.95.3",
     "@tanstack/react-virtual": "^3.13.18",
     "@zxing/browser": "^0.1.5",
