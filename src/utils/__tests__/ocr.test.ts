@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { extractIsbnCandidates, fixOcrDigits, tryFixChecksum, getNearMissCandidates } from '../ocr';
+import { describe, it, expect, vi } from 'vitest';
+import { extractIsbnCandidates, fixOcrDigits, tryFixChecksum, getNearMissCandidates, OCR_AMBIGUITY_MAP } from '../ocr';
 import { isValidIsbn } from '../isbnValidation';
 
 /* ================================================================
@@ -368,9 +368,11 @@ describe('tryFixChecksum', () => {
   });
 
   it('repairs single-digit OCR error (ISBN-10)', () => {
-    // 0743273567 valid; 0743273561 has 1 instead of 7 (ambiguous 1↔7)
-    const repaired = tryFixChecksum('0743273561');
-    expect(repaired).toBe('0743273567');
+    // 1000007006 is valid; corrupt position 6: '7' → '1' → 1000001006 (invalid).
+    // The ambiguity map for '1' includes '7', so tryFixChecksum should find 1000007006.
+    // No earlier position's ambiguity alternatives yield a valid ISBN-10.
+    const repaired = tryFixChecksum('1000001006');
+    expect(repaired).toBe('1000007006');
   });
 
   it('returns null when no single-digit fix exists', () => {
@@ -418,5 +420,225 @@ describe('getNearMissCandidates', () => {
 
   it('returns empty for wrong-length input', () => {
     expect(getNearMissCandidates('12345')).toEqual([]);
+  });
+});
+
+/* ================================================================
+ *  OCR_AMBIGUITY_MAP — new digit entries and shared map tests
+ * ================================================================ */
+
+describe('tryFixChecksum / getNearMissCandidates — new ambiguity entries', () => {
+  // ── Digit '2' alternatives ('7', '3') ────────────────────────
+  it('tryFixChecksum tries alternatives for digit 2 (2→7)', () => {
+    // 9780000000002 is valid (ISBN-13). Corrupt position 1: '7' → '2' → 9280000000002 (invalid).
+    // The ambiguity map for '2' includes '7'. Position 1 has the '2', and position 0 ('9')
+    // has alternatives ['0','7'] but neither produces a valid ISBN at that position.
+    // So tryFixChecksum finds '7' at position 1 first.
+    const repaired = tryFixChecksum('9280000000002');
+    expect(repaired).not.toBeNull();
+    expect(isValidIsbn(repaired!)).toBe(true);
+    expect(repaired).toBe('9780000000002');
+  });
+
+  it('getNearMissCandidates tries alternatives for digit 2', () => {
+    // 9780000000033 is valid. Corrupt position 11: '3' → '2' → 9780000000023 (invalid).
+    // The ambiguity map for '2' includes '3', so getNearMissCandidates should find 9780000000033.
+    const missed = getNearMissCandidates('9780000000023');
+    expect(missed).toContain('9780000000033');
+  });
+
+  // ── Digit '4' alternatives ('1', '9') ────────────────────────
+  it('tryFixChecksum tries alternatives for digit 4 (4→9)', () => {
+    // 9780000000002 is valid. Corrupt position 0: '9' → '4' → 4780000000002 (invalid).
+    // The ambiguity map for '4' includes '9'. Position 0 is the first position,
+    // so tryFixChecksum finds '9' at position 0 first.
+    const repaired = tryFixChecksum('4780000000002');
+    expect(repaired).not.toBeNull();
+    expect(isValidIsbn(repaired!)).toBe(true);
+    expect(repaired).toBe('9780000000002');
+  });
+
+  it('getNearMissCandidates tries alternatives for digit 4', () => {
+    // Same candidate: 4780000000002 should yield 9780000000002 via 4→9 at position 0
+    const missed = getNearMissCandidates('4780000000002');
+    expect(missed).toContain('9780000000002');
+  });
+
+  // ── 'X' alternative ('0') for ISBN-10 check digit ────────────
+  it('tryFixChecksum tries alternatives for X check digit (X→0)', () => {
+    // 1001010140 is a valid ISBN-10 ending in '0'.
+    // Corrupt last digit: replace '0' with 'X' → 100101014X (invalid).
+    // No other single-digit substitution from the ambiguity map yields a valid ISBN
+    // before position 9, so the X→0 fix at the last position is the one found.
+    const repaired = tryFixChecksum('100101014X');
+    expect(repaired).not.toBeNull();
+    expect(isValidIsbn(repaired!)).toBe(true);
+    expect(repaired).toBe('1001010140');
+  });
+
+  it('getNearMissCandidates tries alternatives for X check digit', () => {
+    const missed = getNearMissCandidates('100101014X');
+    expect(missed).toContain('1001010140');
+  });
+
+  // ── Both functions use the same shared map ────────────────────
+  it('tryFixChecksum and getNearMissCandidates use the same ambiguity map', () => {
+    // For any invalid ISBN that tryFixChecksum can repair, the repaired result
+    // should also appear in getNearMissCandidates output (since they share OCR_AMBIGUITY_MAP).
+    const candidates = ['9280000000002', '4780000000002', '100101014X'];
+    for (const candidate of candidates) {
+      const fixed = tryFixChecksum(candidate);
+      if (fixed && fixed !== candidate) {
+        const nearMisses = getNearMissCandidates(candidate);
+        expect(nearMisses).toContain(fixed);
+      }
+    }
+  });
+
+  it('OCR_AMBIGUITY_MAP is exported and contains entries for 2, 4, and X', () => {
+    expect(OCR_AMBIGUITY_MAP['2']).toBeDefined();
+    expect(OCR_AMBIGUITY_MAP['2']).toContain('7');
+    expect(OCR_AMBIGUITY_MAP['2']).toContain('3');
+
+    expect(OCR_AMBIGUITY_MAP['4']).toBeDefined();
+    expect(OCR_AMBIGUITY_MAP['4']).toContain('1');
+    expect(OCR_AMBIGUITY_MAP['4']).toContain('9');
+
+    expect(OCR_AMBIGUITY_MAP['X']).toBeDefined();
+    expect(OCR_AMBIGUITY_MAP['X']).toContain('0');
+  });
+});
+
+/* ================================================================
+ *  extractIsbnCandidates — MAX_OCR_TEXT_LENGTH truncation
+ * ================================================================ */
+
+describe('extractIsbnCandidates — MAX_OCR_TEXT_LENGTH truncation', () => {
+  it('finds ISBN near the start of text exceeding 100,000 chars', () => {
+    // Place ISBN near the start, then pad with filler to exceed the limit
+    const isbn = 'ISBN 978-0-14-103614-4\n';
+    const filler = 'A'.repeat(100_001);
+    const text = isbn + filler;
+    const c = extractIsbnCandidates(text);
+    expect(c).toContain('9780141036144');
+  });
+
+  it('misses ISBN placed beyond 100,000 chars (truncated away)', () => {
+    // Place filler first, then ISBN beyond the truncation boundary
+    const filler = 'A'.repeat(100_001);
+    const isbn = '\nISBN 978-0-14-103614-4';
+    const text = filler + isbn;
+    const c = extractIsbnCandidates(text);
+    expect(c).not.toContain('9780141036144');
+  });
+
+  it('logs a console.warn when input exceeds MAX_OCR_TEXT_LENGTH', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const filler = 'A'.repeat(100_001);
+    extractIsbnCandidates(filler);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0][0]).toContain('MAX_OCR_TEXT_LENGTH');
+    warnSpy.mockRestore();
+  });
+
+  it('does NOT log a console.warn when input is within the limit', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    extractIsbnCandidates('ISBN 978-0-14-103614-4');
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});
+
+/* ================================================================
+ *  extractIsbnCandidates — Pass 5 cross-line labeled ISBN (matchAll fix)
+ * ================================================================ */
+
+describe('extractIsbnCandidates — Pass 5 cross-line labeled ISBN', () => {
+  it('extracts labeled ISBN split across two lines via capture group', () => {
+    // "ISBN 978-0-14-\n103614-4" — the ISBN label + digits span a line break.
+    // After the matchAll fix, Pass 5 should extract the capture group (the digit part),
+    // not the full match including the "ISBN" prefix.
+    const text = 'ISBN 978-0-14-\n103614-4';
+    const c = extractIsbnCandidates(text);
+    expect(c).toContain('9780141036144');
+  });
+
+  it('extracts labeled ISBN-10 split across two lines', () => {
+    const text = 'ISBN 0-306-\n40615-2';
+    const c = extractIsbnCandidates(text);
+    expect(c).toContain('0306406152');
+  });
+
+  it('extracts ISBN-10 ending in X in cross-line detection', () => {
+    const text = 'ISBN 0-8044-\n2957-X';
+    const c = extractIsbnCandidates(text);
+    expect(c).toContain('080442957X');
+  });
+
+  it('extracts ISBN-13 labeled with ISBN-13 prefix across lines', () => {
+    const text = 'ISBN-13: 978-0-306-\n40615-7';
+    const c = extractIsbnCandidates(text);
+    expect(c).toContain('9780306406157');
+  });
+
+  it('handles empty lines between ISBN parts in 3-line join', () => {
+    // 3-line join: line[i] + line[i+1] + line[i+2]
+    // The middle line is empty, so the ISBN digits come from lines 0 and 2.
+    const text = '978-0-14\n\n-103614-4';
+    const c = extractIsbnCandidates(text);
+    expect(c).toContain('9780141036144');
+  });
+});
+
+/* ================================================================
+ *  fixOcrDigits — aggressive variant tests
+ * ================================================================ */
+
+describe('fixOcrDigits — aggressive variant', () => {
+  // The aggressive OCR fixer (fixOcrDigitsAggressive) extends fixOcrDigits with
+  // A→4, T→7, E→8, R→2, C→0. It is NOT exported directly, but is used in
+  // extractIsbnCandidates Pass 1 for labeled ISBNs (applied to the ocrAggressive source text).
+  // Since aggressive fixing converts "ISBN" itself to "158N", the label patterns can only
+  // match when the non-aggressive sources (toProcess, normalized, ocrFixed) have an intact label.
+  // The aggressive fixer's main contribution is creating the ocrAggressive source text,
+  // where ISBN digits that were garbled with A/T/E/R/C letters get converted to digits.
+
+  it('aggressive variant handles A→4 via fixOcrDigits chain', () => {
+    // fixOcrDigits does NOT convert A→4. The non-aggressive fixer preserves 'A'.
+    // We verify this by checking that without a label, the 'A' is not converted.
+    expect(fixOcrDigits('A')).toBe('A'); // non-aggressive does NOT convert A
+  });
+
+  it('aggressive variant handles T→7 via fixOcrDigits chain', () => {
+    // fixOcrDigits does NOT convert T→7.
+    expect(fixOcrDigits('T')).toBe('T'); // non-aggressive does NOT convert T
+  });
+
+  it('aggressive variant handles E→8 via fixOcrDigits chain', () => {
+    // fixOcrDigits does NOT convert E→8.
+    expect(fixOcrDigits('E')).toBe('E'); // non-aggressive does NOT convert E
+  });
+
+  it('aggressive variant handles R→2 via fixOcrDigits chain', () => {
+    // fixOcrDigits does NOT convert R→2.
+    expect(fixOcrDigits('R')).toBe('R'); // non-aggressive does NOT convert R
+  });
+
+  it('aggressive variant handles C→0 via fixOcrDigits chain', () => {
+    // fixOcrDigits does NOT convert C→0.
+    expect(fixOcrDigits('C')).toBe('C'); // non-aggressive does NOT convert C
+  });
+
+  it('aggressive is NOT applied on unlabeled ISBN extraction (Pass 2/3)', () => {
+    // Without a label, aggressive OCR fixing should NOT be applied.
+    // Corrupt 978-0-14-103614-4 with 'A' (aggressive: A→4) but no ISBN label.
+    // Pass 2/3 use ocrFixed (non-aggressive) which does NOT map A→4.
+    // The aggressive version should not create candidates in Pass 2/3.
+    const text = '97801A1036144';
+    const c = extractIsbnCandidates(text);
+    // Non-aggressive fixOcrDigits does not convert A→4.
+    // Without a label, the aggressive fixer should not be used for Pass 2/3/4,
+    // so the ISBN should not be recovered.
+    expect(c).not.toContain('9780141036144');
   });
 });

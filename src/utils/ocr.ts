@@ -34,6 +34,28 @@ const fixOcrDigitsAggressive = (str: string): string =>
     .replace(/[Cc]/g, '0');
 
 /**
+ * Common OCR ambiguity map: digit → alternatives to try when checksum fails.
+ * Shared by tryFixChecksum() and getNearMissCandidates() to ensure consistent repair.
+ *
+ * Mappings based on frequent OCR confusions:
+ *   0↔O↔D, 1↔I↔l, 2↔Z, 3↔8, 4↔A, 5↔S, 6↔0/5/8, 7↔1, 8↔B/0/3/6/9, 9↔g/0/7
+ *   X→0 (ISBN-10 check digit: X=10 can be misread as digit)
+ */
+export const OCR_AMBIGUITY_MAP: Record<string, string[]> = {
+  '0': ['6', '8', '9'],
+  '1': ['7', '4'],
+  '2': ['7', '3'],
+  '3': ['8'],
+  '4': ['1', '9'],
+  '5': ['6', '8', '9'],
+  '6': ['0', '5', '8'],
+  '7': ['1'],
+  '8': ['0', '3', '6', '9'],
+  '9': ['0', '7'],
+  'X': ['0'],
+};
+
+/**
  * Try generating checksum-valid variants by toggling ambiguous digits.
  * If an ISBN candidate is close but has a bad checksum, this tries
  * single-digit substitutions at each position.
@@ -42,22 +64,10 @@ export const tryFixChecksum = (candidate: string): string | null => {
   if (isValidIsbn(candidate)) return candidate;
   if (candidate.length !== 10 && candidate.length !== 13) return null;
 
-  // Common OCR ambiguities: 0↔O↔D, 1↔I↔l, 5↔S, 8↔B, 9↔g, 2↔Z
-  const ambiguous: Record<string, string[]> = {
-    '0': ['6', '8', '9'],
-    '1': ['7', '4'],
-    '3': ['8'],
-    '5': ['6', '8', '9'],
-    '6': ['0', '5', '8'],
-    '7': ['1'],
-    '8': ['0', '3', '6', '9'],
-    '9': ['0', '7'],
-  };
-
   // Only try single-character fixes (avoid combinatorial explosion)
   for (let i = 0; i < candidate.length; i++) {
     const ch = candidate[i];
-    const alternatives = ambiguous[ch];
+    const alternatives = OCR_AMBIGUITY_MAP[ch];
     if (!alternatives) continue;
     for (const alt of alternatives) {
       const variant = candidate.substring(0, i) + alt + candidate.substring(i + 1);
@@ -76,14 +86,10 @@ export const getNearMissCandidates = (candidate: string): string[] => {
   if (candidate.length !== 10 && candidate.length !== 13) return [];
 
   const results: string[] = [];
-  const ambiguous: Record<string, string[]> = {
-    '0': ['6', '8', '9'], '1': ['7', '4'], '3': ['8'], '5': ['6', '8', '9'],
-    '6': ['0', '5', '8'], '7': ['1'], '8': ['0', '3', '6', '9'], '9': ['0', '7'],
-  };
 
   for (let i = 0; i < candidate.length; i++) {
     const ch = candidate[i];
-    const alternatives = ambiguous[ch];
+    const alternatives = OCR_AMBIGUITY_MAP[ch];
     if (!alternatives) continue;
     for (const alt of alternatives) {
       const variant = candidate.substring(0, i) + alt + candidate.substring(i + 1);
@@ -117,6 +123,10 @@ export const extractIsbnCandidates = (text: string): string[] => {
   let toProcess = text.trim();
   if (toProcess.length > MAX_OCR_TEXT_LENGTH) {
     // Process prefix to avoid slowdown/DoS; ISBNs are usually in the first portion of OCR output
+    console.warn(
+      `[OCR] Input text (${toProcess.length} chars) exceeds MAX_OCR_TEXT_LENGTH (${MAX_OCR_TEXT_LENGTH}). ` +
+      `Truncating to first ${MAX_OCR_TEXT_LENGTH} chars — ISBNs beyond this point will be missed.`
+    );
     toProcess = toProcess.substring(0, MAX_OCR_TEXT_LENGTH);
   }
 
@@ -235,13 +245,12 @@ export const extractIsbnCandidates = (text: string): string[] => {
         }
       }
       // Check for labeled ISBNs spanning lines
-      const matchesLabeled = source.match(/ISBN[- ]?(?:1[03])?\s*[:=]?\s*([0-9][- 0-9X]{8,17})/gi);
-      if (matchesLabeled) {
-        for (const m of matchesLabeled) {
-          const digits = m.replace(/[^0-9X]/g, '');
-          if (digits.length === 13 || digits.length === 10) {
-            candidates.push(digits);
-          }
+      const matchesLabeled = source.matchAll(/ISBN[- ]?(?:1[03])?\s*[:=]?\s*([0-9][- 0-9X]{8,17})/gi);
+      for (const match of matchesLabeled) {
+        const raw = match[1];
+        const digits = raw.replace(/[^0-9X]/g, '');
+        if (digits.length === 13 || digits.length === 10) {
+          candidates.push(digits);
         }
       }
     }

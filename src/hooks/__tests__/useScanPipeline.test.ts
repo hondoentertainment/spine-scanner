@@ -614,4 +614,206 @@ describe('useScanPipeline — runPipeline', () => {
     );
   });
 
+  it('low-confidence ISBN does NOT cause early exit; returns high-confidence ISBN from later pass', async () => {
+    const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
+    let callCount = 0;
+    const runOcr = vi.fn().mockImplementation(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        return { isbn: '9780141036144', allCandidates: ['9780141036144'], confidence: 30 };
+      }
+      if (callCount === 2) {
+        return { isbn: '9783161484100', allCandidates: ['9783161484100'], confidence: 95 };
+      }
+      return { isbn: null, allCandidates: [] };
+    });
+
+    const { result } = renderHook(() =>
+      useScanPipeline({
+        addLog: vi.fn(),
+        setStatus: vi.fn(),
+        runOcr,
+        tryBarcodeDecode,
+      }),
+    );
+
+    const img = new Image();
+    img.width = 640;
+    img.height = 480;
+    const canvas = document.createElement('canvas');
+
+    let pipelineResult: { isbn: string | null } | null = null;
+    await act(async () => {
+      pipelineResult = await result.current.runPipeline(img, canvas, 'test');
+    });
+
+    // runOcr should have been called more than once (low-confidence didn't cause early exit)
+    expect(runOcr).toHaveBeenCalledTimes(2);
+    // The pipeline should return the high-confidence ISBN
+    expect(pipelineResult?.isbn).toBe('9783161484100');
+  });
+
+  it('high-confidence ISBN causes early exit on first pass (confidence >= 85)', async () => {
+    const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
+    const runOcr = vi.fn().mockResolvedValue({
+      isbn: '9780141036144',
+      allCandidates: ['9780141036144'],
+      confidence: 92,
+    });
+
+    const addLog = vi.fn();
+    const { result } = renderHook(() =>
+      useScanPipeline({
+        addLog,
+        setStatus: vi.fn(),
+        runOcr,
+        tryBarcodeDecode,
+      }),
+    );
+
+    const img = new Image();
+    img.width = 640;
+    img.height = 480;
+    const canvas = document.createElement('canvas');
+
+    let pipelineResult: { isbn: string | null } | null = null;
+    await act(async () => {
+      pipelineResult = await result.current.runPipeline(img, canvas, 'test');
+    });
+
+    expect(pipelineResult?.isbn).toBe('9780141036144');
+    expect(runOcr).toHaveBeenCalledTimes(1);
+    expect(addLog).toHaveBeenCalledWith(expect.stringContaining('Early exit'));
+  });
+
+  it('returns best candidate when all passes have low confidence', async () => {
+    const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
+    let callCount = 0;
+    const runOcr = vi.fn().mockImplementation(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        return { isbn: '9780141036144', allCandidates: ['9780141036144'], confidence: 40 };
+      }
+      return { isbn: null, allCandidates: [] };
+    });
+
+    const { result } = renderHook(() =>
+      useScanPipeline({
+        addLog: vi.fn(),
+        setStatus: vi.fn(),
+        runOcr,
+        tryBarcodeDecode,
+      }),
+    );
+
+    const img = new Image();
+    img.width = 640;
+    img.height = 480;
+    const canvas = document.createElement('canvas');
+
+    let pipelineResult: { isbn: string | null } | null = null;
+    await act(async () => {
+      pipelineResult = await result.current.runPipeline(img, canvas, 'test');
+    });
+
+    // Even though confidence was low, the best candidate should still be returned (not null)
+    expect(pipelineResult?.isbn).toBe('9780141036144');
+  });
+
+  it('handles zero-dimension image with null ISBN and diagnostics', async () => {
+    const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
+    const runOcr = vi.fn();
+
+    const { result } = renderHook(() =>
+      useScanPipeline({
+        addLog: vi.fn(),
+        setStatus: vi.fn(),
+        runOcr,
+        tryBarcodeDecode,
+      }),
+    );
+
+    const img = new Image();
+    img.width = 0;
+    img.height = 0;
+    const canvas = document.createElement('canvas');
+
+    let pipelineResult: { isbn: string | null; diagnostics?: { lastError?: string } } | null = null;
+    await act(async () => {
+      pipelineResult = await result.current.runPipeline(img, canvas, 'test');
+    });
+
+    expect(pipelineResult?.isbn).toBeNull();
+    expect(pipelineResult?.diagnostics?.lastError).toMatch(/zero/i);
+    expect(runOcr).not.toHaveBeenCalled();
+  });
+
+  it('exits early when abort signal is already aborted', async () => {
+    const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
+    const runOcr = vi.fn().mockResolvedValue({ isbn: null, allCandidates: [] });
+
+    const { result } = renderHook(() =>
+      useScanPipeline({
+        addLog: vi.fn(),
+        setStatus: vi.fn(),
+        runOcr,
+        tryBarcodeDecode,
+      }),
+    );
+
+    const img = new Image();
+    img.width = 640;
+    img.height = 480;
+    const canvas = document.createElement('canvas');
+
+    const controller = new AbortController();
+    controller.abort();
+
+    let pipelineResult: { isbn: string | null } | null = null;
+    await act(async () => {
+      pipelineResult = await result.current.runPipeline(img, canvas, 'test', { signal: controller.signal });
+    });
+
+    // OCR loop should have been skipped due to aborted signal
+    // Barcode phase still runs (it doesn't check signal), but OCR passes check signal
+    // Either 0 OCR calls (all skipped) or pipeline returns null ISBN
+    expect(pipelineResult?.isbn).toBeNull();
+  });
+
+  it('suppresses concurrent pipeline call with diagnostics', async () => {
+    const tryBarcodeDecode = vi.fn().mockImplementation(
+      () => new Promise(resolve => setTimeout(() => resolve(null), 50))
+    );
+    const runOcr = vi.fn().mockResolvedValue({ isbn: null, allCandidates: [] });
+
+    const addLog = vi.fn();
+    const { result } = renderHook(() =>
+      useScanPipeline({
+        addLog,
+        setStatus: vi.fn(),
+        runOcr,
+        tryBarcodeDecode,
+      }),
+    );
+
+    const img = new Image();
+    img.width = 640;
+    img.height = 480;
+    const canvas = document.createElement('canvas');
+
+    let result1: { isbn: string | null; diagnostics?: { lastError?: string } } | null = null;
+    let result2: { isbn: string | null; diagnostics?: { lastError?: string } } | null = null;
+
+    await act(async () => {
+      const p1 = result.current.runPipeline(img, canvas, 'test1');
+      const p2 = result.current.runPipeline(img, canvas, 'test2');
+      [result1, result2] = await Promise.all([p1, p2]);
+    });
+
+    // One of the two calls should have been suppressed
+    const suppressed = [result1, result2].find(r => r?.diagnostics?.lastError?.includes('Concurrent'));
+    expect(suppressed).toBeDefined();
+    expect(addLog).toHaveBeenCalledWith(expect.stringContaining('Pipeline already running'));
+  });
+
 });

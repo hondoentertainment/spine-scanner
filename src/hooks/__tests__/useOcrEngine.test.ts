@@ -320,4 +320,131 @@ describe('useOcrEngine', () => {
       expect(ocrResult.isbn).toBe('9783161484100');
     });
   });
+
+  describe('worker retry counter NOT decremented on recognize timeout', () => {
+    it('does not decrement workerRetries when worker.recognize times out', async () => {
+      // First call: worker created successfully, recognize times out
+      workerRecognizeReject = new Error('OCR test: timed out after 8000ms');
+      mockOcrText = '9780141036144'; // fallback will use this
+
+      const { result } = renderHook(() =>
+        useOcrEngine({ addLog, setStatus, onOcrReady })
+      );
+
+      // First runOcr: worker is created, recognize fails, falls back to one-shot
+      await act(async () =>
+        result.current.runOcr(
+          'data:image/png;base64,iVBORw0KGgo=',
+          'timeout-test',
+          extractIsbnCandidates,
+          isValidIsbn
+        )
+      );
+
+      // Worker was terminated, workerRef is null. But retry counter should NOT have changed.
+      // Now clear the error so the next worker creation succeeds
+      workerRecognizeReject = null;
+      mockOcrText = '9783161484100';
+
+      // Second runOcr: should be able to create a new worker (retry counter not exhausted)
+      const ocrResult2 = await act(async () =>
+        result.current.runOcr(
+          'data:image/png;base64,iVBORw0KGgo=',
+          'after-timeout-test',
+          extractIsbnCandidates,
+          isValidIsbn
+        )
+      );
+
+      // The hook should have created a new worker successfully
+      expect(createWorkerFn).toHaveBeenCalledTimes(2);
+      expect(ocrResult2.isbn).toBe('9783161484100');
+    });
+  });
+
+  describe('runOcr rejects invalid input', () => {
+    it('rejects empty string input', async () => {
+      const { result } = renderHook(() =>
+        useOcrEngine({ addLog, setStatus, onOcrReady })
+      );
+
+      const ocrResult = await act(async () =>
+        result.current.runOcr(
+          '',
+          'empty-test',
+          extractIsbnCandidates,
+          isValidIsbn
+        )
+      );
+
+      expect(ocrResult.isbn).toBeNull();
+      expect(ocrResult.allCandidates).toEqual([]);
+      expect(ocrResult.confidence).toBeUndefined();
+      expect(addLog).toHaveBeenCalledWith(expect.stringContaining('empty or invalid'));
+    });
+
+    it('rejects non-data-URL string input', async () => {
+      const { result } = renderHook(() =>
+        useOcrEngine({ addLog, setStatus, onOcrReady })
+      );
+
+      const ocrResult = await act(async () =>
+        result.current.runOcr(
+          'https://example.com/image.png',
+          'non-dataurl-test',
+          extractIsbnCandidates,
+          isValidIsbn
+        )
+      );
+
+      expect(ocrResult.isbn).toBeNull();
+      expect(ocrResult.allCandidates).toEqual([]);
+      expect(addLog).toHaveBeenCalledWith(expect.stringContaining('expected data:image/ URL'));
+    });
+
+    it('rejects oversized string input (>7MB)', async () => {
+      const { result } = renderHook(() =>
+        useOcrEngine({ addLog, setStatus, onOcrReady })
+      );
+
+      // Create a data URL string > 7MB
+      const oversized = 'data:image/png;base64,' + 'A'.repeat(7_000_001);
+
+      const ocrResult = await act(async () =>
+        result.current.runOcr(
+          oversized,
+          'oversized-test',
+          extractIsbnCandidates,
+          isValidIsbn
+        )
+      );
+
+      expect(ocrResult.isbn).toBeNull();
+      expect(ocrResult.allCandidates).toEqual([]);
+      expect(addLog).toHaveBeenCalledWith(expect.stringContaining('too large'));
+    });
+  });
+
+  describe('runOcr returns confidence undefined when Tesseract does not provide it', () => {
+    it('returns undefined confidence when mock returns no confidence', async () => {
+      mockOcrText = '9780141036144';
+      mockOcrConfidence = undefined; // Tesseract doesn't provide confidence
+
+      const { result } = renderHook(() =>
+        useOcrEngine({ addLog, setStatus, onOcrReady })
+      );
+
+      const ocrResult = await act(async () =>
+        result.current.runOcr(
+          'data:image/png;base64,iVBORw0KGgo=',
+          'no-conf-test',
+          extractIsbnCandidates,
+          isValidIsbn
+        )
+      );
+
+      expect(ocrResult.isbn).toBe('9780141036144');
+      expect(ocrResult.confidence).toBeUndefined();
+    });
+  });
 });

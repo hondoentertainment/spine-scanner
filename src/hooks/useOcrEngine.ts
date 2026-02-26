@@ -257,7 +257,6 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
                 // A timed-out recognize() keeps running inside the worker until terminated.
                 worker.terminate?.().catch(() => {});
                 workerRef.current = null;
-                workerRetries.current = Math.max(0, workerRetries.current - 1);
             }
         }
 

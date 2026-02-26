@@ -80,6 +80,50 @@ describe('formatDiagnostics', () => {
     const out = formatDiagnostics(diag);
     expect(out).toContain('200+ px per axis');
   });
+
+  it('shows "low" brightness label when isDark', () => {
+    const diag = makeDiag({
+      quality: { brightness: 40, blurVariance: 200, isDark: true, isBlurry: false },
+    });
+    const out = formatDiagnostics(diag);
+    expect(out).toContain('(low');
+  });
+
+  it('shows "blurry" label when isBlurry', () => {
+    const diag = makeDiag({
+      quality: { brightness: 128, blurVariance: 60, isDark: false, isBlurry: true },
+    });
+    const out = formatDiagnostics(diag);
+    expect(out).toContain('(blurry');
+  });
+
+  it('includes skip reason text in output', () => {
+    const diag = makeDiag({ skipReason: 'Frame was too shaky' });
+    const out = formatDiagnostics(diag);
+    expect(out).toContain('Frame was too shaky');
+  });
+
+  it('shows low resolution hint when lowResolution is true', () => {
+    const diag = makeDiag({ lowResolution: true });
+    const out = formatDiagnostics(diag);
+    expect(out).toContain('low (move closer)');
+  });
+
+  it('shows "hold steady" tip when blurry', () => {
+    const diag = makeDiag({
+      quality: { brightness: 128, blurVariance: 60, isDark: false, isBlurry: true },
+    });
+    const out = formatDiagnostics(diag);
+    expect(out).toContain('Hold steady');
+  });
+
+  it('shows "improve lighting" tip when dark', () => {
+    const diag = makeDiag({
+      quality: { brightness: 40, blurVariance: 200, isDark: true, isBlurry: false },
+    });
+    const out = formatDiagnostics(diag);
+    expect(out).toContain('Improve lighting');
+  });
 });
 
 describe('buildErrorDiagnostics', () => {
@@ -137,5 +181,22 @@ describe('buildErrorDiagnostics', () => {
     const out = buildErrorDiagnostics('Unknown error xyz', []);
     expect(out).toContain('Expand the debug panel');
     expect(out).toContain('manual ISBN entry');
+  });
+
+  it('maps timeout errors to helpful tips', () => {
+    const out = buildErrorDiagnostics('OCR pass timed out after 8000ms', []);
+    expect(out).toContain('OCR took too long');
+  });
+
+  it('maps worker errors to OCR engine tips', () => {
+    const out = buildErrorDiagnostics('worker initialization failed', []);
+    expect(out).toContain('OCR engine may still be loading');
+  });
+
+  it('includes recent logs in output', () => {
+    const out = buildErrorDiagnostics('some error', ['first log', 'second log', 'third log']);
+    expect(out).toContain('first log');
+    expect(out).toContain('second log');
+    expect(out).toContain('third log');
   });
 });

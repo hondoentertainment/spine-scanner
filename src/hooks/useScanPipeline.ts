@@ -488,6 +488,9 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
 
         reportProgress({ phase: 'ocr', currentPass: 0, totalPasses });
 
+        /** Track best ISBN found so far when confidence is below threshold. */
+        let bestResult: { isbn: string; confidence?: number } | null = null;
+
         for (let i = 0; i < ocrPasses.length; i++) {
             const pass = ocrPasses[i];
             if (Date.now() - ocrStartTime > OCR_TOTAL_TIMEOUT) {
@@ -516,9 +519,17 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                     if (result.confidence != null) {
                         addLog(`[OCR-ANALYTICS] pass=${pass.label} confidence=${result.confidence} imgWidth=${img.width} brightness=${quality.brightness.toFixed(0)} blur=${quality.blurVariance.toFixed(0)}`);
                     }
-                    safeSetStatus(`Found ISBN: ${result.isbn}`);
-                    addLog(`Early exit: valid ISBN found${result.confidence != null ? ` (conf=${result.confidence}, threshold=${HIGH_CONFIDENCE_THRESHOLD})` : ''}`);
-                    return { isbn: result.isbn, suggestions: [] };
+                    // Early exit only when confidence is unavailable (backward compat) or >= threshold
+                    if (result.confidence == null || result.confidence >= HIGH_CONFIDENCE_THRESHOLD) {
+                        safeSetStatus(`Found ISBN: ${result.isbn}`);
+                        addLog(`Early exit: valid ISBN found${result.confidence != null ? ` (conf=${result.confidence}, threshold=${HIGH_CONFIDENCE_THRESHOLD})` : ''}`);
+                        return { isbn: result.isbn, suggestions: [] };
+                    }
+                    // Low confidence: save as best candidate and continue scanning
+                    if (!bestResult || (result.confidence != null && (bestResult.confidence == null || result.confidence > bestResult.confidence))) {
+                        bestResult = { isbn: result.isbn, confidence: result.confidence };
+                        addLog(`Low confidence ISBN (${result.confidence} < ${HIGH_CONFIDENCE_THRESHOLD}), continuing scan...`);
+                    }
                 }
             } catch (err) {
                 addLog(`OCR pass [${pass.label}] error: ${err instanceof Error ? err.message : String(err)}`);
@@ -528,7 +539,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
         /* ── Phase 2b: Multi-language fallback (German/non-English books) ──── */
         // Guarded by useMultilang so ocrLanguage='en' correctly skips this phase.
         // 'de' uses Tesseract's German-only model; 'both' combines eng+deu for mixed spines.
-        if (useMultilang && !signal?.aborted && Date.now() - ocrStartTime < OCR_TOTAL_TIMEOUT) {
+        if (useMultilang && !signal?.aborted && (OCR_TOTAL_TIMEOUT - (Date.now() - ocrStartTime)) >= 8000) {
             const multilangStr = ocrLanguage === 'de' ? 'deu' : 'eng+deu';
             try {
                 safeSetStatus(`OCR: retrying with multi-language (${multilangStr})...`);
@@ -545,6 +556,14 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
             } catch (err) {
                 addLog(`Multi-lang OCR fallback error: ${err instanceof Error ? err.message : String(err)}`);
             }
+        }
+
+        /* ── Return best low-confidence candidate if no high-confidence ISBN was found ──── */
+        if (bestResult) {
+            addLog(`Returning best low-confidence ISBN: ${bestResult.isbn} (conf=${bestResult.confidence})`);
+            safeSetStatus(`Found ISBN: ${bestResult.isbn}`);
+            reportProgress({ phase: 'done' });
+            return { isbn: bestResult.isbn, suggestions: [] };
         }
 
         /* ── Phase 3: Build suggestions (include near-miss candidates) ──── */

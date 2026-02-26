@@ -155,7 +155,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
             if (!video || video.readyState < 2 || processingRef.current || isScanning) return;
             const quality = assessVideoFrameQuality(video, canvas, CROP_MEDIUM);
             if (quality.isBlurry && quality.isDark) {
-                setLiveQualityHint('blurry');
+                setLiveQualityHint('dark');
             } else if (quality.isBlurry) {
                 setLiveQualityHint('blurry');
             } else if (quality.isDark) {
@@ -202,8 +202,9 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
         try {
             const img = new Image();
             await new Promise<void>((resolve, reject) => {
-                img.onload = () => resolve();
-                img.onerror = () => reject(new Error('Failed to load captured image'));
+                const timer = setTimeout(() => reject(new Error('Image load timed out after 10s')), 10000);
+                img.onload = () => { clearTimeout(timer); resolve(); };
+                img.onerror = () => { clearTimeout(timer); reject(new Error('Failed to load captured image')); };
                 img.src = imageSrc;
             });
 
@@ -311,8 +312,9 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
 
             const img = new Image();
             await new Promise<void>((resolve, reject) => {
-                img.onload = () => resolve();
-                img.onerror = () => reject(new Error('Failed to load image'));
+                const timer = setTimeout(() => reject(new Error('Image load timed out after 10s')), 10000);
+                img.onload = () => { clearTimeout(timer); resolve(); };
+                img.onerror = () => { clearTimeout(timer); reject(new Error('Failed to load image')); };
                 img.src = imageSrc;
             });
 
