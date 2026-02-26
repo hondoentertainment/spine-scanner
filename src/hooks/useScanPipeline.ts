@@ -96,7 +96,7 @@ export const preprocessImage = (
     img: HTMLImageElement, canvas: HTMLCanvasElement,
     rotateDeg: number, crop: CropRegion, mode: PreprocessMode = 'clean',
 ): string => {
-    const ctx = canvas.getContext('2d')!;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
     const cropX = img.width * (1 - crop.widthFrac) / 2;
     const cropY = img.height * (1 - crop.heightFrac) / 2;
     const cropW = img.width * crop.widthFrac;
@@ -148,31 +148,42 @@ export const preprocessImage = (
                     }
                 }
             } else {
-                // Unsharp mask (industry std for blurry captures): original + amount * (original - blurred)
-                const radius = 1;
+                // Unsharp mask with 1-2-1 separable Gaussian blur (better edge preservation
+                // than box blur — avoids ringing on high-contrast digit edges).
+                // Two-pass: horizontal then vertical convolution.
                 const amount = 1.5;
-                const blur = new Float32Array(w * h * 3);
-                for (let y = radius; y < h - radius; y++) {
-                    for (let x = radius; x < w - radius; x++) {
-                        let r = 0, g = 0, b = 0, n = 0;
-                        for (let dy = -radius; dy <= radius; dy++) {
-                            for (let dx = -radius; dx <= radius; dx++) {
-                                const idx = ((y + dy) * w + (x + dx)) * 4;
-                                r += src[idx]; g += src[idx + 1]; b += src[idx + 2]; n++;
-                            }
-                        }
+                // Horizontal pass: [1,2,1]/4
+                const hBlur = new Float32Array(w * h * 3);
+                for (let y = 0; y < h; y++) {
+                    for (let x = 1; x < w - 1; x++) {
+                        const i = (y * w + x) * 4;
+                        const iL = (y * w + (x - 1)) * 4;
+                        const iR = (y * w + (x + 1)) * 4;
                         const bi = (y * w + x) * 3;
-                        blur[bi] = r / n; blur[bi + 1] = g / n; blur[bi + 2] = b / n;
+                        for (let c = 0; c < 3; c++) {
+                            hBlur[bi + c] = (src[iL + c] + 2 * src[i + c] + src[iR + c]) / 4;
+                        }
                     }
                 }
-                for (let y = radius; y < h - radius; y++) {
-                    for (let x = radius; x < w - radius; x++) {
+                // Vertical pass: [1,2,1]/4 on hBlur → final Gaussian approximation
+                const blur = new Float32Array(w * h * 3);
+                for (let y = 1; y < h - 1; y++) {
+                    for (let x = 1; x < w - 1; x++) {
+                        const bi  = (y * w + x) * 3;
+                        const biU = ((y - 1) * w + x) * 3;
+                        const biD = ((y + 1) * w + x) * 3;
+                        for (let c = 0; c < 3; c++) {
+                            blur[bi + c] = (hBlur[biU + c] + 2 * hBlur[bi + c] + hBlur[biD + c]) / 4;
+                        }
+                    }
+                }
+                for (let y = 1; y < h - 1; y++) {
+                    for (let x = 1; x < w - 1; x++) {
                         const i = (y * w + x) * 4;
                         const bi = (y * w + x) * 3;
                         for (let c = 0; c < 3; c++) {
                             const orig = src[i + c];
-                            const blr = blur[bi + c];
-                            const val = orig + amount * (orig - blr);
+                            const val = orig + amount * (orig - blur[bi + c]);
                             data[i + c] = Math.min(255, Math.max(0, Math.round(val)));
                         }
                     }
@@ -187,7 +198,7 @@ export const preprocessImage = (
 export const cropForBarcode = (
     img: HTMLImageElement, canvas: HTMLCanvasElement, crop: CropRegion,
 ): string => {
-    const ctx = canvas.getContext('2d')!;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
     const cropX = img.width * (1 - crop.widthFrac) / 2;
     const cropY = img.height * (1 - crop.heightFrac) / 2;
     const cropW = img.width * crop.widthFrac;
@@ -217,7 +228,7 @@ export const assessFrameQuality = (
 /** Live pre-capture quality check for video stream. Industry std: prompt user to hold steady when blur detected. */
 export const assessVideoFrameQuality = (
     video: HTMLVideoElement | { readyState?: number; videoWidth?: number; videoHeight?: number },
-    canvas: HTMLCanvasElement, crop: CropRegion = CROP_MEDIUM,
+    canvas: HTMLCanvasElement, crop: CropRegion = CROP_NARROW,
 ): FrameQuality => {
     const readyState = 'readyState' in video ? (video.readyState ?? 0) : 0;
     if (readyState < 2) return { brightness: 128, blurVariance: BLUR_VARIANCE_THRESHOLD, isDark: false, isBlurry: false };
@@ -230,7 +241,7 @@ export const assessVideoFrameQuality = (
 
 const detectBrightness = (src: FrameSource, canvas: HTMLCanvasElement, crop: CropRegion): number => {
     try {
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx || typeof ctx.getImageData !== 'function') return 128;
         const { w, h } = getFrameDimensions(src);
         const cropX = w * (1 - crop.widthFrac) / 2;
@@ -251,7 +262,7 @@ const detectBrightness = (src: FrameSource, canvas: HTMLCanvasElement, crop: Cro
 
 const detectBlurVariance = (src: FrameSource, canvas: HTMLCanvasElement, crop: CropRegion): number => {
     try {
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx || typeof ctx.getImageData !== 'function') return BLUR_VARIANCE_THRESHOLD;
         const { w, h } = getFrameDimensions(src);
         const cropX = w * (1 - crop.widthFrac) / 2;
@@ -293,19 +304,22 @@ function buildOcrPasses(quality: FrameQuality, prefix: string): OcrPassConfig[] 
     const { isDark, isBlurry } = quality;
 
     const base: OcrPassConfig[] = [
-        { crop: CROP_NARROW, rotation: 0,   mode: 'clean',    label: `${prefix}narrow-0`,    psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
-        { crop: CROP_NARROW, rotation: 0,   mode: 'enhanced', label: `${prefix}narrow-0-enh`, psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
-        { crop: CROP_CENTER, rotation: 0,   mode: 'clean',    label: `${prefix}center-0`,    psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
+        { crop: CROP_NARROW, rotation: 0,   mode: 'clean',    label: `${prefix}narrow-0`,      psm: '7',  charWhitelist: ISBN_CHAR_WHITELIST },
+        // PSM 13 (Raw line) bypasses Tesseract layout analysis — faster, often more accurate
+        // for tightly-cropped ISBN strips where segmentation adds noise.
+        { crop: CROP_NARROW, rotation: 0,   mode: 'clean',    label: `${prefix}narrow-psm13`,   psm: '13', charWhitelist: ISBN_CHAR_WHITELIST },
+        { crop: CROP_NARROW, rotation: 0,   mode: 'enhanced', label: `${prefix}narrow-0-enh`,   psm: '7',  charWhitelist: ISBN_CHAR_WHITELIST },
+        { crop: CROP_CENTER, rotation: 0,   mode: 'clean',    label: `${prefix}center-0`,        psm: '7',  charWhitelist: ISBN_CHAR_WHITELIST },
         { crop: CROP_MEDIUM, rotation: 0,   mode: 'clean',    label: `${prefix}medium-0` },
         { crop: CROP_MEDIUM, rotation: 0,   mode: 'enhanced', label: `${prefix}medium-0-enh` },
-        { crop: CROP_NARROW, rotation: 90,  mode: 'clean',    label: `${prefix}narrow-90`,   psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
-        { crop: CROP_NARROW, rotation: 270, mode: 'clean',    label: `${prefix}narrow-270`,  psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
-        /* Skew correction for tilted spines: slight angle variations */
-        { crop: CROP_NARROW, rotation: 85,  mode: 'clean',    label: `${prefix}narrow-85`,   psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
-        { crop: CROP_NARROW, rotation: 95,  mode: 'clean',    label: `${prefix}narrow-95`,   psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
-        { crop: CROP_NARROW, rotation: 0,   mode: 'boost',    label: `${prefix}narrow-boost`, psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
+        { crop: CROP_NARROW, rotation: 90,  mode: 'clean',    label: `${prefix}narrow-90`,       psm: '7',  charWhitelist: ISBN_CHAR_WHITELIST },
+        { crop: CROP_NARROW, rotation: 270, mode: 'clean',    label: `${prefix}narrow-270`,      psm: '7',  charWhitelist: ISBN_CHAR_WHITELIST },
+        /* Skew correction for tilted spines */
+        { crop: CROP_NARROW, rotation: 85,  mode: 'clean',    label: `${prefix}narrow-85`,       psm: '7',  charWhitelist: ISBN_CHAR_WHITELIST },
+        { crop: CROP_NARROW, rotation: 95,  mode: 'clean',    label: `${prefix}narrow-95`,       psm: '7',  charWhitelist: ISBN_CHAR_WHITELIST },
+        { crop: CROP_NARROW, rotation: 0,   mode: 'boost',    label: `${prefix}narrow-boost`,    psm: '7',  charWhitelist: ISBN_CHAR_WHITELIST },
         ...(isDark ? [{ crop: CROP_NARROW, rotation: 0, mode: 'invert' as PreprocessMode, label: `${prefix}narrow-inv`, psm: '7', charWhitelist: ISBN_CHAR_WHITELIST }] as OcrPassConfig[] : []),
-        { crop: CROP_WIDE,   rotation: 0,   mode: 'clean',    label: `${prefix}wide-sparse`, psm: '11' },
+        { crop: CROP_WIDE,   rotation: 0,   mode: 'clean',    label: `${prefix}wide-sparse`,    psm: '11' },
         { crop: CROP_WIDE,   rotation: 0,   mode: 'clean',    label: `${prefix}wide-0` },
         { crop: CROP_FULL,   rotation: 0,   mode: 'clean',    label: `${prefix}full-0` },
     ];
@@ -429,9 +443,34 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
         const lowRes = hasLowOcrResolution(img.width, img.height, CROP_NARROW);
         addLog(`Quality: brightness=${quality.brightness.toFixed(0)} (${quality.isDark ? 'dark' : 'normal'}), blur=${quality.blurVariance.toFixed(0)} (${quality.isBlurry ? 'blurry' : 'sharp'}), lowRes=${lowRes}`);
 
-        const skipOcr = quality.isBlurry && quality.brightness < SKIP_OCR_BRIGHTNESS_THRESHOLD;
-        if (skipOcr) {
-            addLog('Skipping OCR: image too blurry and dark. Unlikely to succeed.');
+        const likelyShouldSkip = quality.isBlurry && quality.brightness < SKIP_OCR_BRIGHTNESS_THRESHOLD;
+        if (likelyShouldSkip) {
+            // Attempt targeted recovery passes (boost + invert) before giving up.
+            // Dark+blurry images sometimes yield text with aggressive contrast enhancement.
+            addLog('Dark and blurry — attempting recovery passes (boost, invert) before skipping...');
+            setStatus('Low light and blurry — attempting recovery...');
+            const recoveryPasses: OcrPassConfig[] = [
+                { crop: CROP_NARROW, rotation: 0, mode: 'boost',  label: `${prefix}recovery-boost`,  psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
+                { crop: CROP_NARROW, rotation: 0, mode: 'invert', label: `${prefix}recovery-invert`, psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
+            ];
+            for (const pass of recoveryPasses) {
+                if (Date.now() - ocrStartTime > OCR_TOTAL_TIMEOUT) break;
+                try {
+                    const processed = preprocessImage(img, canvas, pass.rotation, pass.crop, pass.mode);
+                    const result = await runOcr(processed, pass.label, extractIsbnCandidates, isValidIsbn, { psm: pass.psm, charWhitelist: pass.charWhitelist });
+                    ocrPassesAttempted += 1;
+                    result.allCandidates.forEach(c => allCandidates.add(c));
+                    if (result.isbn) {
+                        addLog(`ISBN via recovery pass [${pass.label}]: ${result.isbn}`);
+                        setStatus(`Found ISBN: ${result.isbn}`);
+                        return { isbn: result.isbn, suggestions: [] };
+                    }
+                } catch (err) {
+                    addLog(`Recovery pass [${pass.label}] error: ${err instanceof Error ? err.message : String(err)}`);
+                }
+            }
+            // Recovery failed — now actually skip remaining passes
+            addLog('Recovery passes found nothing. Skipping full OCR scan.');
             setStatus('Image too blurry and dark. Hold steady, improve lighting, and try again.');
             reportProgress({ phase: 'done' });
             return {
@@ -441,8 +480,8 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                     quality,
                     phase: 'ocr',
                     barcodeAttempted: true,
-                    ocrPassesAttempted: 0,
-                    skipReason: 'Image too blurry and dark',
+                    ocrPassesAttempted,
+                    skipReason: 'Image too blurry and dark (recovery passes failed)',
                     lowResolution: lowRes,
                 },
             };

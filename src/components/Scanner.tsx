@@ -1,15 +1,16 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
-import { Camera, Loader2, Edit3, Check, Play, Square, ImagePlus, Zap, Image as ImageIcon, Focus, Flashlight, Barcode, Type, Activity } from 'lucide-react';
+import { Camera, Loader2, Edit3, Check, Play, Square, ImagePlus, Zap, Image as ImageIcon, Focus, Flashlight, Barcode, Type, Activity, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { isValidIsbn } from '../utils/isbnValidation.ts';
 import { getNearMissCandidates } from '../utils/ocr.ts';
 import { useToast } from './Toast.tsx';
 import { useOcrEngine } from '../hooks/useOcrEngine.ts';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner.ts';
-import { useScanPipeline, isLowResolution, assessVideoFrameQuality, CROP_MEDIUM, type OcrLanguage, type ScanProgress } from '../hooks/useScanPipeline.ts';
+import { useScanPipeline, isLowResolution, assessVideoFrameQuality, CROP_NARROW, type OcrLanguage, type ScanProgress } from '../hooks/useScanPipeline.ts';
 import { buildErrorDiagnostics, formatDiagnostics } from '../utils/ocrDiagnostics.ts';
 import type { LiveScanTelemetry } from '../hooks/useBarcodeScanner.ts';
 import { hapticSuccess, hapticFailure, hapticHoldSteady } from '../utils/haptics.ts';
+import { usePreferencesStore } from '../store/usePreferencesStore.ts';
 import DebugPanel from './DebugPanel.tsx';
 import s from './Scanner.module.css';
 
@@ -67,11 +68,16 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const [torchOn, setTorchOn] = useState(false);
     const [hasTorch, setHasTorch] = useState(false);
     const [liveQualityHint, setLiveQualityHint] = useState<'ready' | 'blurry' | 'dark' | null>(null);
-    const [scanMode, setScanMode] = useState<ScanMode>('auto');
     const [torchWarningShown, setTorchWarningShown] = useState(false);
     const [ocrReady, setOcrReady] = useState(false);
-    const [ocrLanguage, setOcrLanguage] = useState<OcrLanguage>('both');
     const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
+    const [showProfileMenu, setShowProfileMenu] = useState(false);
+
+    /* ── OCR Profiles ─────────────────────────────────────────── */
+    const { allProfiles, activeProfile, activeProfileId, setActiveProfileId, recordAnalytics } = usePreferencesStore();
+    const profile = activeProfile();
+    const scanMode: ScanMode = profile.scanMode;
+    const ocrLanguage: OcrLanguage = profile.ocrLanguage;
     const videoTrackRef = useRef<MediaStreamTrack | null>(null);
 
     /* ── Refs for async closures ──────────────────────────────── */
@@ -89,7 +95,16 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const addLog = useCallback((msg: string) => {
         console.log(`[Scanner] ${msg}`);
         setDebugLogs(prev => [msg, ...prev].slice(0, 50));
-    }, []);
+        // Persist OCR analytics entries for tuning pass ordering and thresholds
+        if (msg.startsWith('[OCR-ANALYTICS]')) {
+            const pass       = msg.match(/pass=(\S+)/)?.[1]       ?? '';
+            const confidence = parseFloat(msg.match(/confidence=([\d.]+)/)?.[1] ?? '0');
+            const imgWidth   = parseInt(msg.match(/imgWidth=(\d+)/)?.[1]   ?? '0', 10);
+            const brightness = parseFloat(msg.match(/brightness=([\d.]+)/)?.[1] ?? '0');
+            const blur       = parseFloat(msg.match(/blur=([\d.]+)/)?.[1]        ?? '0');
+            recordAnalytics({ timestamp: Date.now(), pass, confidence, imgWidth, brightness, blur });
+        }
+    }, [recordAnalytics]);
 
     /* ── OCR engine hook ──────────────────────────────────────── */
     const { preWarm, runOcr, runOcrWithLang } = useOcrEngine({
@@ -137,7 +152,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
 
         const interval = setInterval(() => {
             if (!video || video.readyState < 2 || processingRef.current || isScanning) return;
-            const quality = assessVideoFrameQuality(video, canvas, CROP_MEDIUM);
+            const quality = assessVideoFrameQuality(video, canvas, CROP_NARROW);
             if (quality.isBlurry && quality.isDark) {
                 setLiveQualityHint('blurry');
             } else if (quality.isBlurry) {
@@ -607,35 +622,48 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                     </div>
                 ) : !showManual ? (
                     <>
-                    <div className={s.scanModeRow}>
-                        <span className={s.scanModeLabel}>Mode:</span>
-                        <button type="button" onClick={() => setScanMode('barcode')} aria-pressed={scanMode === 'barcode'}
-                            className={`${s.scanModeBtn} ${scanMode === 'barcode' ? s.scanModeBtnActive : ''}`} title="Barcode only">
-                            <Barcode size={16} /> Barcode
+                    {/* Profile selector — replaces the separate mode + language rows */}
+                    <div className={s.profileRow} style={{ position: 'relative' }}>
+                        <SlidersHorizontal size={14} style={{ opacity: 0.7 }} />
+                        <span className={s.profileLabel}>Profile:</span>
+                        <button
+                            type="button"
+                            onClick={() => setShowProfileMenu(prev => !prev)}
+                            className={`glass ${s.profileBtn}`}
+                            aria-haspopup="listbox"
+                            aria-expanded={showProfileMenu}
+                            title="Switch scan profile"
+                        >
+                            {/* Mode icon */}
+                            {scanMode === 'barcode' ? <Barcode size={13} /> : scanMode === 'ocr' ? <Type size={13} /> : <Zap size={13} />}
+                            <span>{profile.name}</span>
+                            <ChevronDown size={13} style={{ opacity: 0.7 }} />
                         </button>
-                        <button type="button" onClick={() => setScanMode('ocr')} aria-pressed={scanMode === 'ocr'}
-                            className={`${s.scanModeBtn} ${scanMode === 'ocr' ? s.scanModeBtnActive : ''}`} title="OCR text only">
-                            <Type size={16} /> OCR
-                        </button>
-                        <button type="button" onClick={() => setScanMode('auto')} aria-pressed={scanMode === 'auto'}
-                            className={`${s.scanModeBtn} ${scanMode === 'auto' ? s.scanModeBtnActive : ''}`} title="Both (default)">
-                            <Zap size={16} /> Auto
-                        </button>
-                    </div>
-                    <div className={s.languageRow}>
-                        <span className={s.languageLabel}>Language:</span>
-                        <button type="button" onClick={() => setOcrLanguage('en')} aria-pressed={ocrLanguage === 'en'}
-                            className={`${s.languageBtn} ${ocrLanguage === 'en' ? s.languageBtnActive : ''}`} title="English only">
-                            English
-                        </button>
-                        <button type="button" onClick={() => setOcrLanguage('de')} aria-pressed={ocrLanguage === 'de'}
-                            className={`${s.languageBtn} ${ocrLanguage === 'de' ? s.languageBtnActive : ''}`} title="German fallback">
-                            German
-                        </button>
-                        <button type="button" onClick={() => setOcrLanguage('both')} aria-pressed={ocrLanguage === 'both'}
-                            className={`${s.languageBtn} ${ocrLanguage === 'both' ? s.languageBtnActive : ''}`} title="English and German">
-                            Both
-                        </button>
+                        {showProfileMenu && (
+                            <ul
+                                role="listbox"
+                                aria-label="Select scan profile"
+                                className={s.profileMenu}
+                                onBlur={() => setShowProfileMenu(false)}
+                            >
+                                {allProfiles().map(p => (
+                                    <li
+                                        key={p.id}
+                                        role="option"
+                                        aria-selected={p.id === activeProfileId}
+                                        className={`${s.profileMenuItem} ${p.id === activeProfileId ? s.profileMenuItemActive : ''}`}
+                                        onClick={() => { setActiveProfileId(p.id); setShowProfileMenu(false); }}
+                                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setActiveProfileId(p.id); setShowProfileMenu(false); } }}
+                                        tabIndex={0}
+                                    >
+                                        <span className={s.profileMenuName}>{p.name}</span>
+                                        <span className={s.profileMenuMeta}>
+                                            {p.scanMode === 'barcode' ? 'Barcode' : p.scanMode === 'ocr' ? 'OCR' : 'Auto'} · {p.ocrLanguage === 'en' ? 'EN' : p.ocrLanguage === 'de' ? 'DE' : 'EN+DE'}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
                     </div>
                     <div className={s.btnRow}>
                         <button onClick={capture} disabled={processing || isScanning || !cameraReady || liveQualityHint === 'blurry'}

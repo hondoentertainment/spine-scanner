@@ -82,6 +82,11 @@ describe('useOcrEngine', () => {
   let onOcrReady: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
+    // Use fake timers so exponential-backoff retry delays don't cause test timeouts.
+    // Mock-based async operations (Promises) still resolve normally; only
+    // timer-based delays (setTimeout in withTimeout / retry logic) are frozen.
+    vi.useFakeTimers();
+
     addLog = vi.fn();
     setStatus = vi.fn();
     onOcrReady = vi.fn();
@@ -110,6 +115,7 @@ describe('useOcrEngine', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   describe('runOcr with worker', () => {
@@ -143,17 +149,22 @@ describe('useOcrEngine', () => {
         useOcrEngine({ addLog, setStatus, onOcrReady })
       );
 
-      const ocrResult = await act(async () =>
-        result.current.runOcr(
+      // The 2-worker pool uses exponential backoff between retries; advance all fake
+      // timers so the retries complete without hitting the real test timeout.
+      let ocrResult: Awaited<ReturnType<typeof result.current.runOcr>>;
+      await act(async () => {
+        const promise = result.current.runOcr(
           'data:image/png;base64,iVBORw0KGgo=',
           'fallback-test',
           extractIsbnCandidates,
           isValidIsbn
-        )
-      );
+        );
+        await vi.runAllTimersAsync();
+        ocrResult = await promise;
+      });
 
       expect(addLog).toHaveBeenCalledWith(expect.stringContaining('one-shot recognize() fallback'));
-      expect(ocrResult.isbn).toBe('9780141036144');
+      expect(ocrResult!.isbn).toBe('9780141036144');
     });
   });
 
@@ -282,8 +293,11 @@ describe('useOcrEngine', () => {
         useOcrEngine({ addLog, setStatus, onOcrReady })
       );
 
+      // Advance fake timers to bypass exponential-backoff retry delays.
       await act(async () => {
-        await result.current.preWarm();
+        const promise = result.current.preWarm();
+        await vi.runAllTimersAsync();
+        await promise;
       });
 
       expect(addLog).toHaveBeenCalledWith(expect.stringMatching(/OCR worker unavailable|Pre-warm failed|will use fallback/));

@@ -344,11 +344,13 @@ describe('useScanPipeline — runPipeline', () => {
     expect(pipelineResult?.suggestions).toContain('9780306406158');
   });
 
-  it('skips OCR when image is blurry and dark', async () => {
+  it('skips OCR when image is blurry and dark (after recovery passes)', async () => {
     // mockBrightness 50 => isDark (50 < 90); uniform data => low Laplacian variance => isBlurry
+    // Recovery passes (boost+invert) are attempted before the full skip.
     mockBrightness = 50;
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null); // no barcode, so we reach OCR phase
-    const runOcr = vi.fn();
+    // Recovery passes call runOcr — return a no-result value to avoid crashes.
+    const runOcr = vi.fn().mockResolvedValue({ isbn: null, allCandidates: [] });
 
     const addLog = vi.fn();
     const { result } = renderHook(() =>
@@ -370,10 +372,16 @@ describe('useScanPipeline — runPipeline', () => {
       pipelineResult = await result.current.runPipeline(img, canvas, 'test');
     });
 
+    // New behavior: attempts recovery passes, then logs "Recovery passes found nothing. Skipping..."
     expect(addLog).toHaveBeenCalledWith(
-      expect.stringContaining('Skipping OCR'),
+      expect.stringContaining('Dark and blurry'),
     );
-    expect(runOcr).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(
+      expect.stringContaining('Skipping full OCR scan'),
+    );
+    // runOcr IS called for the 2 recovery passes (boost + invert)
+    expect(runOcr).toHaveBeenCalledTimes(2);
+    expect(pipelineResult?.isbn).toBeNull();
     expect(pipelineResult?.suggestions.length).toBeGreaterThanOrEqual(0);
   });
 

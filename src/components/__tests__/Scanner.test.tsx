@@ -393,14 +393,32 @@ describe('Scanner', () => {
       createWorkerShouldFail = true;
       ocrText = 'ISBN 978-0-14-103614-4';
 
-      const onScan = vi.fn();
-      renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
+      // Use fake timers to fast-forward the exponential-backoff retry delays in
+      // the 2-worker pool; without them the retries take 15+ seconds.
+      vi.useFakeTimers();
+      try {
+        const onScan = vi.fn();
+        renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
-      const capture = screen.getByRole('button', { name: /capture and scan/i });
-      await waitFor(() => expect(capture).not.toBeDisabled());
-      await act(async () => { fireEvent.click(capture); });
+        // Drain microtasks: webcam mock fires onUserMedia via Promise.resolve()
+        await act(async () => { await Promise.resolve(); });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 10000 });
+        const capture = screen.getByRole('button', { name: /capture and scan/i });
+
+        await act(async () => {
+          fireEvent.click(capture);
+          // Advance timers by 20 s to skip retry backoff delays (~15.5 s for 6
+          // retries: 500+1000+2000+4000+8000ms).  The barcode scanner's 100ms
+          // recursive loop fires ~200× during this window but is always finite;
+          // using advanceTimersByTimeAsync instead of runAllTimersAsync avoids
+          // the "infinite loop" guard triggered by the recursive scanner loop.
+          await vi.advanceTimersByTimeAsync(20000);
+        });
+
+        expect(onScan).toHaveBeenCalledWith('9780141036144');
+      } finally {
+        vi.useRealTimers();
+      }
     }, 15000);
 
     it('recovers when worker.recognize throws', async () => {
@@ -692,41 +710,53 @@ describe('Scanner', () => {
       expect(statusText).toBeInTheDocument();
     });
 
-    it('renders language selector with English, German, Both', async () => {
+    it('renders profile selector with scan profile options', async () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /capture and scan/i })).toBeInTheDocument();
       });
 
-      expect(screen.getByRole('button', { name: /^English$/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /^German$/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /^Both$/ })).toBeInTheDocument();
+      // Profile trigger button should be present
+      const profileBtn = screen.getByTitle('Switch scan profile');
+      expect(profileBtn).toBeInTheDocument();
+      expect(profileBtn).toHaveAttribute('aria-haspopup', 'listbox');
+
+      // Clicking it reveals profile options
+      fireEvent.click(profileBtn);
+      expect(screen.getByRole('listbox', { name: /select scan profile/i })).toBeInTheDocument();
+      expect(screen.getAllByRole('option').length).toBeGreaterThanOrEqual(2);
     });
 
-    it('Both is selected by default for language', async () => {
+    it('Standard profile is active by default', async () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /capture and scan/i })).toBeInTheDocument();
       });
 
-      const bothBtn = screen.getByRole('button', { name: /^Both$/ });
-      expect(bothBtn).toHaveAttribute('aria-pressed', 'true');
+      // The profile button shows the active profile's name ("Standard")
+      const profileBtn = screen.getByTitle('Switch scan profile');
+      expect(profileBtn).toHaveTextContent('Standard');
     });
 
-    it('selecting German updates language button state', async () => {
+    it('selecting a profile updates the profile button label', async () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /capture and scan/i })).toBeInTheDocument();
       });
 
-      const germanBtn = screen.getByRole('button', { name: /^German$/ });
-      fireEvent.click(germanBtn);
+      // Open the profile menu
+      fireEvent.click(screen.getByTitle('Switch scan profile'));
 
-      expect(germanBtn).toHaveAttribute('aria-pressed', 'true');
-      expect(screen.getByRole('button', { name: /^Both$/ })).toHaveAttribute('aria-pressed', 'false');
+      // Select the "Barcode Only" profile
+      const barcodeOption = screen.getByRole('option', { name: /Barcode Only/i });
+      fireEvent.click(barcodeOption);
+
+      // Profile button should now show "Barcode Only"
+      const profileBtn = screen.getByTitle('Switch scan profile');
+      expect(profileBtn).toHaveTextContent('Barcode Only');
     });
   });
 });

@@ -28,9 +28,12 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        // Exclude WASM core files from precache — they're ~3.8 MB each and
-        // the browser only needs ONE variant. Let the HTTP cache handle them.
+        // Include the locally-served language data so OCR works offline.
+        // Exclude WASM core files — ~3.8 MB each, browser picks ONE variant.
         globIgnores: ['**/tesseract/*.wasm.js'],
+        additionalManifestEntries: [
+          { url: `${base}tesseract/eng.traineddata.gz`, revision: null },
+        ],
         runtimeCaching: [
           {
             // Tesseract.js WASM core files from CDN (loaded by the OCR web worker)

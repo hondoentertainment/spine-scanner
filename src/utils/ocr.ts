@@ -194,13 +194,22 @@ export const extractIsbnCandidates = (text: string): string[] => {
   }
 
   // ── Pass 4: Sliding window for dense/concatenated text ──────
-  // For ISBN-13 starting with 978/979.
-  // ocrAggressive is excluded — too many false positives from prose.
+  // 4a: ISBN-13 starting with 978/979 (digits only).
+  // ocrAggressive excluded — too many false positives from prose.
   for (const source of [text, normalized, ocrFixed]) {
     const digitsOnly = source.replace(/[^0-9]/g, '');
     for (let i = 0; i <= digitsOnly.length - 13; i++) {
       const chunk = digitsOnly.substring(i, i + 13);
       if ((chunk.startsWith('978') || chunk.startsWith('979')) && /^\d{13}$/.test(chunk)) {
+        candidates.push(chunk);
+      }
+    }
+    // 4b: ISBN-10 with X check digit embedded in dense text.
+    // Only scan sequences that end with X — the sole position X is valid.
+    const digitsX = source.replace(/[^0-9X]/g, '');
+    for (let i = 0; i <= digitsX.length - 10; i++) {
+      const chunk = digitsX.substring(i, i + 10);
+      if (/^\d{9}X$/.test(chunk)) {
         candidates.push(chunk);
       }
     }

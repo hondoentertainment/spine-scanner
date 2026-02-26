@@ -20,6 +20,24 @@ export interface Shelf {
   color: string;
 }
 
+/** Named OCR scan configuration profile. */
+export interface OcrProfile {
+  id: string;
+  name: string;
+  scanMode: 'auto' | 'barcode' | 'ocr';
+  ocrLanguage: 'en' | 'de' | 'both';
+  /** Built-in profiles cannot be deleted, only switched away from. */
+  isBuiltIn?: boolean;
+}
+
+/** Factory defaults — always available, never editable by the user. */
+export const BUILTIN_OCR_PROFILES: OcrProfile[] = [
+  { id: 'standard',    name: 'Standard',      scanMode: 'auto',    ocrLanguage: 'both', isBuiltIn: true },
+  { id: 'barcode',     name: 'Barcode Only',  scanMode: 'barcode', ocrLanguage: 'en',   isBuiltIn: true },
+  { id: 'ocr-en',      name: 'OCR (English)', scanMode: 'ocr',     ocrLanguage: 'en',   isBuiltIn: true },
+  { id: 'multilingual',name: 'Multilingual',  scanMode: 'auto',    ocrLanguage: 'both', isBuiltIn: true },
+];
+
 export const SHELF_COLORS = [
   '#6366f1', // indigo
   '#f43f5e', // rose
