@@ -445,8 +445,8 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const getSimpleHint = (): string => {
         if (liveQualityHint === 'ready') return 'Ready — tap Scan';
         if (liveQualityHint === 'blurry') return 'Hold steady...';
-        if (liveQualityHint === 'dark') return 'Need more light';
-        if (liveQualityHint === 'blurry-dark') return 'Hold steady, need more light';
+        if (liveQualityHint === 'dark') return torchSupported && !torchOn ? 'Too dark — tap flashlight' : 'Need more light';
+        if (liveQualityHint === 'blurry-dark') return torchSupported && !torchOn ? 'Hold steady — tap flashlight' : 'Hold steady, need more light';
         return 'Center the barcode in the frame';
     };
 
@@ -629,7 +629,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                         </button>
                         {showManual && (
                             <form onSubmit={handleManualSubmit} className={s.manualForm}>
-                                <input type="text" inputMode="numeric" placeholder="Enter ISBN..." value={manualIsbn}
+                                <input type="text" inputMode="text" pattern="[0-9Xx\-]{10,17}" placeholder="Enter ISBN..." value={manualIsbn}
                                     onChange={(e) => setManualIsbn(e.target.value)} aria-label="Enter ISBN manually"
                                     className={`glass ${s.manualInput}`} autoFocus />
                                 <button type="submit" disabled={manualIsbn.length < 5 || isScanning}
@@ -643,7 +643,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                     /* ── Manual ISBN entry (full-width form) ── */
                     <div className={s.manualSection}>
                         <form onSubmit={handleManualSubmit} className={s.manualForm}>
-                            <input type="text" inputMode="numeric" placeholder="Type ISBN number..." value={manualIsbn}
+                            <input type="text" inputMode="text" pattern="[0-9Xx\-]{10,17}" placeholder="Type ISBN number..." value={manualIsbn}
                                 onChange={(e) => setManualIsbn(e.target.value)} aria-label="Enter ISBN manually"
                                 className={`glass ${s.manualInput}`} autoFocus />
                             <button type="submit" disabled={manualIsbn.length < 5 || isScanning}

@@ -77,7 +77,7 @@
 .barcodeGuide {
   position: relative;
   width: min(80%, 320px);
-  height: 120px;
+  height: clamp(80px, 18vh, 140px);
   border: 2px solid rgba(255, 255, 255, 0.5);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
@@ -167,7 +167,7 @@
 .torchBtn {
   position: absolute;
   top: 0.75rem;
-  left: 3.5rem;
+  right: 3.5rem;
   padding: 0.625rem;
   border-radius: 50%;
   color: white;
@@ -839,6 +839,52 @@
 
 .scanningTipsList li:last-child {
   margin-bottom: 0;
+}
+
+/* ── Focus-visible & active states (accessibility + tactile feedback) ── */
+
+.primaryBtn:focus-visible,
+.secondaryBtn:focus-visible,
+.suggestionBtn:focus-visible,
+.torchBtn:focus-visible,
+.cancelScanBtn:focus-visible,
+.submitBtn:focus-visible,
+.backToScanBtn:focus-visible,
+.toolBtn:focus-visible,
+.debugBtn:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+.secondaryBtn:active:not(:disabled),
+.suggestionBtn:active:not(:disabled),
+.cancelScanBtn:active:not(:disabled),
+.submitBtn:active:not(:disabled),
+.toolBtn:active:not(:disabled),
+.torchBtn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+/* ── Monospace ISBN digits in suggestion buttons ── */
+
+.suggestionBtn {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', Menlo, Consolas, monospace;
+  letter-spacing: 0.02em;
+}
+
+/* ── Prevent text selection on interactive elements ── */
+
+.primaryBtn,
+.secondaryBtn,
+.suggestionBtn,
+.torchBtn,
+.cancelScanBtn,
+.toolBtn,
+.scanIndicator,
+.guideHint {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* ── Legacy class aliases (keep tests passing) ── */
