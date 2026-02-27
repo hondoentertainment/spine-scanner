@@ -7,10 +7,9 @@ test.describe('SpineScanner App', () => {
 
   test('renders the app title and navigation', async ({ page }) => {
     await expect(page.locator('h1')).toContainText('SpineScanner');
-    // Navigation buttons should be present
-    await expect(page.getByRole('button', { name: /scanner/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /library/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /data/i })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /scanner/i })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /library/i })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /data/i })).toBeVisible();
   });
 
   test('scanner view is shown by default', async ({ page }) => {
@@ -18,17 +17,17 @@ test.describe('SpineScanner App', () => {
   });
 
   test('can navigate to Library view', async ({ page }) => {
-    await page.getByRole('button', { name: /library/i }).click();
+    await page.getByRole('tab', { name: /library/i }).click();
     await expect(page.getByRole('heading', { name: /Your Library/ })).toBeVisible();
   });
 
   test('can navigate to Data view', async ({ page }) => {
-    await page.getByRole('button', { name: /data/i }).click();
+    await page.getByRole('tab', { name: /data/i }).click();
     await expect(page.getByText('Manage Library Data')).toBeVisible();
   });
 
   test('library shows empty state when no books', async ({ page }) => {
-    await page.getByRole('button', { name: /library/i }).click();
+    await page.getByRole('tab', { name: /library/i }).click();
     await expect(page.getByText(/your library is empty/i)).toBeVisible();
   });
 
@@ -51,17 +50,15 @@ test.describe('SpineScanner App', () => {
   });
 
   test('manual ISBN input is accessible', async ({ page }) => {
-    // Click the manual entry button (icon button with aria-label, or fallback "Enter ISBN manually" text)
-    const manualBtn = page.getByRole('button', { name: /manual isbn entry|enter isbn manually/i }).first();
+    const manualBtn = page.getByRole('button', { name: /type isbn/i }).first();
     await expect(manualBtn).toBeVisible();
     await manualBtn.click();
 
-    // Manual input should appear
     await expect(page.getByRole('textbox', { name: /enter isbn manually/i })).toBeVisible();
   });
 
   test('search input in library works', async ({ page }) => {
-    await page.getByRole('button', { name: /library/i }).click();
+    await page.getByRole('tab', { name: /library/i }).click();
     const search = page.getByRole('textbox', { name: /search library/i });
     await expect(search).toBeVisible();
     await search.fill('Test');
@@ -69,14 +66,14 @@ test.describe('SpineScanner App', () => {
   });
 
   test('data export section is visible', async ({ page }) => {
-    await page.getByRole('button', { name: /data/i }).click();
+    await page.getByRole('tab', { name: /data/i }).click();
     await expect(page.getByText('Export Library')).toBeVisible();
     await expect(page.getByText('Import from File')).toBeVisible();
     await expect(page.getByText('Import from Web')).toBeVisible();
   });
 
   test('library status filters are visible', async ({ page }) => {
-    await page.getByRole('button', { name: /library/i }).click();
+    await page.getByRole('tab', { name: /library/i }).click();
     await expect(page.getByRole('button', { name: /all/i }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: /to read/i })).toBeVisible();
     // Filter button shows "Reading (0)" — avoid matching "Toggle reading statistics"
@@ -84,7 +81,7 @@ test.describe('SpineScanner App', () => {
   });
 
   test('can switch between grid and list view', async ({ page }) => {
-    await page.getByRole('button', { name: /library/i }).click();
+    await page.getByRole('tab', { name: /library/i }).click();
     const listBtn = page.getByRole('button', { name: /list view/i });
     const gridBtn = page.getByRole('button', { name: /grid view/i });
     await expect(gridBtn).toBeVisible();
@@ -96,7 +93,7 @@ test.describe('SpineScanner App', () => {
   });
 
   test('shelf manager toggles', async ({ page }) => {
-    await page.getByRole('button', { name: /library/i }).click();
+    await page.getByRole('tab', { name: /library/i }).click();
     const shelfToggle = page.getByRole('button', { name: /toggle shelf manager/i });
     await shelfToggle.click();
     await expect(page.getByText('Shelves', { exact: true })).toBeVisible();
@@ -104,7 +101,7 @@ test.describe('SpineScanner App', () => {
   });
 
   test('data management can be closed', async ({ page }) => {
-    await page.getByRole('button', { name: /data/i }).click();
+    await page.getByRole('tab', { name: /data/i }).click();
     await expect(page.getByText('Manage Library Data')).toBeVisible();
     await page.getByRole('button', { name: /close data management/i }).click();
     // Should navigate back to library
@@ -124,7 +121,7 @@ test.describe('SpineScanner App', () => {
     await context.route(/openlibrary\.org\/api\/books/, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) }));
 
     // Open manual ISBN entry
-    const manualBtn = page.getByRole('button', { name: /manual isbn entry|enter isbn manually/i }).first();
+    const manualBtn = page.getByRole('button', { name: /type isbn/i }).first();
     await manualBtn.click();
     await expect(page.getByRole('textbox', { name: /enter isbn/i })).toBeVisible();
 

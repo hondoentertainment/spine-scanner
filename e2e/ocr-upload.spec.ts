@@ -53,7 +53,7 @@ test.describe('OCR photo upload', () => {
     });
 
     // Verify book appears in library
-    await page.getByRole('button', { name: /library/i }).click();
+    await page.getByRole('tab', { name: /library/i }).click();
     await expect(page.getByRole('heading', { name: /Your Library/ })).toBeVisible();
     await expect(page.getByText(mockTitle)).toBeVisible({ timeout: 5000 });
   });
