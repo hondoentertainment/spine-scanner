@@ -233,17 +233,16 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Camera error: Permission denied/i)).toBeInTheDocument();
+        expect(screen.getByText(/Can't access camera: Permission denied/i)).toBeInTheDocument();
       });
 
-      // Capture button should be replaced by upload + manual entry fallback
-      expect(screen.queryByRole('button', { name: /capture and scan/i })).not.toBeInTheDocument();
-      expect(screen.getByText(/Take Photo \/ Upload/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /scan book/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /upload a photo/i })).toBeInTheDocument();
     });
 
     it('enables capture after camera is ready', async () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
-      const capture = screen.getByRole('button', { name: /capture and scan/i });
+      const capture = screen.getByRole('button', { name: /scan book/i });
       await waitFor(() => expect(capture).not.toBeDisabled());
     });
 
@@ -254,7 +253,7 @@ describe('Scanner', () => {
 
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
 
-      const capture = screen.getByRole('button', { name: /capture and scan/i });
+      const capture = screen.getByRole('button', { name: /scan book/i });
       await waitFor(() => expect(capture).not.toBeDisabled());
 
       await act(async () => { fireEvent.click(capture); });
@@ -274,7 +273,7 @@ describe('Scanner', () => {
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
-      const capture = screen.getByRole('button', { name: /capture and scan/i });
+      const capture = screen.getByRole('button', { name: /scan book/i });
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
@@ -288,7 +287,7 @@ describe('Scanner', () => {
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
-      const capture = screen.getByRole('button', { name: /capture and scan/i });
+      const capture = screen.getByRole('button', { name: /scan book/i });
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
@@ -304,7 +303,7 @@ describe('Scanner', () => {
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
-      const capture = screen.getByRole('button', { name: /capture and scan/i });
+      const capture = screen.getByRole('button', { name: /scan book/i });
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
@@ -320,7 +319,7 @@ describe('Scanner', () => {
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
-      const capture = screen.getByRole('button', { name: /capture and scan/i });
+      const capture = screen.getByRole('button', { name: /scan book/i });
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
@@ -334,7 +333,7 @@ describe('Scanner', () => {
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
-      const capture = screen.getByRole('button', { name: /capture and scan/i });
+      const capture = screen.getByRole('button', { name: /scan book/i });
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
@@ -352,7 +351,7 @@ describe('Scanner', () => {
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
-      const capture = screen.getByRole('button', { name: /capture and scan/i });
+      const capture = screen.getByRole('button', { name: /scan book/i });
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
@@ -376,7 +375,7 @@ describe('Scanner', () => {
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
-      const capture = screen.getByRole('button', { name: /capture and scan/i });
+      const capture = screen.getByRole('button', { name: /scan book/i });
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
@@ -385,7 +384,7 @@ describe('Scanner', () => {
       // onScan should never have been called
       expect(onScan).not.toHaveBeenCalled();
       // Manual entry form should have been shown (the "no candidates" path sets showManual)
-      expect(screen.getByPlaceholderText(/enter isbn/i)).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/type isbn/i)).toBeInTheDocument();
     }, 15000);
   });
 
@@ -398,7 +397,7 @@ describe('Scanner', () => {
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
-      const capture = screen.getByRole('button', { name: /capture and scan/i });
+      const capture = screen.getByRole('button', { name: /scan book/i });
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
@@ -412,7 +411,7 @@ describe('Scanner', () => {
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
-      const capture = screen.getByRole('button', { name: /capture and scan/i });
+      const capture = screen.getByRole('button', { name: /scan book/i });
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
@@ -424,16 +423,16 @@ describe('Scanner', () => {
   describe('manual ISBN entry', () => {
     it('opens manual entry form', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
-      fireEvent.click(screen.getByRole('button', { name: /manual isbn entry/i }));
-      expect(screen.getByPlaceholderText(/enter isbn/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
+      expect(screen.getByPlaceholderText(/type isbn/i)).toBeInTheDocument();
     });
 
     it('submits valid manual ISBN', () => {
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
-      fireEvent.click(screen.getByRole('button', { name: /manual isbn entry/i }));
-      fireEvent.change(screen.getByPlaceholderText(/enter isbn/i), { target: { value: '9780141036144' } });
+      fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
+      fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '9780141036144' } });
       fireEvent.click(screen.getByRole('button', { name: /submit isbn/i }));
 
       expect(onScan).toHaveBeenCalledWith('9780141036144');
@@ -443,8 +442,8 @@ describe('Scanner', () => {
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
-      fireEvent.click(screen.getByRole('button', { name: /manual isbn entry/i }));
-      fireEvent.change(screen.getByPlaceholderText(/enter isbn/i), { target: { value: '123456' } });
+      fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
+      fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '123456' } });
       fireEvent.click(screen.getByRole('button', { name: /submit isbn/i }));
 
       expect(onScan).not.toHaveBeenCalled();
@@ -454,8 +453,8 @@ describe('Scanner', () => {
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
-      fireEvent.click(screen.getByRole('button', { name: /manual isbn entry/i }));
-      fireEvent.change(screen.getByPlaceholderText(/enter isbn/i), { target: { value: '9780141036145' } });
+      fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
+      fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '9780141036145' } });
       fireEvent.click(screen.getByRole('button', { name: /submit isbn/i }));
 
       expect(onScan).not.toHaveBeenCalled();
@@ -465,8 +464,8 @@ describe('Scanner', () => {
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
-      fireEvent.click(screen.getByRole('button', { name: /manual isbn entry/i }));
-      fireEvent.change(screen.getByPlaceholderText(/enter isbn/i), { target: { value: '0743273567' } });
+      fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
+      fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '0743273567' } });
       fireEvent.click(screen.getByRole('button', { name: /submit isbn/i }));
 
       expect(onScan).toHaveBeenCalledWith('0743273567');
@@ -474,11 +473,11 @@ describe('Scanner', () => {
 
     it('closes manual form', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
-      fireEvent.click(screen.getByRole('button', { name: /manual isbn entry/i }));
-      expect(screen.getByPlaceholderText(/enter isbn/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
+      expect(screen.getByPlaceholderText(/type isbn/i)).toBeInTheDocument();
 
-      fireEvent.click(screen.getByText(/close/i));
-      expect(screen.queryByPlaceholderText(/enter isbn/i)).not.toBeInTheDocument();
+      fireEvent.click(screen.getByText(/back to scanning/i));
+      expect(screen.queryByPlaceholderText(/type isbn/i)).not.toBeInTheDocument();
     });
   });
 
@@ -495,17 +494,11 @@ describe('Scanner', () => {
     });
   });
 
-  /* ── Auto-scan controls ────────────────────────────────────── */
-  describe('auto-scan', () => {
-    it('has auto-scan toggle', () => {
-      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
-      expect(screen.getByRole('button', { name: /start auto.*scan/i })).toBeInTheDocument();
-    });
-
+  /* ── Scan controls ─────────────────────────────────────────── */
+  describe('scan controls', () => {
     it('disables capture while isScanning is true', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={true} />);
-      // When isScanning (book lookup in progress), capture should be disabled
-      const btn = screen.getByRole('button', { name: /capture and scan|scanning in progress/i });
+      const btn = screen.getByRole('button', { name: /scan book|scanning in progress/i });
       expect(btn).toBeDisabled();
     });
   });
@@ -537,7 +530,7 @@ describe('Scanner', () => {
 
     it('shows upload button alongside capture when camera works', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
-      expect(screen.getByLabelText('Upload photo of ISBN')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /upload photo/i })).toBeInTheDocument();
     });
 
     it('renders hidden file input with correct attributes', () => {
@@ -557,7 +550,7 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
       await waitFor(() => {
-        expect(screen.getByLabelText('Upload photo of ISBN')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /upload photo/i })).toBeInTheDocument();
       });
 
       const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
@@ -578,7 +571,7 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
       await waitFor(() => {
-        expect(screen.getByLabelText('Upload photo of ISBN')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /upload photo/i })).toBeInTheDocument();
       });
 
       const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
@@ -605,14 +598,13 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Take Photo \/ Upload/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /upload a photo/i })).toBeInTheDocument();
       });
-      // Manual entry text may appear in both the error message link and the fallback button
-      const manualEntryElements = screen.getAllByText(/Enter ISBN manually/);
+      const manualEntryElements = screen.getAllByText(/Type ISBN manually/i);
       expect(manualEntryElements.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('hides capture and auto-scan buttons when camera fails', async () => {
+    it('hides scan button when camera fails', async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mod = await import('react-webcam') as any;
       mod.__setWebcamState({
@@ -623,11 +615,10 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Take Photo \/ Upload/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /upload a photo/i })).toBeInTheDocument();
       });
 
-      expect(screen.queryByRole('button', { name: /capture and scan/i })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /start auto-scan/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /scan book/i })).not.toBeInTheDocument();
     });
 
     it('shows status message about alternatives', async () => {
@@ -641,7 +632,7 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/upload a photo or enter ISBN manually/i)).toBeInTheDocument();
+        expect(screen.getByText(/upload a photo or type the ISBN/i)).toBeInTheDocument();
       });
     });
 
@@ -657,7 +648,7 @@ describe('Scanner', () => {
 
       // Camera error message should appear
       await waitFor(() => {
-        expect(screen.getByText(/Camera error: Device not found/)).toBeInTheDocument();
+        expect(screen.getByText(/Can't access camera: Device not found/)).toBeInTheDocument();
       });
 
       fireEvent.click(screen.getByRole('button', { name: /show debug logs/i }));
@@ -670,16 +661,16 @@ describe('Scanner', () => {
     });
   });
 
-  /* ── OCR enhancements: progress, language, accessibility ──── */
+  /* ── OCR enhancements: accessibility ──────────────────────── */
   describe('OCR enhancements', () => {
     it('capture button has aria-describedby linking to status text', async () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /capture and scan/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /scan book/i })).toBeInTheDocument();
       });
 
-      const captureBtn = screen.getByRole('button', { name: /capture and scan/i });
+      const captureBtn = screen.getByRole('button', { name: /scan book/i });
       expect(captureBtn).toHaveAttribute('aria-describedby', 'status-text');
     });
 
@@ -687,48 +678,11 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /capture and scan/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /scan book/i })).toBeInTheDocument();
       });
 
       const statusText = document.getElementById('status-text');
       expect(statusText).toBeInTheDocument();
-    });
-
-    it('renders language selector with English, German, Both', async () => {
-      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
-
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /capture and scan/i })).toBeInTheDocument();
-      });
-
-      expect(screen.getByRole('button', { name: /^English$/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /^German$/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /^Both$/ })).toBeInTheDocument();
-    });
-
-    it('Both is selected by default for language', async () => {
-      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
-
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /capture and scan/i })).toBeInTheDocument();
-      });
-
-      const bothBtn = screen.getByRole('button', { name: /^Both$/ });
-      expect(bothBtn).toHaveAttribute('aria-pressed', 'true');
-    });
-
-    it('selecting German updates language button state', async () => {
-      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
-
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /capture and scan/i })).toBeInTheDocument();
-      });
-
-      const germanBtn = screen.getByRole('button', { name: /^German$/ });
-      fireEvent.click(germanBtn);
-
-      expect(germanBtn).toHaveAttribute('aria-pressed', 'true');
-      expect(screen.getByRole('button', { name: /^Both$/ })).toHaveAttribute('aria-pressed', 'false');
     });
   });
 });
