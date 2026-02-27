@@ -1,13 +1,13 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
-import { Camera, Loader2, Edit3, Check, ImagePlus, Zap, Image as ImageIcon, Flashlight, X } from 'lucide-react';
+import { Camera, Loader2, Edit3, Check, ImagePlus, Zap, Image as ImageIcon, X } from 'lucide-react';
 import { isValidIsbn } from '../utils/isbnValidation.ts';
 import { getNearMissCandidates } from '../utils/ocr.ts';
 import { useToast } from './Toast.tsx';
 import { useOcrEngine } from '../hooks/useOcrEngine.ts';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner.ts';
 import { useFrameAveraging } from '../hooks/useFrameAveraging.ts';
-import { useScanPipeline, isLowResolution, assessVideoFrameQuality, CROP_MEDIUM, type OcrLanguage, type ScanProgress, type RunPipelineOptions } from '../hooks/useScanPipeline.ts';
+import { useScanPipeline, assessVideoFrameQuality, CROP_MEDIUM, type OcrLanguage, type ScanProgress, type RunPipelineOptions } from '../hooks/useScanPipeline.ts';
 import { buildErrorDiagnostics, formatDiagnostics } from '../utils/ocrDiagnostics.ts';
 import type { LiveScanTelemetry } from '../hooks/useBarcodeScanner.ts';
 import { hapticSuccess, hapticFailure, hapticHoldSteady } from '../utils/haptics.ts';
@@ -60,18 +60,13 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const [showDebug, setShowDebug] = useState(false);
     const [autoScan, setAutoScan] = useState(false);
     const [liveTelemetry, setLiveTelemetry] = useState<LiveScanTelemetry>({ ...EMPTY_TELEMETRY });
-    const [cameraResolution, setCameraResolution] = useState<{ width: number; height: number } | null>(null);
-    const [torchOn, setTorchOn] = useState(false);
-    const [hasTorch, setHasTorch] = useState(false);
     const [liveQualityHint, setLiveQualityHint] = useState<'ready' | 'blurry' | 'dark' | 'blurry-dark' | null>(null);
-    const [torchWarningShown, setTorchWarningShown] = useState(false);
     const [, setOcrReady] = useState(false);
     const [ocrLanguage] = useState<OcrLanguage>('both');
     const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
     const [scanSuccessFlash, setScanSuccessFlash] = useState(false);
     const [successAnnouncement, setSuccessAnnouncement] = useState('');
     const [ocrFallbackDismissed, setOcrFallbackDismissed] = useState(false);
-    const videoTrackRef = useRef<MediaStreamTrack | null>(null);
 
     const abortControllerRef = useRef<AbortController | null>(null);
     useEffect(() => {
@@ -110,7 +105,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     });
 
     const isBusy = useCallback(() => processingRef.current || isScanning, [isScanning]);
-    const { tryBarcodeDecode, continuousActiveRef, setTelemetryCallback, refocus } = useBarcodeScanner({
+    const { tryBarcodeDecode, continuousActiveRef, setTelemetryCallback } = useBarcodeScanner({
         addLog, onScan, isScanning, cameraReady, cameraError,
         webcamRef: webcamRef as React.RefObject<Webcam | null>,
         isBusy,
@@ -273,29 +268,6 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
         }
     }, [onScan, isScanning, runPipeline, addLog, toastDetail, debugLogs, batchModeProp, captureAveragedFrame]);
 
-    const toggleTorch = useCallback(() => {
-        const track = videoTrackRef.current;
-        if (!track) return;
-        const caps = track.getCapabilities?.() as Record<string, unknown> | undefined;
-        if (!caps?.torch) {
-            addLog('Torch not supported on this device');
-            return;
-        }
-        hapticHoldSteady();
-        const next = !torchOn;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        track.applyConstraints({ advanced: [{ torch: next }] } as any)
-            .then(() => {
-                setTorchOn(next);
-                addLog(`Torch ${next ? 'on' : 'off'}`);
-                if (next && !torchWarningShown) {
-                    setTorchWarningShown(true);
-                    toast('Don\'t hold the light too close — it can cause glare.', 'info');
-                }
-            })
-            .catch(() => addLog('Torch toggle failed'));
-    }, [torchOn, torchWarningShown, addLog, toast]);
-
     const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || processingRef.current || isScanning) return;
@@ -384,32 +356,6 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
             setProcessing(false);
         }
     }, [onScan, isScanning, runPipeline, addLog, toastDetail, debugLogs]);
-
-    const capturePhotoOnly = useCallback(() => {
-        if (!onPhotoCapture || processingRef.current || isScanning) return;
-
-        const video = webcamRef.current?.video as HTMLVideoElement | undefined;
-        const screenshot = webcamRef.current?.getScreenshot?.();
-
-        if (screenshot) {
-            addLog('Photo-only capture from camera');
-            onPhotoCapture(screenshot);
-            return;
-        }
-        if (video && video.readyState >= 2 && canvasRef.current) {
-            const canvas = canvasRef.current;
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.drawImage(video, 0, 0);
-                addLog('Photo-only capture from video frame');
-                onPhotoCapture(canvas.toDataURL('image/jpeg', 0.92));
-                return;
-            }
-        }
-        photoOnlyInputRef.current?.click();
-    }, [onPhotoCapture, isScanning, addLog]);
 
     const handlePhotoOnlyFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -513,12 +459,11 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                     try {
                         const track = stream.getVideoTracks()[0];
                         if (track) {
-                            videoTrackRef.current = track;
                             const caps = track.getCapabilities?.() as Record<string, unknown> | undefined;
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             const advanced: Record<string, any> = {};
                             if (caps?.focusMode) advanced.focusMode = 'continuous';
-                            if (caps?.torch) { advanced.torch = false; setHasTorch(true); }
+                            if (caps?.torch) advanced.torch = false;
                             if (Object.keys(advanced).length > 0) {
                                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                 track.applyConstraints({ advanced: [advanced] } as any)
@@ -528,14 +473,11 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                             const settings = track.getSettings();
                             const w = settings.width ?? 0;
                             const h = settings.height ?? 0;
-                            setCameraResolution(w && h ? { width: w, height: h } : null);
                             addLog(`Camera: ${w}x${h}${settings.facingMode ? ` (${settings.facingMode})` : ''}`);
                         }
                     } catch { /* best effort */ }
                 }}
                 onUserMediaError={(err) => {
-                    videoTrackRef.current = null;
-                    setHasTorch(false);
                     const msg = err instanceof Error ? err.message : 'Camera access denied';
                     setCameraError(`Can't access camera: ${msg}`);
                     setStatus('No camera — upload a photo or type the ISBN');
