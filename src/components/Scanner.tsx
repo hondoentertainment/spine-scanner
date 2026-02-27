@@ -1,6 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
-import { Camera, Loader2, Edit3, Check, Play, Square, ImagePlus, Zap, Image as ImageIcon, Focus, Flashlight, Barcode, Type, Activity, X, Info, ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
+import { Camera, Loader2, Edit3, Check, ImagePlus, Zap, Image as ImageIcon, Flashlight, X } from 'lucide-react';
 import { isValidIsbn } from '../utils/isbnValidation.ts';
 import { getNearMissCandidates } from '../utils/ocr.ts';
 import { useToast } from './Toast.tsx';
@@ -64,15 +64,13 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const [torchOn, setTorchOn] = useState(false);
     const [hasTorch, setHasTorch] = useState(false);
     const [liveQualityHint, setLiveQualityHint] = useState<'ready' | 'blurry' | 'dark' | 'blurry-dark' | null>(null);
-    const [scanMode, setScanMode] = useState<ScanMode>('auto');
     const [torchWarningShown, setTorchWarningShown] = useState(false);
     const [, setOcrReady] = useState(false);
-    const [ocrLanguage, setOcrLanguage] = useState<OcrLanguage>('both');
+    const [ocrLanguage] = useState<OcrLanguage>('both');
     const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
     const [scanSuccessFlash, setScanSuccessFlash] = useState(false);
     const [successAnnouncement, setSuccessAnnouncement] = useState('');
     const [ocrFallbackDismissed, setOcrFallbackDismissed] = useState(false);
-    const [showAdvanced, setShowAdvanced] = useState(false);
     const videoTrackRef = useRef<MediaStreamTrack | null>(null);
 
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -714,111 +712,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                             </button>
                         </div>
 
-                        {/* Advanced options (collapsed by default) */}
-                        <details className={s.advancedSection} open={showAdvanced} onToggle={(e) => setShowAdvanced((e.target as HTMLDetailsElement).open)}>
-                            <summary className={s.advancedSummary}>
-                                <Settings2 size={14} />
-                                <span>More options</span>
-                                <span className={s.tipsChevronDown}><ChevronDown size={14} aria-hidden /></span>
-                                <span className={s.tipsChevronUp}><ChevronUp size={14} aria-hidden /></span>
-                            </summary>
-                            <div className={s.advancedContent}>
-                                {/* Scan mode toggle */}
-                                <div className={s.optionRow}>
-                                    <span className={s.optionLabel}>Scan mode</span>
-                                    <div className={s.optionBtns}>
-                                        <button type="button" onClick={() => setScanMode('auto')} aria-pressed={scanMode === 'auto'}
-                                            className={`${s.optionBtn} ${scanMode === 'auto' ? s.optionBtnActive : ''}`}>
-                                            <Zap size={14} /> Auto
-                                        </button>
-                                        <button type="button" onClick={() => setScanMode('barcode')} aria-pressed={scanMode === 'barcode'}
-                                            className={`${s.optionBtn} ${scanMode === 'barcode' ? s.optionBtnActive : ''}`}>
-                                            <Barcode size={14} /> Barcode
-                                        </button>
-                                        <button type="button" onClick={() => setScanMode('ocr')} aria-pressed={scanMode === 'ocr'}
-                                            className={`${s.optionBtn} ${scanMode === 'ocr' ? s.optionBtnActive : ''}`}>
-                                            <Type size={14} /> Text
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Language toggle */}
-                                <div className={s.optionRow}>
-                                    <span className={s.optionLabel}>Language</span>
-                                    <div className={s.optionBtns}>
-                                        <button type="button" onClick={() => setOcrLanguage('both')} aria-pressed={ocrLanguage === 'both'}
-                                            className={`${s.optionBtn} ${ocrLanguage === 'both' ? s.optionBtnActive : ''}`}>
-                                            Both
-                                        </button>
-                                        <button type="button" onClick={() => setOcrLanguage('en')} aria-pressed={ocrLanguage === 'en'}
-                                            className={`${s.optionBtn} ${ocrLanguage === 'en' ? s.optionBtnActive : ''}`}>
-                                            English
-                                        </button>
-                                        <button type="button" onClick={() => setOcrLanguage('de')} aria-pressed={ocrLanguage === 'de'}
-                                            className={`${s.optionBtn} ${ocrLanguage === 'de' ? s.optionBtnActive : ''}`}>
-                                            German
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Tool buttons */}
-                                <div className={s.toolRow}>
-                                    <button onClick={() => { hapticHoldSteady(); setAutoScan(prev => !prev); }} disabled={isScanning}
-                                        aria-label={autoScan ? 'Stop auto scan' : 'Start auto scan'}
-                                        className={`glass ${s.toolBtn} ${autoScan ? s.toolBtnActive : ''}`}>
-                                        {autoScan ? <Square size={16} /> : <Play size={16} />}
-                                        {autoScan ? 'Stop auto' : 'Auto scan'}
-                                    </button>
-                                    <button onClick={() => { hapticHoldSteady(); refocus(); }}
-                                        aria-label="Refocus camera" className={`glass ${s.toolBtn}`}>
-                                        <Focus size={16} /> Refocus
-                                    </button>
-                                    {hasTorch && (
-                                        <button onClick={toggleTorch}
-                                            aria-label={torchOn ? 'Turn off light' : 'Turn on light'}
-                                            className={`glass ${s.toolBtn} ${torchOn ? s.toolBtnActive : ''}`}>
-                                            <Flashlight size={16} /> {torchOn ? 'Light on' : 'Light'}
-                                        </button>
-                                    )}
-                                    {onPhotoCapture && (
-                                        <button onClick={() => { hapticHoldSteady(); capturePhotoOnly(); }} disabled={processing || isScanning}
-                                            aria-label="Save photo of book" className={`glass ${s.toolBtn}`}>
-                                            <ImageIcon size={16} /> Photo only
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* Status details */}
-                                <div className={s.statusDetails}>
-                                    <div className={s.cameraStatus}>
-                                        <span className={`${s.cameraDot} ${cameraReady ? s.cameraDotReady : cameraError ? s.cameraDotError : s.cameraDotPending}`} />
-                                        <span className={s.cameraLabel}>
-                                            {cameraError ? 'Camera error' : cameraReady ? 'Camera ready' : 'Camera starting'}
-                                        </span>
-                                    </div>
-                                    {ocrState === 'loading' && (
-                                        <span className={s.ocrReadyBadge} aria-live="polite">
-                                            <Loader2 size={12} className="animate-spin" /> Loading text engine…
-                                        </span>
-                                    )}
-                                    {ocrState === 'ready' && (
-                                        <span className={s.ocrReadyBadge}>
-                                            <Activity size={12} /> Text engine ready
-                                        </span>
-                                    )}
-                                    {ocrState === 'fallback' && (
-                                        <span className={s.ocrReadyBadge}>
-                                            <Activity size={12} /> Text engine (compat.)
-                                        </span>
-                                    )}
-                                    {cameraResolution && isLowResolution(cameraResolution.width) && !cameraError && (
-                                        <p className={s.resolutionHint} aria-live="polite">
-                                            Move closer for a better scan
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        </details>
+                        {/* Torch overlay is on the camera feed, not here */}
                     </>
                 )}
 
@@ -858,22 +752,6 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                     </div>
                 )}
 
-                {/* Scanning tips (simplified) */}
-                <details className={s.scanningTips}>
-                    <summary className={s.scanningTipsSummary}>
-                        <Info size={16} />
-                        <span>Tips for better scans</span>
-                        <span className={s.tipsChevronDown}><ChevronDown size={16} aria-hidden /></span>
-                        <span className={s.tipsChevronUp}><ChevronUp size={16} aria-hidden /></span>
-                    </summary>
-                    <ul className={s.scanningTipsList} aria-label="Scanning tips">
-                        <li>Hold the camera 5–10 cm from the barcode</li>
-                        <li>Make sure the barcode fills most of the frame</li>
-                        <li>Use good, even lighting (avoid glare)</li>
-                        <li>Hold steady — the app will tell you when it's ready</li>
-                        <li>For spine text, try rotating the book so the ISBN is horizontal</li>
-                    </ul>
-                </details>
             </div>
         </div>
     );
