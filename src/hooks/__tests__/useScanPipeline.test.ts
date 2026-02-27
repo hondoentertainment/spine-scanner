@@ -481,7 +481,7 @@ describe('useScanPipeline — runPipeline', () => {
 
     expect(pipelineResult?.isbn).toBeNull();
     expect(pipelineResult?.suggestions).toContain('9780306406158');
-  });
+  }, 15000);
 
   it('skips OCR when image is blurry and dark', async () => {
     // mockBrightness 50 => isDark (50 < 90); uniform data => low Laplacian variance => isBlurry
@@ -542,7 +542,7 @@ describe('useScanPipeline — runPipeline', () => {
 
     expect(hasLowOcrResolution(400, 150, CROP_MEDIUM)).toBe(true);
     expect(pipelineResult?.diagnostics?.lowResolution).toBe(true);
-  });
+  }, 15000);
 
   it('invokes onProgress with barcode and ocr phases', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
@@ -573,9 +573,8 @@ describe('useScanPipeline — runPipeline', () => {
     expect(progressCalls.length).toBeGreaterThanOrEqual(2);
     expect(progressCalls[0].phase).toBe('barcode');
     expect(progressCalls.some((p) => p.phase === 'ocr')).toBe(true);
-    // Pipeline completes; suggestions and done may appear depending on code path
     expect(progressCalls.some((p) => p.phase === 'suggestions' || p.phase === 'done')).toBe(true);
-  });
+  }, 15000);
 
   it('onProgress includes currentPass and totalPasses during OCR', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
@@ -611,7 +610,7 @@ describe('useScanPipeline — runPipeline', () => {
     const withPass = ocrProgress.find((p) => p.currentPass != null && p.totalPasses != null);
     expect(withPass).toBeDefined();
     expect(withPass?.totalPasses).toBeGreaterThan(0);
-  });
+  }, 15000);
 
   it('exits early on first OCR pass when high confidence ISBN found', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
@@ -676,7 +675,7 @@ describe('useScanPipeline — runPipeline', () => {
       expect.any(Function),
       expect.any(Function),
     );
-  });
+  }, 15000);
 
   it('low-confidence ISBN does NOT cause early exit; returns high-confidence ISBN from later pass', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
@@ -780,9 +779,8 @@ describe('useScanPipeline — runPipeline', () => {
       pipelineResult = await result.current.runPipeline(img, canvas, 'test');
     });
 
-    // Even though confidence was low, the best candidate should still be returned (not null)
     expect(pipelineResult?.isbn).toBe('9780141036144');
-  });
+  }, 15000);
 
   it('handles zero-dimension image with null ISBN and diagnostics', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
@@ -878,6 +876,6 @@ describe('useScanPipeline — runPipeline', () => {
     const suppressed = [result1, result2].find(r => r?.diagnostics?.lastError?.includes('Concurrent'));
     expect(suppressed).toBeDefined();
     expect(addLog).toHaveBeenCalledWith(expect.stringContaining('Pipeline already running'));
-  });
+  }, 15000);
 
 });

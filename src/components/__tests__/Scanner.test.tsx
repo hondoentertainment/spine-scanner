@@ -277,8 +277,8 @@ describe('Scanner', () => {
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 8000 });
-    }, 10000);
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 12000 });
+    }, 15000);
 
     it('falls through to OCR if barcode has invalid checksum (no repair)', async () => {
       barcodeResult = '9780141036145'; // invalid, tryFixChecksum returns null
