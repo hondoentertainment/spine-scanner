@@ -386,7 +386,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
 
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const cleanIsbn = manualIsbn.replace(/[^0-9X]/g, '');
+        const cleanIsbn = manualIsbn.toUpperCase().replace(/[^0-9X]/g, '');
         if (cleanIsbn.length !== 10 && cleanIsbn.length !== 13) {
             toast('Enter a 10 or 13 digit ISBN.', 'warning');
             return;
