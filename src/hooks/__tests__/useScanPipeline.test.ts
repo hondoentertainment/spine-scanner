@@ -7,6 +7,7 @@ import {
   assessFrameQuality,
   hasLowOcrResolution,
   buildOcrPasses,
+  getQualityHints,
   CROP_NARROW,
   CROP_MEDIUM,
   CROP_WIDE,
@@ -146,6 +147,65 @@ describe('useScanPipeline — buildOcrPasses', () => {
     expect(passes.some(p => p.label === 'p-narrow-0')).toBe(true);
     expect(passes.some(p => p.label === 'p-wide-sparse')).toBe(true);
   });
+
+  it('includes center and full rotations (0°, 90°, 270°)', () => {
+    const quality = { brightness: 128, blurVariance: 150, isDark: false, isBlurry: false };
+    const passes = buildOcrPasses(quality, 'p-');
+    const labels = passes.map(p => p.label);
+    expect(labels).toContain('p-center-90');
+    expect(labels).toContain('p-center-270');
+    expect(labels).toContain('p-full-90');
+    expect(labels).toContain('p-full-270');
+  });
+
+  it('includes invert when borderline dark (brightness 90–115)', () => {
+    const quality = { brightness: 100, blurVariance: 150, isDark: false, isBlurry: false };
+    const passes = buildOcrPasses(quality, 'p-');
+    expect(passes.some(p => p.label === 'p-narrow-inv')).toBe(true);
+  });
+
+  it('includes invertBoost first when very dark (brightness < 60)', () => {
+    const quality = { brightness: 50, blurVariance: 150, isDark: true, isBlurry: false };
+    const passes = buildOcrPasses(quality, 'p-');
+    expect(passes.some(p => p.label === 'p-narrow-invBoost')).toBe(true);
+    expect(passes[0].label).toBe('p-narrow-invBoost');
+  });
+
+  it('uses dpiLabel for resolution hints when quality has it', () => {
+    const quality = { brightness: 128, blurVariance: 150, isDark: false, isBlurry: false, dpiLabel: 'low' as const };
+    const hints = getQualityHints(quality, false);
+    expect(hints).toContain('low_resolution');
+  });
+});
+
+/* ================================================================
+ *  getQualityHints
+ * ================================================================ */
+
+describe('useScanPipeline — getQualityHints', () => {
+  it('returns hold_steady when blurry', () => {
+    const quality = { brightness: 128, blurVariance: 80, isDark: false, isBlurry: true };
+    const hints = getQualityHints(quality, false);
+    expect(hints).toContain('hold_steady');
+  });
+
+  it('returns improve_lighting when dark', () => {
+    const quality = { brightness: 50, blurVariance: 150, isDark: true, isBlurry: false };
+    const hints = getQualityHints(quality, false);
+    expect(hints).toContain('improve_lighting');
+  });
+
+  it('returns low_resolution when lowRes is true', () => {
+    const quality = { brightness: 128, blurVariance: 150, isDark: false, isBlurry: false };
+    const hints = getQualityHints(quality, true);
+    expect(hints).toContain('low_resolution');
+  });
+
+  it('returns ok when quality is good and not low res', () => {
+    const quality = { brightness: 128, blurVariance: 150, isDark: false, isBlurry: false };
+    const hints = getQualityHints(quality, false);
+    expect(hints).toContain('ok');
+  });
 });
 
 /* ================================================================
@@ -221,6 +281,10 @@ describe('useScanPipeline — preprocessImage', () => {
     expect(lastContext?.filter).toContain('invert');
 
     preprocessImage(img, canvas, 0, CROP_MEDIUM, 'boost');
+    expect(lastContext?.filter).toContain('contrast');
+
+    preprocessImage(img, canvas, 0, CROP_MEDIUM, 'invertBoost');
+    expect(lastContext?.filter).toContain('invert');
     expect(lastContext?.filter).toContain('contrast');
   });
 

@@ -12,8 +12,14 @@ import { useAuthStore } from '../useAuthStore';
 const mockGetSession = vi.fn();
 const mockSignUp = vi.fn();
 const mockSignInWithPassword = vi.fn();
+const mockSignInWithOAuth = vi.fn();
 const mockSignOut = vi.fn();
 const mockOnAuthStateChange = vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } }));
+
+vi.mock('../../lib/profiles', () => ({
+  getProfile: vi.fn().mockResolvedValue(null),
+  upsertProfile: vi.fn().mockResolvedValue(true),
+}));
 
 vi.mock('../../lib/supabase', () => ({
   supabase: {
@@ -21,6 +27,7 @@ vi.mock('../../lib/supabase', () => ({
       getSession: () => mockGetSession(),
       signUp: (creds: { email: string; password: string }) => mockSignUp(creds),
       signInWithPassword: (creds: { email: string; password: string }) => mockSignInWithPassword(creds),
+      signInWithOAuth: (opts: unknown) => mockSignInWithOAuth(opts),
       signOut: () => mockSignOut(),
       onAuthStateChange: (cb: (...args: unknown[]) => void) => mockOnAuthStateChange(cb),
     },
@@ -36,6 +43,7 @@ describe('useAuthStore', () => {
     useAuthStore.setState({
       user: null,
       session: null,
+      profile: null,
       loading: true,
       error: null,
     });
@@ -89,21 +97,32 @@ describe('useAuthStore', () => {
   /* ── signUp ──────────────────────────────────────────────── */
   describe('signUp', () => {
     it('calls supabase.auth.signUp and clears loading on success', async () => {
-      mockSignUp.mockResolvedValue({ error: null });
+      mockSignUp.mockResolvedValue({ data: { user: { id: 'user-123' }, session: null }, error: null });
 
-      await useAuthStore.getState().signUp('test@test.com', 'password123');
+      const userId = await useAuthStore.getState().signUp('test@test.com', 'password123');
 
       expect(mockSignUp).toHaveBeenCalledWith({ email: 'test@test.com', password: 'password123' });
+      expect(userId).toBe('user-123');
       const state = useAuthStore.getState();
       expect(state.loading).toBe(false);
       expect(state.error).toBeNull();
     });
 
+    it('returns userId on signUp success when username is provided', async () => {
+      mockSignUp.mockResolvedValue({ data: { user: { id: 'user-456' }, session: null }, error: null });
+
+      const userId = await useAuthStore.getState().signUp('test@test.com', 'password123', 'alice');
+
+      expect(mockSignUp).toHaveBeenCalledWith({ email: 'test@test.com', password: 'password123' });
+      expect(userId).toBe('user-456');
+    });
+
     it('sets error on signUp failure', async () => {
-      mockSignUp.mockResolvedValue({ error: { message: 'Email already registered' } });
+      mockSignUp.mockResolvedValue({ data: { user: null, session: null }, error: { message: 'Email already registered' } });
 
-      await useAuthStore.getState().signUp('test@test.com', 'password123');
+      const userId = await useAuthStore.getState().signUp('test@test.com', 'password123');
 
+      expect(userId).toBeUndefined();
       const state = useAuthStore.getState();
       expect(state.error).toBe('Email already registered');
       expect(state.loading).toBe(false);
@@ -139,6 +158,32 @@ describe('useAuthStore', () => {
       expect(state.error).toBe('Invalid login credentials');
       expect(state.loading).toBe(false);
       expect(state.user).toBeNull();
+    });
+  });
+
+  /* ── signInWithGoogle ────────────────────────────────────── */
+  describe('signInWithGoogle', () => {
+    it('calls supabase.auth.signInWithOAuth with google provider', async () => {
+      mockSignInWithOAuth.mockResolvedValue({ error: null });
+
+      await useAuthStore.getState().signInWithGoogle();
+
+      expect(mockSignInWithOAuth).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: 'google',
+          options: expect.objectContaining({ redirectTo: expect.any(String) }),
+        })
+      );
+    });
+
+    it('sets error on signInWithOAuth failure', async () => {
+      mockSignInWithOAuth.mockResolvedValue({ error: { message: 'OAuth failed' } });
+
+      await useAuthStore.getState().signInWithGoogle();
+
+      const state = useAuthStore.getState();
+      expect(state.error).toBe('OAuth failed');
+      expect(state.loading).toBe(false);
     });
   });
 

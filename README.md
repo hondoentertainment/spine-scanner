@@ -94,15 +94,19 @@ create policy "Users can delete their own shelves"
   on shelves for delete using (auth.uid() = user_id);
 ```
 
-3. Copy your project URL and anon key from **Settings > API** in the Supabase dashboard
-4. Create a `.env` file (see `.env.example`):
+3. (Optional) For username support on sign-up, run `supabase/migrations/001_profiles.sql` in the SQL Editor.
+
+4. Copy your project URL and anon key from **Settings > API** in the Supabase dashboard
+5. Create a `.env` file (see `.env.example`):
 
 ```
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-5. Restart the dev server. A "Sign in to sync" button will appear in the header.
+6. Restart the dev server. A "Sign in to sync" button will appear in the header.
+
+**Auth flow:** Sign-up collects email, password, and optional username. Username is stored in profiles and shown in the UI when available. Sign-in uses email + password only (not username).
 
 ## Scripts
 

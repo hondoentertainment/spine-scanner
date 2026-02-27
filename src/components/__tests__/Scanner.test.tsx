@@ -328,7 +328,8 @@ describe('Scanner', () => {
     }, 15000);
 
     it('shows suggestions when OCR finds invalid-checksum candidate', async () => {
-      ocrText = 'ISBN 9780306406158'; // invalid checksum
+      // Use unrepairable ISBN (tryFixChecksum returns null) so suggestions are shown
+      ocrText = 'ISBN 1111111111111';
 
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
@@ -337,15 +338,16 @@ describe('Scanner', () => {
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
-      // Should not auto-submit invalid ISBN
+      // Should not auto-submit invalid ISBN; should show suggestion
       await waitFor(() => {
-        expect(screen.getByText('9780306406158')).toBeInTheDocument();
+        expect(screen.getByText('1111111111111')).toBeInTheDocument();
       }, { timeout: 10000 });
       expect(onScan).not.toHaveBeenCalled();
     }, 15000);
 
     it('populates manual form when user clicks invalid ISBN suggestion', async () => {
-      ocrText = 'ISBN 9780306406158'; // invalid checksum, no repair
+      // Use invalid ISBN with no valid checksum repair (tryFixChecksum returns null)
+      ocrText = 'ISBN 1111111111111';
 
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
@@ -355,16 +357,16 @@ describe('Scanner', () => {
       await act(async () => { fireEvent.click(capture); });
 
       await waitFor(() => {
-        expect(screen.getByText('9780306406158')).toBeInTheDocument();
+        expect(screen.getByText('1111111111111')).toBeInTheDocument();
       }, { timeout: 10000 });
 
-      // Click the invalid suggestion (has ? mark) - should populate manual form
-      const suggestionBtn = screen.getByRole('button', { name: /9780306406158/ });
+      // Click the invalid suggestion - should populate manual form
+      const suggestionBtn = screen.getByRole('button', { name: /1111111111111/ });
       fireEvent.click(suggestionBtn);
 
       await waitFor(() => {
         const input = screen.getByRole('textbox', { name: /enter isbn/i });
-        expect(input).toHaveValue('9780306406158');
+        expect(input).toHaveValue('1111111111111');
       });
     }, 15000);
 

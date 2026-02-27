@@ -62,6 +62,20 @@ function validateBarcode(raw: string, addLog: (m: string) => void, source: strin
     return null;
 }
 
+/**
+ * Extract an ISBN from a raw barcode value.
+ * Handles direct numeric ISBNs, URLs like https://isbn.org/978..., and prefixed text like ISBN:978...
+ */
+function extractIsbnFromBarcode(raw: string): string | null {
+    const digitsOnly = raw.replace(/[^0-9X]/g, '');
+    if (digitsOnly.length === 13 || digitsOnly.length === 10) return digitsOnly;
+    const match = raw.match(/(?:978|979)\d{10}/);
+    if (match) return match[0];
+    const match10 = raw.match(/\d{9}[\dX]/);
+    if (match10 && match10[0].length === 10) return match10[0];
+    return null;
+}
+
 /** Extract the HTMLVideoElement from a Webcam ref. */
 function getVideoFromRef(
     ref: HTMLVideoElement | { video: HTMLVideoElement | null } | null,
@@ -114,15 +128,17 @@ export function useBarcodeScanner({
             import('@zxing/library'),
         ]);
         const hints = new Map();
-        // P2: Only EAN-13 + UPC-A — no EAN-8/UPC-E to prevent misparse
         hints.set(libraryMod.DecodeHintType.POSSIBLE_FORMATS, [
             libraryMod.BarcodeFormat.EAN_13,
             libraryMod.BarcodeFormat.UPC_A,
+            libraryMod.BarcodeFormat.CODE_128,
+            libraryMod.BarcodeFormat.ITF,
+            libraryMod.BarcodeFormat.QR_CODE,
         ]);
         hints.set(libraryMod.DecodeHintType.TRY_HARDER, true);
         const reader = new browserMod.BrowserMultiFormatReader(hints);
         barcodeReaderRef.current = reader;
-        addLog('ZXing reader initialized (EAN-13/UPC-A, TRY_HARDER)');
+        addLog('ZXing reader initialized (EAN-13/UPC-A/Code128/ITF/QR, TRY_HARDER)');
         return reader;
     }, [addLog]);
 
@@ -131,10 +147,9 @@ export function useBarcodeScanner({
         if (!('BarcodeDetector' in window)) return null;
         if (barcodeDetectorRef.current) return barcodeDetectorRef.current;
         try {
-            // P2: Only EAN-13 + UPC-A
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             barcodeDetectorRef.current = new (window as any).BarcodeDetector({
-                formats: ['ean_13', 'upc_a'],
+                formats: ['ean_13', 'upc_a', 'code_128', 'itf', 'qr_code'],
             });
             return barcodeDetectorRef.current;
         } catch { return null; }
@@ -164,8 +179,9 @@ export function useBarcodeScanner({
         if (detector) {
             try {
                 const barcodes = await detector.detect(img);
-                const raw = barcodes[0]?.rawValue?.replace(/[^0-9X]/g, '');
-                if (raw && (raw.length === 13 || raw.length === 10)) {
+                const rawValue = barcodes[0]?.rawValue;
+                const raw = rawValue ? extractIsbnFromBarcode(rawValue) : null;
+                if (raw) {
                     addLog(`Barcode [${label}] native: ${raw}${isValidIsbn(raw) ? ' ✓' : ' (bad checksum)'}`);
                     return raw;
                 }
@@ -175,8 +191,8 @@ export function useBarcodeScanner({
         try {
             const reader = await getBarcodeReader();
             const result = await reader.decodeFromImageElement(img);
-            const text = result.getText().replace(/[^0-9X]/g, '');
-            if (text.length === 13 || text.length === 10) {
+            const text = extractIsbnFromBarcode(result.getText());
+            if (text) {
                 addLog(`Barcode [${label}]: ${text}${isValidIsbn(text) ? ' ✓' : ' (bad checksum)'}`);
                 return text;
             }
@@ -232,10 +248,12 @@ export function useBarcodeScanner({
                 ]);
 
                 const hints = new Map();
-                // P2: Only ISBN-relevant formats
                 hints.set(libraryMod.DecodeHintType.POSSIBLE_FORMATS, [
                     libraryMod.BarcodeFormat.EAN_13,
                     libraryMod.BarcodeFormat.UPC_A,
+                    libraryMod.BarcodeFormat.CODE_128,
+                    libraryMod.BarcodeFormat.ITF,
+                    libraryMod.BarcodeFormat.QR_CODE,
                 ]);
                 hints.set(libraryMod.DecodeHintType.TRY_HARDER, true);
 
@@ -253,8 +271,8 @@ export function useBarcodeScanner({
                     (result, err) => {
                         if (cancelled) return;
                         if (result) {
-                            const raw = result.getText().replace(/[^0-9X]/g, '');
-                            if (raw.length === 13 || raw.length === 10) {
+                            const raw = extractIsbnFromBarcode(result.getText());
+                            if (raw) {
                                 const isbn = validateBarcode(raw, addLog, 'ZXing-live');
                                 if (isbn) {
                                     bumpTelemetry('zxingHits', 1, true);
@@ -332,8 +350,8 @@ export function useBarcodeScanner({
                 try {
                     const barcodes = await detector.detect(video);
                     for (const bc of barcodes) {
-                        const raw = (bc.rawValue || '').replace(/[^0-9X]/g, '');
-                        if (raw.length === 13 || raw.length === 10) {
+                        const raw = extractIsbnFromBarcode(bc.rawValue || '');
+                        if (raw) {
                             const isbn = validateBarcode(raw, addLog, 'Native');
                             if (isbn) {
                                 bumpTelemetry('nativeHits', 1, true);

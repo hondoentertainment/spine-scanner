@@ -1,7 +1,9 @@
 import { useCallback, useRef } from 'react';
 import { isValidIsbn } from '../utils/isbnValidation.ts';
-import { extractIsbnCandidates, tryFixChecksum, getNearMissCandidates } from '../utils/ocr.ts';
+import { extractIsbnCandidates, tryFixChecksum, tryFixChecksumDouble, getNearMissCandidates } from '../utils/ocr.ts';
 import type { OcrResult } from './useOcrEngine.ts';
+import { PSM } from './useOcrEngine.ts';
+import { applyOtsuBinarization, applyAdaptiveThreshold, applyMedianFilter, applyMorphClose, applyCLAHE, detectSkewAngle, measureContrast } from '../utils/imageProcessing.ts';
 
 /* ================================================================
  *  Types & Constants
@@ -29,16 +31,27 @@ const HIGH_CONFIDENCE_THRESHOLD = 85;
 const LOW_RES_WIDTH = 640;
 /** Min effective pixels (short dimension) for reliable OCR. Industry std: ≥200 DPI equivalent. */
 const MIN_OCR_PIXELS = 200;
+/** Target 200–300 DPI equivalent; >300 DPI can degrade accuracy per OCR best practices. */
+const TARGET_DPI_MIN = 200;
+const TARGET_DPI_MAX = 300;
+/** Assumed physical size of spine in frame (inches) for DPI estimation. */
+const ASSUMED_SPINE_INCHES = 2.5;
 
-type PreprocessMode = 'clean' | 'enhanced' | 'boost' | 'invert' | 'sharpen' | 'unsharp';
+type PreprocessMode = 'clean' | 'enhanced' | 'boost' | 'invert' | 'invertBoost' | 'sharpen' | 'unsharp' | 'otsu' | 'adaptive' | 'denoise' | 'clahe';
 
+/** Enhancement filters: grayscale, contrast (110–180%), brightness; optional invert for dark-on-light. */
 const PREPROCESS_FILTERS: Record<PreprocessMode, string> = {
-    clean:    'grayscale(100%) contrast(110%)',
-    enhanced: 'grayscale(100%) contrast(140%) brightness(108%)',
-    boost:    'grayscale(100%) contrast(180%) brightness(115%)',
-    invert:   'grayscale(100%) contrast(130%) invert(100%)',
-    sharpen:  'grayscale(100%) contrast(130%) brightness(105%)',
-    unsharp:  'grayscale(100%) contrast(120%)',  // unsharp applied in pixel loop
+    clean:      'grayscale(100%) contrast(110%)',
+    enhanced:   'grayscale(100%) contrast(140%) brightness(108%)',
+    boost:      'grayscale(100%) contrast(180%) brightness(115%)',
+    invert:     'grayscale(100%) contrast(130%) invert(100%)',
+    invertBoost: 'grayscale(100%) contrast(180%) brightness(120%) invert(100%)',
+    sharpen:    'grayscale(100%) contrast(130%) brightness(105%)',
+    unsharp:    'grayscale(100%) contrast(120%)',  // unsharp applied in pixel loop
+    otsu:       'grayscale(100%) contrast(130%)',
+    adaptive:   'grayscale(100%) contrast(120%)',
+    denoise:    'grayscale(100%) contrast(115%)',
+    clahe:      'grayscale(100%)',
 };
 
 export interface FrameQuality {
@@ -46,9 +59,20 @@ export interface FrameQuality {
     blurVariance: number;
     isDark: boolean;
     isBlurry: boolean;
+    /** Effective short dimension (px) after preprocessing scale for OCR. Used for resolution hints. */
+    effectiveShortDimPixels?: number;
+    /** DPI-equivalent label for user feedback: 'low' (<200), 'ok' (200-300), 'high' (>300). */
+    dpiLabel?: 'low' | 'ok' | 'high';
+    /** Pixel-value standard deviation. Low contrast (<30) benefits from CLAHE. */
+    contrast?: number;
+    /** Whether contrast is too low for reliable OCR. */
+    isLowContrast?: boolean;
 }
 
-/** Tesseract PSM: 6=SINGLE_BLOCK, 7=SINGLE_LINE, 11=SPARSE_TEXT */
+/** Resolution/quality hints for user feedback (blur, brightness, resolution). */
+export type QualityHint = 'hold_steady' | 'improve_lighting' | 'move_closer' | 'low_resolution' | 'low_contrast' | 'ok';
+
+/** Tesseract PSM: 6=SINGLE_BLOCK (standard text), 7=SINGLE_LINE (ISBN/spine), 11=SPARSE_TEXT (scattered). */
 interface OcrPassConfig {
     crop: CropRegion;
     rotation: number;
@@ -65,6 +89,19 @@ interface OcrPassConfig {
 
 /** Industry std: >300 DPI can degrade accuracy. Cap output dimension to avoid over-sharpening. */
 const MAX_OUTPUT_DIM = 2400;
+
+/**
+ * Compute scale to target 200–300 DPI equivalent.
+ * Assumes spine occupies ~2.5" in frame; scales so short dimension maps to 200–300 px per inch.
+ */
+const getScaleForTargetDpi = (cropW: number, cropH: number): number => {
+    const shortDim = Math.min(cropW, cropH);
+    const targetPxAt200 = TARGET_DPI_MIN * ASSUMED_SPINE_INCHES;
+    const targetPxAt300 = TARGET_DPI_MAX * ASSUMED_SPINE_INCHES;
+    if (shortDim >= targetPxAt300) return 1; // Already at or above 300 DPI equiv
+    if (shortDim >= targetPxAt200) return targetPxAt300 / shortDim; // Scale into 200–300 range
+    return targetPxAt200 / shortDim; // Scale up to minimum 200 DPI equiv
+};
 
 const getAdaptiveScale = (imgWidth: number): number => {
     if (imgWidth >= 1920) return 1.5;
@@ -84,6 +121,26 @@ const getResolutionCapScale = (cropW: number, cropH: number, scale: number): num
 
 export const isLowResolution = (imgWidth: number): boolean => imgWidth < LOW_RES_WIDTH;
 
+/**
+ * Get quality hints for user feedback based on frame quality and resolution.
+ * Feeds into status messages (e.g. "Hold steady", "Improve lighting").
+ * Uses quality.dpiLabel when available for resolution hints.
+ */
+export const getQualityHints = (
+    quality: FrameQuality,
+    lowRes: boolean,
+): QualityHint[] => {
+    const hints: QualityHint[] = [];
+    if (quality.isBlurry) hints.push('hold_steady');
+    if (quality.isDark) hints.push('improve_lighting');
+    const resolutionLow = lowRes || quality.dpiLabel === 'low';
+    if (resolutionLow || quality.isBlurry) hints.push('move_closer');
+    if (resolutionLow) hints.push('low_resolution');
+    if (quality.isLowContrast) hints.push('low_contrast');
+    if (hints.length === 0) hints.push('ok');
+    return hints;
+};
+
 /** Check if effective OCR resolution is too low. Industry std: need enough pixels for 200 DPI equiv. */
 export const hasLowOcrResolution = (imgWidth: number, imgHeight: number, crop: CropRegion): boolean => {
     const cropW = imgWidth * crop.widthFrac;
@@ -92,22 +149,33 @@ export const hasLowOcrResolution = (imgWidth: number, imgHeight: number, crop: C
     return shortDim < MIN_OCR_PIXELS;
 };
 
+/**
+ * Preprocess image for OCR. Pipeline order per OCR best practices:
+ * 1. Rotation/skew correction — fix tilted documents (0°, 90°, 270°)
+ * 2. Region detection — crop to area of interest (narrow, center, full-frame)
+ * 3. Enhancement — grayscale, contrast (110–180%), brightness; optional invert for dark-on-light
+ * 4. Optional sharpen — unsharp mask for blurry captures
+ *
+ * Target 200–300 DPI equivalent; >300 DPI can degrade OCR accuracy.
+ */
 export const preprocessImage = (
     img: HTMLImageElement, canvas: HTMLCanvasElement,
     rotateDeg: number, crop: CropRegion, mode: PreprocessMode = 'clean',
 ): string => {
     const ctx = canvas.getContext('2d')!;
+    // Stage 1 & 2: Region detection (crop) + rotation/skew correction
     const cropX = img.width * (1 - crop.widthFrac) / 2;
     const cropY = img.height * (1 - crop.heightFrac) / 2;
     const cropW = img.width * crop.widthFrac;
     const cropH = img.height * crop.heightFrac;
-    let scale = getAdaptiveScale(img.width);
+    // Target 200–300 DPI equivalent; resolution hints per OCR best practices
+    let scale = Math.max(getAdaptiveScale(img.width), getScaleForTargetDpi(cropW, cropH));
     const capScale = getResolutionCapScale(cropW, cropH, scale);
-    if (capScale < 1) scale *= capScale; // Downscale when output would exceed MAX_OUTPUT_DIM
+    if (capScale < 1) scale *= capScale;
     const outW = cropW * scale;
     const outH = cropH * scale;
 
-    // Compute tight bounding box for arbitrary rotation angle.
+    // Output bounds for rotation (0°, 90°, 270°, or skew angles)
     // For 0° → outW×outH; for 90°/270° → outH×outW; for skew angles (85°/95°) the
     // bounding box is larger than a simple swap — cos(5°)≈0.996, sin(5°)≈0.087.
     const rad = (rotateDeg * Math.PI) / 180;
@@ -122,10 +190,12 @@ export const preprocessImage = (
         ctx.rotate(rad);
         ctx.translate(-outW / 2, -outH / 2);
     }
+    // Stage 3: Enhancement — grayscale, contrast (110–180%), brightness; invert for dark-on-light
     ctx.filter = PREPROCESS_FILTERS[mode];
     ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
     ctx.restore();
 
+    // Stage 4: Optional sharpen — unsharp mask for blurry captures
     if ((mode === 'sharpen' || mode === 'unsharp') && typeof ctx.getImageData === 'function') {
         try {
             const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -181,6 +251,29 @@ export const preprocessImage = (
             ctx.putImageData(imgData, 0, 0);
         } catch { /* skip */ }
     }
+
+    // Stage 5: Advanced preprocessing — binarization, denoising, CLAHE, morphological ops
+    if (['otsu', 'adaptive', 'denoise', 'clahe'].includes(mode) && typeof ctx.getImageData === 'function') {
+        try {
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            if (mode === 'denoise') {
+                applyMedianFilter(imgData);
+                applyOtsuBinarization(imgData);
+            } else if (mode === 'otsu') {
+                applyOtsuBinarization(imgData);
+                applyMorphClose(imgData);
+            } else if (mode === 'adaptive') {
+                applyMedianFilter(imgData);
+                applyAdaptiveThreshold(imgData);
+                applyMorphClose(imgData);
+            } else if (mode === 'clahe') {
+                applyCLAHE(imgData);
+                applyOtsuBinarization(imgData);
+            }
+            ctx.putImageData(imgData, 0, 0);
+        } catch { /* skip advanced preprocessing on error */ }
+    }
+
     return canvas.toDataURL('image/png');
 };
 
@@ -206,12 +299,37 @@ function getFrameDimensions(src: FrameSource): { w: number; h: number } {
     return { w: v.videoWidth ?? v.width ?? 0, h: v.videoHeight ?? v.height ?? 0 };
 }
 
+/** Compute effective short-dimension pixels and DPI label for resolution hints. */
+function getResolutionInfo(imgWidth: number, imgHeight: number, crop: CropRegion): { effectiveShortDimPixels: number; dpiLabel: 'low' | 'ok' | 'high' } {
+    const cropW = imgWidth * crop.widthFrac;
+    const cropH = imgHeight * crop.heightFrac;
+    const shortDim = Math.min(cropW, cropH);
+    const scale = Math.max(getAdaptiveScale(imgWidth), getScaleForTargetDpi(cropW, cropH));
+    const capScale = getResolutionCapScale(cropW, cropH, scale);
+    const finalScale = capScale < 1 ? scale * capScale : scale;
+    const effectiveShortDimPixels = shortDim * finalScale;
+    const dpiEquivalent = effectiveShortDimPixels / ASSUMED_SPINE_INCHES;
+    const dpiLabel = dpiEquivalent < TARGET_DPI_MIN ? 'low' : dpiEquivalent > TARGET_DPI_MAX ? 'high' : 'ok';
+    return { effectiveShortDimPixels: Math.round(effectiveShortDimPixels), dpiLabel };
+}
+
 export const assessFrameQuality = (
     img: HTMLImageElement, canvas: HTMLCanvasElement, crop: CropRegion = CROP_MEDIUM,
 ): FrameQuality => {
     const brightness = detectBrightness(img, canvas, crop);
     const blurVariance = detectBlurVariance(img, canvas, crop);
-    return { brightness, blurVariance, isDark: brightness < DARK_SCENE_THRESHOLD, isBlurry: blurVariance < BLUR_VARIANCE_THRESHOLD };
+    const { effectiveShortDimPixels, dpiLabel } = getResolutionInfo(img.width, img.height, crop);
+    const contrast = detectContrast(img, canvas, crop);
+    return {
+        brightness,
+        blurVariance,
+        isDark: brightness < DARK_SCENE_THRESHOLD,
+        isBlurry: blurVariance < BLUR_VARIANCE_THRESHOLD,
+        effectiveShortDimPixels,
+        dpiLabel,
+        contrast,
+        isLowContrast: contrast < LOW_CONTRAST_THRESHOLD,
+    };
 };
 
 /** Live pre-capture quality check for video stream. Industry std: prompt user to hold steady when blur detected. */
@@ -225,7 +343,15 @@ export const assessVideoFrameQuality = (
     if (!w || !h) return { brightness: 128, blurVariance: BLUR_VARIANCE_THRESHOLD, isDark: false, isBlurry: false };
     const brightness = detectBrightness(video as FrameSource, canvas, crop);
     const blurVariance = detectBlurVariance(video as FrameSource, canvas, crop);
-    return { brightness, blurVariance, isDark: brightness < DARK_SCENE_THRESHOLD, isBlurry: blurVariance < BLUR_VARIANCE_THRESHOLD };
+    const { effectiveShortDimPixels, dpiLabel } = getResolutionInfo(w, h, crop);
+    return {
+        brightness,
+        blurVariance,
+        isDark: brightness < DARK_SCENE_THRESHOLD,
+        isBlurry: blurVariance < BLUR_VARIANCE_THRESHOLD,
+        effectiveShortDimPixels,
+        dpiLabel,
+    };
 };
 
 const detectBrightness = (src: FrameSource, canvas: HTMLCanvasElement, crop: CropRegion): number => {
@@ -282,40 +408,121 @@ const detectBlurVariance = (src: FrameSource, canvas: HTMLCanvasElement, crop: C
     } catch { return BLUR_VARIANCE_THRESHOLD; }
 };
 
+const detectContrast = (src: FrameSource, canvas: HTMLCanvasElement, crop: CropRegion): number => {
+    try {
+        const ctx = canvas.getContext('2d');
+        if (!ctx || typeof ctx.getImageData !== 'function') return 50;
+        const { w, h } = getFrameDimensions(src);
+        const cropX = w * (1 - crop.widthFrac) / 2;
+        const cropY = h * (1 - crop.heightFrac) / 2;
+        const cropW = w * crop.widthFrac;
+        const cropH = h * crop.heightFrac;
+        const sW = Math.min(Math.floor(cropW), 200);
+        const sH = Math.min(Math.floor(cropH), 150);
+        if (sW < 3 || sH < 3) return 50;
+        canvas.width = sW; canvas.height = sH;
+        ctx.filter = 'grayscale(100%)';
+        ctx.drawImage(src as CanvasImageSource, cropX, cropY, cropW, cropH, 0, 0, sW, sH);
+        const imgData = ctx.getImageData(0, 0, sW, sH);
+        return measureContrast(imgData);
+    } catch { return 50; }
+};
+
 /** Digit whitelist for ISBN-only crops — reduces O→0, I→1 confusion. */
 const ISBN_CHAR_WHITELIST = '0123456789X -';
 
+/** Very dark threshold: prioritize invert+boost passes (quality assessment → preprocessing). */
+const VERY_DARK_THRESHOLD = 60;
+const LOW_CONTRAST_THRESHOLD = 30;
+
 /* ================================================================
  *  Build OCR pass configurations (adaptive to quality)
+ *  Multiple passes with varied settings per OCR best practices:
+ *  - Crops: narrow, center, full-frame
+ *  - Rotations: 0°, 90°, 270° (spine often vertical)
+ *  - Quality-driven: blur → sharpen/unsharp first; dark → invert; very dark → invertBoost
  * ================================================================ */
 
-export function buildOcrPasses(quality: FrameQuality, prefix: string): OcrPassConfig[] {
-    const { isDark, isBlurry } = quality;
+function pass(crop: CropRegion, rotation: number, mode: PreprocessMode, label: string, psm: string = PSM.SINGLE_LINE, charWhitelist?: string): OcrPassConfig {
+    return { crop, rotation, mode, label, psm, charWhitelist: charWhitelist ?? undefined };
+}
 
-    const base: OcrPassConfig[] = [
-        { crop: CROP_NARROW, rotation: 0,   mode: 'clean',    label: `${prefix}narrow-0`,    psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
-        { crop: CROP_NARROW, rotation: 0,   mode: 'enhanced', label: `${prefix}narrow-0-enh`, psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
-        { crop: CROP_CENTER, rotation: 0,   mode: 'clean',    label: `${prefix}center-0`,    psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
-        { crop: CROP_MEDIUM, rotation: 0,   mode: 'clean',    label: `${prefix}medium-0` },
-        { crop: CROP_MEDIUM, rotation: 0,   mode: 'enhanced', label: `${prefix}medium-0-enh` },
-        { crop: CROP_NARROW, rotation: 90,  mode: 'clean',    label: `${prefix}narrow-90`,   psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
-        { crop: CROP_NARROW, rotation: 270, mode: 'clean',    label: `${prefix}narrow-270`,  psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
-        /* Skew correction for tilted spines: slight angle variations */
-        { crop: CROP_NARROW, rotation: 85,  mode: 'clean',    label: `${prefix}narrow-85`,   psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
-        { crop: CROP_NARROW, rotation: 95,  mode: 'clean',    label: `${prefix}narrow-95`,   psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
-        { crop: CROP_NARROW, rotation: 0,   mode: 'boost',    label: `${prefix}narrow-boost`, psm: '7', charWhitelist: ISBN_CHAR_WHITELIST },
-        ...(isDark ? [{ crop: CROP_NARROW, rotation: 0, mode: 'invert' as PreprocessMode, label: `${prefix}narrow-inv`, psm: '7', charWhitelist: ISBN_CHAR_WHITELIST }] as OcrPassConfig[] : []),
-        { crop: CROP_WIDE,   rotation: 0,   mode: 'clean',    label: `${prefix}wide-sparse`, psm: '11' },
-        { crop: CROP_WIDE,   rotation: 0,   mode: 'clean',    label: `${prefix}wide-0` },
-        { crop: CROP_FULL,   rotation: 0,   mode: 'clean',    label: `${prefix}full-0` },
+export function buildOcrPasses(quality: FrameQuality, prefix: string): OcrPassConfig[] {
+    const { isDark, isBlurry, brightness } = quality;
+    const isBorderlineDark = brightness >= DARK_SCENE_THRESHOLD && brightness < DARK_SCENE_THRESHOLD + 25;
+    const isVeryDark = brightness < VERY_DARK_THRESHOLD;
+
+    // Core matrix: narrow, center = SINGLE_LINE (ISBN on spine); full, medium = SINGLE_BLOCK (standard text)
+    const narrow0   = pass(CROP_NARROW,   0,   'clean', `${prefix}narrow-0`,    PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+    const narrow90  = pass(CROP_NARROW,  90,  'clean', `${prefix}narrow-90`,   PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+    const narrow270 = pass(CROP_NARROW,  270, 'clean', `${prefix}narrow-270`,  PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+    const center0   = pass(CROP_CENTER,  0,   'clean', `${prefix}center-0`,    PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+    const center90  = pass(CROP_CENTER,  90,  'clean', `${prefix}center-90`,   PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+    const center270 = pass(CROP_CENTER,  270, 'clean', `${prefix}center-270`,  PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+    const full0     = pass(CROP_FULL,    0,   'clean', `${prefix}full-0`,      PSM.SINGLE_BLOCK);
+    const full90    = pass(CROP_FULL,   90,  'clean', `${prefix}full-90`,     PSM.SINGLE_BLOCK);
+    const full270   = pass(CROP_FULL,    270, 'clean', `${prefix}full-270`,   PSM.SINGLE_BLOCK);
+
+    // Enhancement passes: varied contrast (110–180%), brightness
+    const narrowEnhanced = pass(CROP_NARROW,  0, 'enhanced', `${prefix}narrow-0-enh`, PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+    const narrowBoost   = pass(CROP_NARROW,  0, 'boost',    `${prefix}narrow-boost`, PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+    const centerEnhanced = pass(CROP_CENTER, 0, 'enhanced', `${prefix}center-0-enh`, PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+    const medium0       = pass(CROP_MEDIUM,  0, 'clean',    `${prefix}medium-0`,    PSM.SINGLE_BLOCK);
+    const mediumEnhanced = pass(CROP_MEDIUM,  0, 'enhanced', `${prefix}medium-0-enh`, PSM.SINGLE_BLOCK);
+
+    // Skew correction for tilted spines
+    const narrow85 = pass(CROP_NARROW, 85, 'clean', `${prefix}narrow-85`, PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+    const narrow95 = pass(CROP_NARROW, 95, 'clean', `${prefix}narrow-95`, PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+
+    // Dark-on-light: invert when dark or borderline; invertBoost for very dark (high contrast + invert)
+    const invertPass = pass(CROP_NARROW, 0, 'invert', `${prefix}narrow-inv`, PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+    const invertBoostPass = pass(CROP_NARROW, 0, 'invertBoost', `${prefix}narrow-invBoost`, PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+
+    // Optional sharpen for blurry captures (industry std: unsharp mask first)
+    const unsharpPass = pass(CROP_NARROW, 0, 'unsharp', `${prefix}narrow-unsharp`, PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+    const sharpenPass = pass(CROP_NARROW, 0, 'sharpen', `${prefix}narrow-sharpen`, PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+
+    // Advanced preprocessing: binarization for cleaner input
+    const otsuPass = pass(CROP_NARROW, 0, 'otsu', `${prefix}narrow-otsu`, PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+    const adaptivePass = pass(CROP_NARROW, 0, 'adaptive', `${prefix}narrow-adaptive`, PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+    const denoisePass = pass(CROP_NARROW, 0, 'denoise', `${prefix}narrow-denoise`, PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+    const clahePass = pass(CROP_CENTER, 0, 'clahe', `${prefix}center-clahe`, PSM.SINGLE_LINE, ISBN_CHAR_WHITELIST);
+
+    // Sparse text for wide crops (PSM 11 = scattered text)
+    const wideSparse = pass(CROP_WIDE, 0, 'clean', `${prefix}wide-sparse`, PSM.SPARSE_TEXT);
+    const wide0      = pass(CROP_WIDE, 0, 'clean', `${prefix}wide-0`, PSM.SINGLE_BLOCK);
+
+    const darkPasses = (isDark || isBorderlineDark)
+        ? (isVeryDark ? [invertBoostPass, invertPass] : [invertPass])
+        : [];
+
+    let base: OcrPassConfig[] = [
+        narrow0, narrowEnhanced, narrow90, narrow270,
+        center0, centerEnhanced, center90, center270,
+        full0, full90, full270,
+        medium0, mediumEnhanced,
+        narrow85, narrow95,
+        narrowBoost,
+        ...darkPasses,
+        wideSparse, wide0,
+        otsuPass, adaptivePass, denoisePass,
     ];
 
-    // Adaptive: unsharp mask first if blurry (industry std), then sharpen; invert/boost earlier if dark
+    // Quality-driven: blurry → unsharp and sharpen first (blur feeds into preprocessing)
     if (isBlurry) {
-        const unsharp: OcrPassConfig = { crop: CROP_NARROW, rotation: 0, mode: 'unsharp', label: `${prefix}narrow-unsharp`, psm: '7', charWhitelist: ISBN_CHAR_WHITELIST };
-        const sharpen: OcrPassConfig = { crop: CROP_NARROW, rotation: 0, mode: 'sharpen', label: `${prefix}narrow-sharpen`, psm: '7', charWhitelist: ISBN_CHAR_WHITELIST };
-        return [unsharp, sharpen, ...base.filter(p => p.mode !== 'sharpen' && p.mode !== 'unsharp')];
+        base = [unsharpPass, sharpenPass, ...base];
     }
+
+    // Quality-driven: very dark → invertBoost at front for best chance on dark spines
+    if (isVeryDark) {
+        base = [invertBoostPass, ...base.filter(p => p.label !== `${prefix}narrow-invBoost`)];
+    }
+
+    // Quality-driven: low contrast → CLAHE pass at front
+    if (quality.isLowContrast) {
+        base = [clahePass, ...base];
+    }
+
     return base;
 }
 
@@ -330,6 +537,8 @@ export interface ScanProgress {
     totalPasses?: number;
     /** Within-pass recognition progress 0–100 (from Tesseract). */
     passProgress?: number;
+    /** Human-readable pass label (e.g. "narrow-0", "narrow-90") for progress display. */
+    passLabel?: string;
     /** Near-valid candidates found so far (for "Possible: X" during scan). */
     possibleCandidates?: string[];
 }
@@ -459,6 +668,24 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
         const lowRes = hasLowOcrResolution(img.width, img.height, CROP_NARROW);
         addLog(`Quality: brightness=${quality.brightness.toFixed(0)} (${quality.isDark ? 'dark' : 'normal'}), blur=${quality.blurVariance.toFixed(0)} (${quality.isBlurry ? 'blurry' : 'sharp'}), lowRes=${lowRes}`);
 
+        // Detect fine-grained skew angle for more precise rotation
+        let detectedSkew = 0;
+        try {
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                const sW = Math.min(img.width, 400);
+                const sH = Math.min(img.height, 300);
+                canvas.width = sW; canvas.height = sH;
+                ctx.filter = 'grayscale(100%)';
+                ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, sW, sH);
+                const skewData = ctx.getImageData(0, 0, sW, sH);
+                detectedSkew = detectSkewAngle(skewData);
+                if (Math.abs(detectedSkew) > 1) {
+                    addLog(`Detected skew angle: ${detectedSkew.toFixed(1)}°`);
+                }
+            }
+        } catch { /* skip skew detection on error */ }
+
         const skipOcr = quality.isBlurry && quality.brightness < SKIP_OCR_BRIGHTNESS_THRESHOLD;
         if (skipOcr) {
             addLog('Skipping OCR: image too blurry and dark. Unlikely to succeed.');
@@ -500,12 +727,13 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
             if (signal?.aborted) break;
             try {
                 safeSetStatus(`OCR: pass ${i + 1} of ${totalPasses}...`);
-                reportProgress({ phase: 'ocr', currentPass: i + 1, totalPasses });
-                const processed = preprocessImage(img, canvas, pass.rotation, pass.crop, pass.mode);
+                reportProgress({ phase: 'ocr', currentPass: i + 1, totalPasses, passLabel: pass.label });
+                const effectiveRotation = (pass.rotation === 0 && Math.abs(detectedSkew) > 1) ? detectedSkew : pass.rotation;
+                const processed = preprocessImage(img, canvas, effectiveRotation, pass.crop, pass.mode);
                 const result = await runOcr(processed, pass.label, extractIsbnCandidates, isValidIsbn, {
                     psm: pass.psm,
                     charWhitelist: pass.charWhitelist,
-                    onRecognizeProgress: (pct) => reportProgress({ phase: 'ocr', currentPass: i + 1, totalPasses, passProgress: Math.round(pct * 100) }),
+                    onRecognizeProgress: (pct) => reportProgress({ phase: 'ocr', currentPass: i + 1, totalPasses, passLabel: pass.label, passProgress: Math.round(pct * 100) }),
                 });
                 ocrPassesAttempted += 1;
                 result.allCandidates.forEach(c => allCandidates.add(c));
@@ -513,7 +741,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                     const fix = tryFixChecksum(c);
                     return fix ? [fix] : [];
                 });
-                reportProgress({ phase: 'ocr', currentPass: i + 1, totalPasses, possibleCandidates: repairable.slice(0, 3) });
+                reportProgress({ phase: 'ocr', currentPass: i + 1, totalPasses, passLabel: pass.label, possibleCandidates: repairable.slice(0, 3) });
                 if (result.isbn) {
                     addLog(`ISBN via OCR [${pass.label}]: ${result.isbn}${result.confidence != null ? ` conf=${result.confidence}` : ''}`);
                     if (result.confidence != null) {
@@ -579,6 +807,14 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                     repaired.push(fix);
                     repairedMap[fix] = c;
                     addLog(`Checksum repair: ${c} → ${fix} (suggested)`);
+                }
+                if (!fix) {
+                    const doubleFix = tryFixChecksumDouble(c);
+                    if (doubleFix && !candidateList.includes(doubleFix) && !repaired.includes(doubleFix)) {
+                        repaired.push(doubleFix);
+                        repairedMap[doubleFix] = c;
+                        addLog(`Checksum double-repair: ${c} → ${doubleFix} (suggested)`);
+                    }
                 }
                 const misses = getNearMissCandidates(c);
                 for (const m of misses) {

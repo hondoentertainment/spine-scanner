@@ -45,7 +45,8 @@ describe('formatDiagnostics', () => {
   it('includes low resolution line when applicable', () => {
     const diag = makeDiag({ lowResolution: true });
     const out = formatDiagnostics(diag);
-    expect(out).toContain('Resolution: low (move closer)');
+    expect(out).toContain('Resolution: low');
+    expect(out).toContain('move closer');
   });
 
   it('includes skip reason when present', () => {
@@ -106,7 +107,7 @@ describe('formatDiagnostics', () => {
   it('shows low resolution hint when lowResolution is true', () => {
     const diag = makeDiag({ lowResolution: true });
     const out = formatDiagnostics(diag);
-    expect(out).toContain('low (move closer)');
+    expect(out).toContain('Resolution: low');
   });
 
   it('shows "hold steady" tip when blurry', () => {

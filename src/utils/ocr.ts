@@ -1,14 +1,12 @@
 import { isValidIsbn } from './isbnValidation.ts';
 
 /**
- * Fix common OCR digit misreads.
- * These substitutions handle the most frequent character confusions
- * when Tesseract reads ISBN digits.
- *
+ * Fix common OCR digit misreads (OCR best-practice normalization).
+ * Core set per spec: O→0, I→1, S→5, B→8, G→9, Z→2.
  * Extended set covers more OCR engine quirks:
- *   O/o → 0,  I/l/| → 1,  S/s/$ → 5,  B → 8,  G/g/q → 9,
- *   Z/z → 2,  A → 4,  T → 7,  D → 0 (in digit context),
- *   {} → () (OCR sometimes reads parens as braces)
+ *   O/o → 0,  I/l/|/! → 1,  S/s/$ → 5,  B/b → 8,  G/g/q → 9,
+ *   Z/z → 2,  D/d → 0 (in digit context).
+ * Apply before validation; checksum repair uses OCR_AMBIGUITY_MAP for single-digit substitutions.
  */
 export const fixOcrDigits = (str: string): string =>
   str.replace(/[Oo]/g, '0')
@@ -34,12 +32,12 @@ const fixOcrDigitsAggressive = (str: string): string =>
     .replace(/[Cc]/g, '0');
 
 /**
- * Common OCR ambiguity map: digit → alternatives to try when checksum fails.
+ * Common OCR ambiguity map: digit/letter → alternatives to try when checksum fails.
  * Shared by tryFixChecksum() and getNearMissCandidates() to ensure consistent repair.
  *
- * Mappings based on frequent OCR confusions:
- *   0↔O↔D, 1↔I↔l, 2↔Z, 3↔8, 4↔A, 5↔S, 6↔0/5/8, 7↔1, 8↔B/0/3/6/9, 9↔g/0/7
- *   X→0 (ISBN-10 check digit: X=10 can be misread as digit)
+ * Digit confusions: 0↔6↔8↔9, 1↔7↔4, 2↔7↔3, 3↔8, 5↔6↔8↔9, 7↔1, 8↔0↔3↔6↔9
+ * Letter→digit (OCR best-practice): O→0, I→1, S→5, B→8, G→9, Z→2
+ * X→0 (ISBN-10 check digit: X=10 can be misread as digit)
  */
 export const OCR_AMBIGUITY_MAP: Record<string, string[]> = {
   '0': ['6', '8', '9'],
@@ -53,6 +51,10 @@ export const OCR_AMBIGUITY_MAP: Record<string, string[]> = {
   '8': ['0', '3', '6', '9'],
   '9': ['0', '7'],
   'X': ['0'],
+  /* Letter alternatives for near-valid candidates that slipped through with letters */
+  'O': ['0'], 'o': ['0'], 'I': ['1'], 'l': ['1'], 'S': ['5'], 's': ['5'],
+  'B': ['8'], 'b': ['8'], 'G': ['9'], 'g': ['9'], 'Z': ['2'], 'z': ['2'],
+  'D': ['0'], 'd': ['0'], 'Q': ['9'], 'q': ['9'],
 };
 
 /**
@@ -100,20 +102,88 @@ export const getNearMissCandidates = (candidate: string): string[] => {
 };
 
 /**
+ * Try TWO-position substitutions to fix an invalid ISBN checksum.
+ * Catches ISBNs with 2 OCR errors that tryFixChecksum (single-sub) misses.
+ * When charConfidences is provided, only the 6 least-confident positions
+ * are tried to keep the search space manageable.
+ */
+export const tryFixChecksumDouble = (
+  candidate: string,
+  charConfidences?: number[],
+): string | null => {
+  if (isValidIsbn(candidate)) return candidate;
+  if (candidate.length !== 10 && candidate.length !== 13) return null;
+
+  const MAX_ITERATIONS = 5000;
+  let iterations = 0;
+
+  let positions: number[];
+
+  if (charConfidences && charConfidences.length === candidate.length) {
+    const indexed = charConfidences.map((conf, idx) => ({ idx, conf }));
+    indexed.sort((a, b) => a.conf - b.conf);
+    positions = indexed.slice(0, 6).map(e => e.idx).sort((a, b) => a - b);
+  } else {
+    positions = [];
+    for (let i = 0; i < candidate.length; i++) {
+      if (OCR_AMBIGUITY_MAP[candidate[i]]) positions.push(i);
+    }
+  }
+
+  for (let pi = 0; pi < positions.length; pi++) {
+    const i = positions[pi];
+    const altsI = OCR_AMBIGUITY_MAP[candidate[i]];
+    if (!altsI) continue;
+
+    for (let pj = pi + 1; pj < positions.length; pj++) {
+      const j = positions[pj];
+      const altsJ = OCR_AMBIGUITY_MAP[candidate[j]];
+      if (!altsJ) continue;
+
+      for (const altI of altsI) {
+        for (const altJ of altsJ) {
+          if (++iterations > MAX_ITERATIONS) return null;
+          const variant =
+            candidate.substring(0, i) + altI +
+            candidate.substring(i + 1, j) + altJ +
+            candidate.substring(j + 1);
+          if (isValidIsbn(variant)) return variant;
+        }
+      }
+    }
+  }
+
+  return null;
+};
+
+/**
+ * Extract per-character confidence values from Tesseract symbol data.
+ * Filters to ISBN-relevant characters (digits and 'X') and returns
+ * confidence values (0–100) for each.
+ */
+export const getCharConfidenceWeights = (
+  symbols: Array<{ text: string; confidence: number }>,
+): number[] => {
+  if (!symbols || symbols.length === 0) return [];
+  return symbols
+    .filter(s => /^[0-9X]$/i.test(s.text))
+    .map(s => s.confidence);
+};
+
+/**
  * Extract ISBN candidates from raw OCR text.
  *
  * This function is designed for FULL TEXT output (no character whitelist).
  * Tesseract may return surrounding prose, titles, author names, etc.
  *
- * Strategy:
+ * Strategy (multi-pass extraction with deduplication):
  *   Pass 1: Find labeled ISBNs ("ISBN 978-0-14-103614-4", "ISBN-13:", "ISBN-10:")
  *   Pass 2: Find 13-digit sequences starting with 978/979
  *   Pass 3: Find any standalone 10 or 13-digit number-like sequences
  *   Pass 4: Sliding window for dense text (978/979 prefix only)
  *   Pass 5: Cross-line ISBN detection (ISBNs split by line breaks)
- *   Deduplicate and rank by validity confidence.
- *   Note: fuzzy checksum repair is applied in the scan pipeline (useScanPipeline),
- *   not inside this function.
+ *   Deduplicate via Set; validate via isValidIsbn for ranking.
+ *   Checksum repair for near-valid candidates is applied in useOcrEngine.runOcr and useScanPipeline.
  */
 /** Max OCR text length to process (avoids slowdown/DoS from huge input). ~100KB is plenty for book text. */
 const MAX_OCR_TEXT_LENGTH = 100_000;

@@ -347,16 +347,18 @@ describe('useOcrEngine', () => {
       mockOcrText = '9783161484100';
 
       // Second runOcr: should be able to create a new worker (retry counter not exhausted)
+      // Use a different image string to avoid OCR cache hit from the first call
       const ocrResult2 = await act(async () =>
         result.current.runOcr(
-          'data:image/png;base64,iVBORw0KGgo=',
+          'data:image/png;base64,DIFFERENT_IMAGE_DATA',
           'after-timeout-test',
           extractIsbnCandidates,
           isValidIsbn
         )
       );
 
-      // The hook should have created a new worker successfully
+      // First runOcr: 1 create (worker reused across recognize retries), recognize fails twice, terminate, fallback to one-shot.
+      // Second runOcr: 1 create (workerRef was null after terminate).
       expect(createWorkerFn).toHaveBeenCalledTimes(2);
       expect(ocrResult2.isbn).toBe('9783161484100');
     });

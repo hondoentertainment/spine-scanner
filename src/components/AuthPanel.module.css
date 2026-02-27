@@ -28,7 +28,15 @@
   border-radius: 9999px;
 }
 
-.email {
+.avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  object-fit: cover;
+}
+
+.email,
+.displayName {
   color: var(--text-muted);
   max-width: 140px;
   overflow: hidden;
@@ -157,6 +165,32 @@
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+}
+
+.googleBtn {
+  padding: 0.65rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.googleBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.formDivider {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
 }
 
 .formInput {

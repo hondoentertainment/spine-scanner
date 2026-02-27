@@ -11,7 +11,11 @@ export function formatDiagnostics(diag: ScanDiagnostics): string {
     lines.push('═══ Image quality ═══');
     lines.push(`Brightness: ${quality.brightness.toFixed(0)} ${quality.isDark ? '(low — add light)' : '(OK)'}`);
     lines.push(`Blur (sharpness): ${quality.blurVariance.toFixed(0)} ${quality.isBlurry ? '(blurry — hold steady)' : '(OK)'}`);
-    if (diag.lowResolution) lines.push('Resolution: low (move closer)');
+    if (quality.dpiLabel === 'low' || diag.lowResolution) {
+        lines.push('Resolution: low (move closer for 200+ DPI equivalent)');
+    } else if (quality.dpiLabel === 'ok' && quality.effectiveShortDimPixels != null) {
+        lines.push(`Resolution: ~${quality.effectiveShortDimPixels}px (200–300 DPI equivalent)`);
+    }
 
     if (skipReason) {
         lines.push('');
@@ -106,6 +110,7 @@ function getErrorTips(errorMessage: string): string[] {
 
     if (msg.includes('timeout') || msg.includes('timed out')) {
         return [
+            '• You can still add books: upload a photo or enter ISBN manually',
             '• OCR took too long — try a smaller/clearer image',
             '• Ensure a stable connection if loading OCR data',
             '• Try capturing again with better lighting',
@@ -113,13 +118,14 @@ function getErrorTips(errorMessage: string): string[] {
     }
     if (msg.includes('fallback') || msg.includes('one-shot')) {
         return [
+            '• You can still add books: upload a photo or enter ISBN manually',
             '• First scan may be slower while using fallback OCR mode',
-            '• OCR worker failed to start — scans will still work',
             '• Refresh the page to retry loading the full OCR engine',
         ];
     }
     if (msg.includes('tesseract') || msg.includes('worker') || msg.includes('module')) {
         return [
+            '• You can still add books: upload a photo or enter ISBN manually',
             '• OCR engine may still be loading — wait a moment and try again',
             '• Check your internet connection (first load downloads OCR data)',
             '• Refresh the page if the problem persists',
@@ -141,6 +147,7 @@ function getErrorTips(errorMessage: string): string[] {
     return [
         '• Expand the debug panel (terminal icon) for full logs',
         '• Try again with a clearer image',
+        '• Upload a photo instead of using camera',
         '• Use manual ISBN entry if scanning keeps failing',
     ];
 }

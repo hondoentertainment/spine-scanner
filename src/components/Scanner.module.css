@@ -61,7 +61,7 @@
   cursor: pointer;
 }
 
-/* ── P5: Barcode targeting guide overlay ──────────── */
+/* ── Viewfinder overlay ──────────────────────── */
 
 .viewfinderOverlay {
   position: absolute;
@@ -141,21 +141,28 @@
   50% { top: 80%; }
 }
 
-.guideHint {
-  margin-top: 0.75rem;
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.7);
-  font-weight: 500;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-  text-align: center;
+@media (prefers-reduced-motion: reduce) {
+  .scanLine { animation: none; }
+  .scanIndicator { animation: none; }
+  .cameraLoadingSkeleton { animation: none; }
+  .successFlash { animation: none; }
 }
 
-/* Live quality state (industry std: ready=green, blur/dark=amber) */
+.guideHint {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 600;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
 .guideHintReady { color: #22c55e; }
 .guideHintBlurry,
 .guideHintDark { color: #fbbf24; }
 
-/* ── Live scanning indicator ──────────────────────── */
+/* ── Live scanning indicator ──────────────────── */
 
 .scanIndicator {
   position: absolute;
@@ -167,7 +174,7 @@
   padding: 0.35rem 0.7rem;
   background: rgba(34, 197, 94, 0.85);
   color: white;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 600;
   border-radius: 9999px;
   z-index: 100;
@@ -180,13 +187,15 @@
   50% { opacity: 1; box-shadow: 0 0 12px rgba(34, 197, 94, 0.6); }
 }
 
+/* ── Controls panel ──────────────────────────── */
+
 .controls {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
   padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.9));
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.92));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -196,38 +205,249 @@
 .statusLine {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   text-align: center;
-  flex-wrap: wrap;
+  width: 100%;
 }
 
 .statusText {
   color: #fff;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   font-weight: 500;
+  margin: 0;
+  line-height: 1.3;
 }
 
-/* ── OCR progress bar ──────────────────────────────── */
+/* ── Primary scan button ─────────────────────── */
+
+.primaryBtn {
+  width: 100%;
+  max-width: 340px;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 700;
+  border-radius: 14px;
+  min-height: 56px;
+  background: var(--primary) !important;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.1s ease, opacity 0.15s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.primaryBtn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.primaryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Secondary action buttons ────────────────── */
+
+.secondaryRow {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 340px;
+}
+
+.secondaryBtn {
+  flex: 1;
+  padding: 0.75rem 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 10px;
+  min-height: 48px;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease;
+}
+
+.secondaryBtn:hover {
+  background: rgba(255, 255, 255, 0.14) !important;
+}
+
+.secondaryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Advanced options section ────────────────── */
+
+.advancedSection {
+  width: 100%;
+  max-width: 340px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.advancedSummary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  list-style: none;
+  justify-content: center;
+}
+
+.advancedSummary::-webkit-details-marker {
+  display: none;
+}
+
+.advancedContent {
+  padding: 0.5rem 0.75rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.optionRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.optionLabel {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 600;
+  min-width: 70px;
+}
+
+.optionBtns {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.optionBtn {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.optionBtnActive {
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
+  color: white;
+}
+
+.toolRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.toolBtn {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  color: rgba(255, 255, 255, 0.8);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.toolBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.toolBtnActive {
+  background: var(--accent-blue) !important;
+  border-color: var(--accent-blue);
+  color: white;
+}
+
+.statusDetails {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ── Manual entry section ────────────────────── */
+
+.manualSection {
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.backToScanBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  background: none;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.backToScanBtn:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ── Progress bar ────────────────────────────── */
 
 .progressContainer {
   width: 100%;
-  max-width: 280px;
-  margin-top: 0.35rem;
-}
-
-.progressLabel {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.85);
-  margin-bottom: 0.25rem;
+  max-width: 340px;
 }
 
 .progressBarTrack {
   width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.2);
+  height: 4px;
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 9999px;
   overflow: hidden;
 }
@@ -236,43 +456,30 @@
   height: 100%;
   background: var(--accent-blue);
   border-radius: 9999px;
-  transition: width 0.2s ease-out;
+  transition: width 0.3s ease-out;
 }
 
-/* ── Language selector row ─────────────────────────── */
+/* ── Cancel scan ─────────────────────────────── */
 
-.languageRow {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.languageLabel {
-  font-size: 0.75rem;
-  color: var(--text-muted);
+.cancelScanBtn {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
   font-weight: 600;
-}
-
-.languageBtn {
-  padding: 0.3rem 0.55rem;
-  font-size: 0.7rem;
-  font-weight: 600;
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.4);
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.8);
-  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   -webkit-tap-highlight-color: transparent;
+  min-height: 40px;
 }
 
-.languageBtnActive {
-  background: var(--accent-blue);
-  border-color: var(--accent-blue);
-  color: white;
+.cancelScanBtn:hover {
+  background: rgba(248, 113, 113, 0.15);
 }
 
-/* ── Camera loading overlay ─────────────────────────── */
+/* ── Camera states ───────────────────────────── */
 
 .cameraLoadingOverlay {
   position: absolute;
@@ -310,31 +517,36 @@
   font-weight: 500;
 }
 
-.resolutionHint {
-  width: 100%;
-  margin: 0.15rem 0 0;
-  font-size: 0.7rem;
-  color: #fbbf24;
-  font-weight: 500;
-}
-
-/* ── Prominent low-resolution banner ──────────────────── */
-
-.resolutionBanner {
-  width: 100%;
-  padding: 0.6rem 1rem;
-  margin-bottom: 0.25rem;
+.successFlash {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  background: rgba(251, 191, 36, 0.2);
-  border: 1px solid rgba(251, 191, 36, 0.5);
-  border-radius: 0.5rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #fbbf24;
-  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.15);
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+  pointer-events: none;
+  animation: success-flash 0.8s ease-out forwards;
+}
+
+@keyframes success-flash {
+  0% { opacity: 0; transform: scale(0.8); }
+  20% { opacity: 1; transform: scale(1.1); }
+  60% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+.cameraError {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  border-radius: 10px;
+  text-align: center;
+  width: 100%;
+  max-width: 340px;
 }
 
 .cameraStatus {
@@ -352,17 +564,9 @@
   display: inline-block;
 }
 
-.cameraDotReady {
-  background: #22c55e;
-}
-
-.cameraDotError {
-  background: #ef4444;
-}
-
-.cameraDotPending {
-  background: #f59e0b;
-}
+.cameraDotReady { background: #22c55e; }
+.cameraDotError { background: #ef4444; }
+.cameraDotPending { background: #f59e0b; }
 
 .cameraLabel {
   font-weight: 600;
@@ -377,85 +581,80 @@
   font-weight: 600;
 }
 
-.scanModeRow {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.scanModeLabel {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-
-.scanModeBtn {
-  padding: 0.35rem 0.6rem;
+.resolutionHint {
+  width: 100%;
+  margin: 0;
   font-size: 0.7rem;
-  font-weight: 600;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.8);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  -webkit-tap-highlight-color: transparent;
+  color: #fbbf24;
+  font-weight: 500;
 }
 
-.scanModeBtnActive {
-  background: var(--accent-blue);
-  border-color: var(--accent-blue);
-  color: white;
+/* ── OCR fallback banner ─────────────────────── */
+
+.ocrFallbackBanner {
+  width: 100%;
+  max-width: 340px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 10px;
+  font-size: 0.8rem;
 }
 
-.repairBtn {
-  background: rgba(34, 197, 94, 0.2) !important;
-  border-color: rgba(34, 197, 94, 0.5);
+.ocrFallbackTitle {
+  font-weight: 700;
+  color: #fbbf24;
+  margin: 0 0 0.25rem;
 }
 
-.cameraError {
-  padding: 0.4rem 0.6rem;
-  font-size: 0.75rem;
-  color: #f87171;
-  background: rgba(248, 113, 113, 0.1);
-  border: 1px solid rgba(248, 113, 113, 0.25);
-  border-radius: 0.5rem;
-  text-align: center;
+.ocrFallbackText {
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0 0 0.5rem;
+  line-height: 1.4;
 }
 
-.btnRow {
+.ocrFallbackActions {
   display: flex;
-  gap: 0.75rem;
-  align-items: center;
-}
-
-.captureBtn {
-  padding: 0.875rem 1.5rem;
-  display: flex;
-  align-items: center;
   gap: 0.5rem;
-  color: white;
-  font-size: 0.9rem;
+}
+
+.ocrFallbackBtn {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.75rem;
   font-weight: 600;
   border-radius: 9999px;
-  min-height: 48px;
+  background: var(--accent-blue);
+  color: white;
+  border: none;
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 
-.roundBtn {
-  padding: 0.875rem;
-  color: white;
+.ocrFallbackDismiss {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 9999px;
-  min-width: 48px;
-  min-height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* ── Fallback actions (no camera) ────────────── */
+
+.fallbackActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 340px;
+  align-items: stretch;
+}
+
+/* ── Manual ISBN form ────────────────────────── */
 
 .manualForm {
   display: flex;
@@ -473,28 +672,39 @@
   min-height: 48px;
   font-family: inherit;
   outline: none;
+  border-radius: 10px;
 }
 
 .submitBtn {
   padding: 0.75rem;
   background: var(--accent-blue);
   color: white;
-  border-radius: 0.5rem;
+  border-radius: 10px;
   min-width: 48px;
   min-height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: none;
+  cursor: pointer;
 }
 
-.closeBtn {
-  padding: 0.75rem;
-  color: var(--text-muted);
-  min-width: 48px;
-  min-height: 48px;
+/* ── Suggestions ─────────────────────────────── */
+
+.suggestionSection {
+  width: 100%;
+  max-width: 340px;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.suggestionHeader {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
+  text-align: center;
 }
 
 .suggestionRow {
@@ -505,67 +715,120 @@
 }
 
 .suggestionBtn {
-  padding: 0.4rem 0.6rem;
-  font-size: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-main);
-  border-radius: 9999px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.4rem;
+  min-height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.suggestionBtn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.repairBtn {
+  background: rgba(34, 197, 94, 0.15) !important;
+  border-color: rgba(34, 197, 94, 0.4);
+}
+
+.repairBtn:hover {
+  background: rgba(34, 197, 94, 0.25) !important;
 }
 
 .suggestionNote {
-  color: #f59e0b;
-  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.7rem;
+  font-weight: 500;
 }
 
-/* ── Fallback actions (when camera fails) ──────────── */
+/* ── Scanning tips ───────────────────────────── */
 
-.fallbackActions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+.scanningTips {
   width: 100%;
   max-width: 340px;
-  align-items: stretch;
+  margin-top: 0.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
 }
 
-.uploadBtn {
-  padding: 1rem 1.5rem;
+.scanningTipsSummary {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
-  color: white;
-  font-size: 1rem;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  border-radius: 0.75rem;
-  min-height: 52px;
-  background: var(--primary) !important;
-  border: none;
+  color: rgba(255, 255, 255, 0.45);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-}
-
-.uploadBtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.manualEntryBtn {
-  padding: 0.75rem 1rem;
-  display: flex;
-  align-items: center;
+  list-style: none;
   justify-content: center;
-  gap: 0.5rem;
-  color: var(--text-main);
-  font-size: 0.85rem;
-  font-weight: 500;
-  border-radius: 0.75rem;
-  min-height: 44px;
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
+
+.scanningTipsSummary::-webkit-details-marker {
+  display: none;
+}
+
+.tipsChevronDown {
+  display: inline-flex;
+}
+
+.tipsChevronUp {
+  display: none;
+}
+
+.scanningTips[open] .tipsChevronDown,
+.advancedSection[open] .tipsChevronDown {
+  display: none;
+}
+
+.scanningTips[open] .tipsChevronUp,
+.advancedSection[open] .tipsChevronUp {
+  display: inline-flex;
+}
+
+.scanningTipsList {
+  margin: 0;
+  padding: 0.5rem 0.75rem 0.75rem 1.25rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.6;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.scanningTipsList li {
+  margin-bottom: 0.35rem;
+}
+
+.scanningTipsList li:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Legacy class aliases (keep tests passing) ── */
+
+.uploadBtn { composes: primaryBtn; }
+.manualEntryBtn { composes: secondaryBtn; }
+.closeBtn { composes: backToScanBtn; }
+.captureBtn { composes: primaryBtn; }
+.roundBtn { composes: toolBtn; }
+.btnRow { composes: toolRow; }
+.scanModeRow { composes: optionRow; }
+.scanModeLabel { composes: optionLabel; }
+.scanModeBtn { composes: optionBtn; }
+.scanModeBtnActive { composes: optionBtnActive; }
+.languageRow { composes: optionRow; }
+.languageLabel { composes: optionLabel; }
+.languageBtn { composes: optionBtn; }
+.languageBtnActive { composes: optionBtnActive; }
+.phaseLabel { composes: statusText; font-size: 0.75rem; }
+.progressLabel { composes: statusText; font-size: 0.7rem; }
+.resolutionBanner { composes: cameraError; color: #fbbf24; }

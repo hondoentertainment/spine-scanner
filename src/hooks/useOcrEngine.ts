@@ -1,4 +1,5 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
+import { tryFixChecksum, fixOcrDigits } from '../utils/ocr.ts';
 
 /* ================================================================
  *  Tesseract.js module resolution
@@ -49,8 +50,34 @@ const TESS_ASSET_BASE = (() => {
 const MAX_WORKER_RETRIES = 3;
 /** Base delay (ms) for exponential backoff between worker creation retries. */
 const RETRY_BASE_DELAY = 500;
+/** PSM modes: 6=SINGLE_BLOCK (standard text), 7=SINGLE_LINE (ISBN/spine), 11=SPARSE_TEXT (scattered). */
+export const PSM = { SINGLE_BLOCK: '6', SINGLE_LINE: '7', SPARSE_TEXT: '11' } as const;
+/** Retries for transient recognize() failures before falling to one-shot. */
+const RECOGNIZE_RETRIES = 2;
 /** Max base64 image size (~5MB) to avoid Tesseract/memory issues. */
 const MAX_IMAGE_DATA_LENGTH = 7_000_000;
+/** Maximum number of cached OCR results (simple LRU). */
+const OCR_CACHE_MAX = 30;
+
+/** Extract per-symbol confidences (digits/X only) from Tesseract result data. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractSymbolConfidences(data: any): Array<{text: string, confidence: number}> | undefined {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let symbols: any[] | undefined;
+    if (Array.isArray(data?.symbols)) {
+        symbols = data.symbols;
+    } else if (Array.isArray(data?.words)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        symbols = data.words.flatMap((w: any) => Array.isArray(w.symbols) ? w.symbols : []);
+    }
+    if (!symbols || symbols.length === 0) return undefined;
+    const filtered = symbols
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .filter((s: any) => typeof s.text === 'string' && /^[0-9X]$/.test(s.text))
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((s: any) => ({ text: s.text as string, confidence: s.confidence as number }));
+    return filtered.length > 0 ? filtered : undefined;
+}
 
 /** Validate processedImage before passing to Tesseract. */
 function isValidOcrInput(processedImage: string, addLog: (m: string) => void): boolean {
@@ -85,6 +112,8 @@ export interface OcrResult {
     allCandidates: string[];
     /** Tesseract confidence 0–100 for this pass. Used for ranking and early exit. */
     confidence?: number;
+    /** Per-symbol confidence values from Tesseract, for targeted checksum repair. */
+    symbolConfidences?: Array<{text: string, confidence: number}>;
 }
 
 interface UseOcrEngineOptions {
@@ -100,6 +129,7 @@ interface UseOcrEngineOptions {
 export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOptions) {
     const tessModuleRef = useRef<ResolvedTesseract | null>(null);
     const tessModulePromise = useRef<Promise<ResolvedTesseract> | null>(null);
+    const ocrCacheRef = useRef(new Map<string, OcrResult>());
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const workerRef = useRef<any>(null);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -162,7 +192,7 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
                     'Worker creation'
                 );
 
-                await worker.setParameters({ tessedit_pageseg_mode: tess.PSM.SINGLE_BLOCK || '6' });
+                await worker.setParameters({ tessedit_pageseg_mode: tess.PSM?.SINGLE_BLOCK ?? PSM.SINGLE_BLOCK });
 
                 addLog('OCR worker ready');
                 workerRef.current = worker;
@@ -187,7 +217,7 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
         return workerPromise.current;
     }, [loadTessModule, addLog, setStatus, onOcrReady]);
 
-    /** Pre-warm the OCR engine (call when camera is ready). Also prefetches eng traineddata for offline. */
+    /** Pre-warm the OCR engine when capture is ready (e.g. camera on mount / cameraReady). Creates and reuses worker across passes. Prefetches eng traineddata for offline. */
     const preWarm = useCallback(async () => {
         setOcrState('loading');
         addLog('Pre-warming OCR engine...');
@@ -233,30 +263,49 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
             return { isbn: null, allCandidates: [], confidence: undefined };
         }
 
+        // Cache lookup: fast approximate key from bookend chars + length
+        const cacheKey = processedImage.slice(0, 200) + processedImage.slice(-200) + ':' + processedImage.length;
+        const cached = ocrCacheRef.current.get(cacheKey);
+        if (cached) {
+            addLog(`[${label}] OCR cache hit`);
+            return cached;
+        }
+
         try {
         // Path A: Persistent worker
-        const worker = await getWorker();
+        let currentWorker = await getWorker();
         let confidence: number | undefined;
-        if (worker) {
-            try {
-                const params: Record<string, string> = { tessedit_pageseg_mode: psmOverride ?? '6' };
-                if (charWhitelist) params.tessedit_char_whitelist = charWhitelist;
-                await worker.setParameters(params);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const result: any = await withTimeout(
-                    worker.recognize(processedImage),
-                    OCR_PASS_TIMEOUT,
-                    `OCR ${label}`
-                );
-                text = result.data.text;
-                confidence = typeof result.data?.confidence === 'number' ? result.data.confidence : undefined;
-            } catch (err) {
-                const msg = err instanceof Error ? err.message : String(err);
-                addLog(`Worker recognize failed: ${msg}`);
-                // Terminate the hanging worker to free Web Worker + WASM memory.
-                // A timed-out recognize() keeps running inside the worker until terminated.
-                worker.terminate?.().catch(() => {});
-                workerRef.current = null;
+        let symbolConfidences: Array<{text: string, confidence: number}> | undefined;
+        if (currentWorker) {
+            const params: Record<string, string> = { tessedit_pageseg_mode: psmOverride ?? PSM.SINGLE_BLOCK };
+            if (charWhitelist) params.tessedit_char_whitelist = charWhitelist;
+
+            for (let attempt = 0; attempt < RECOGNIZE_RETRIES && !text; attempt++) {
+                try {
+                    await currentWorker.setParameters(params);
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const result: any = await withTimeout(
+                        currentWorker.recognize(processedImage),
+                        OCR_PASS_TIMEOUT,
+                        `OCR ${label}`
+                    );
+                    text = result.data.text;
+                    confidence = typeof result.data?.confidence === 'number' ? result.data.confidence : undefined;
+                    symbolConfidences = extractSymbolConfidences(result.data);
+                } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    addLog(`Worker recognize failed (attempt ${attempt + 1}/${RECOGNIZE_RETRIES}): ${msg}`);
+                    if (attempt < RECOGNIZE_RETRIES - 1) {
+                        const delay = RETRY_BASE_DELAY * Math.pow(2, attempt);
+                        addLog(`Retrying in ${delay}ms (exponential backoff)`);
+                        await new Promise(r => setTimeout(r, delay));
+                        // Reuse same worker for retries; only terminate when giving up
+                    } else {
+                        currentWorker.terminate?.().catch(() => {});
+                        workerRef.current = null;
+                        addLog('Worker terminated after exhausting retries — will use fallback');
+                    }
+                }
             }
         }
 
@@ -278,7 +327,7 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
                             }
                         },
                     };
-                    if (psmOverride) (recognizeOptions as Record<string, unknown>).tessedit_pageseg_mode = psmOverride;
+                    (recognizeOptions as Record<string, unknown>).tessedit_pageseg_mode = psmOverride ?? PSM.SINGLE_BLOCK;
                     if (charWhitelist) (recognizeOptions as Record<string, unknown>).tessedit_char_whitelist = charWhitelist;
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const result: any = await withTimeout(
@@ -288,6 +337,7 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
                     );
                     text = result?.data?.text ?? '';
                     if (typeof result?.data?.confidence === 'number') confidence = result.data.confidence;
+                    if (!symbolConfidences) symbolConfidences = extractSymbolConfidences(result?.data);
                 }
             } catch (err) {
                 addLog(`One-shot recognize failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -303,12 +353,42 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
 
         // Confidence-weighted: prefer valid ISBN with higher confidence when multiple exist
         const validCandidates = candidates.filter(c => isValidIsbn(c));
-        const validIsbn = validCandidates.length === 0 ? null
+        let validIsbn: string | null = validCandidates.length === 0 ? null
             : validCandidates.length === 1 ? validCandidates[0]
             : confidence != null
                 ? validCandidates[0] // already ranked by extractIsbnCandidates; confidence applies to whole pass
                 : validCandidates[0];
-        return { isbn: validIsbn, allCandidates: candidates, confidence };
+
+        // Checksum repair for near-valid ISBN candidates when no valid ISBN found:
+        // 1) Try digit normalization (O→0, I→1, etc) then 2) tryFixChecksum for single-digit fixes
+        if (!validIsbn && candidates.length > 0) {
+            for (const c of candidates) {
+                const normalized = fixOcrDigits(c).replace(/[^0-9X]/g, '');
+                if (normalized.length === 10 || normalized.length === 13) {
+                    if (isValidIsbn(normalized)) {
+                        addLog(`[${label}] digit normalization: ${c} → ${normalized}`);
+                        validIsbn = normalized;
+                        break;
+                    }
+                }
+                const repaired = tryFixChecksum(c);
+                if (repaired) {
+                    addLog(`[${label}] checksum repair: ${c} → ${repaired}`);
+                    validIsbn = repaired;
+                    break;
+                }
+            }
+        }
+        const ocrResult: OcrResult = { isbn: validIsbn, allCandidates: candidates, confidence, symbolConfidences };
+
+        // Store in cache; evict oldest if over limit
+        ocrCacheRef.current.set(cacheKey, ocrResult);
+        if (ocrCacheRef.current.size > OCR_CACHE_MAX) {
+            const oldest = ocrCacheRef.current.keys().next().value;
+            if (oldest !== undefined) ocrCacheRef.current.delete(oldest);
+        }
+
+        return ocrResult;
         } finally {
             progressCallbackRef.current = null;
         }
@@ -336,7 +416,7 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
             const recognizeOptions: Record<string, unknown> = {
                 workerPath: workerURL,
                 corePath: coreURL,
-                tessedit_pageseg_mode: '6', // SINGLE_BLOCK for mixed text
+                tessedit_pageseg_mode: PSM.SINGLE_BLOCK, // SINGLE_BLOCK for mixed-language text
                 logger: (m: { status: string; progress?: number }) => {
                     if (m.status === 'recognizing text' && m.progress) setStatus(`OCR (${label}): ${Math.round(m.progress * 100)}%`);
                 },
