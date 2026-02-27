@@ -1,7 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
-import { Camera, Loader2, Edit3, Check, ImagePlus, Zap, Image as ImageIcon, X } from 'lucide-react';
-import { isValidIsbn } from '../utils/isbnValidation.ts';
+import { Camera, Loader2, Edit3, Check, ImagePlus, Zap, Image as ImageIcon, X, Flashlight } from 'lucide-react';
+import { isValidIsbn, formatIsbnForDisplay } from '../utils/isbnValidation.ts';
 import { getNearMissCandidates } from '../utils/ocr.ts';
 import { useToast } from './Toast.tsx';
 import { useOcrEngine } from '../hooks/useOcrEngine.ts';
@@ -67,6 +67,9 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const [scanSuccessFlash, setScanSuccessFlash] = useState(false);
     const [successAnnouncement, setSuccessAnnouncement] = useState('');
     const [ocrFallbackDismissed, setOcrFallbackDismissed] = useState(false);
+    const [torchOn, setTorchOn] = useState(false);
+    const [torchSupported, setTorchSupported] = useState(false);
+    const videoTrackRef = useRef<MediaStreamTrack | null>(null);
 
     const abortControllerRef = useRef<AbortController | null>(null);
     useEffect(() => {
@@ -429,6 +432,16 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
         addLog('Scan cancelled by user');
     }, [addLog]);
 
+    const toggleTorch = useCallback(() => {
+        const track = videoTrackRef.current;
+        if (!track) return;
+        const next = !torchOn;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        track.applyConstraints({ advanced: [{ torch: next }] } as any)
+            .then(() => { setTorchOn(next); addLog(`Torch ${next ? 'on' : 'off'}`); })
+            .catch(() => addLog('Torch toggle failed'));
+    }, [torchOn, addLog]);
+
     const getSimpleHint = (): string => {
         if (liveQualityHint === 'ready') return 'Ready — tap Scan';
         if (liveQualityHint === 'blurry') return 'Hold steady...';
@@ -439,9 +452,9 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
 
     const getProgressPercent = (): number => {
         if (!scanProgress || scanProgress.totalPasses == null || scanProgress.totalPasses <= 0) return 0;
-        const passFrac = (scanProgress.currentPass ?? 0) / scanProgress.totalPasses;
+        const completedPasses = Math.max(0, (scanProgress.currentPass ?? 0) - 1);
         const withinPass = (scanProgress.passProgress ?? 0) / 100;
-        return Math.min(100, (passFrac - 1 / scanProgress.totalPasses + withinPass / scanProgress.totalPasses) * 100);
+        return Math.min(100, Math.max(0, ((completedPasses + withinPass) / scanProgress.totalPasses) * 100));
     };
 
     /* ── Render ────────────────────────────────────────────────── */
@@ -459,11 +472,12 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                     try {
                         const track = stream.getVideoTracks()[0];
                         if (track) {
+                            videoTrackRef.current = track;
                             const caps = track.getCapabilities?.() as Record<string, unknown> | undefined;
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             const advanced: Record<string, any> = {};
                             if (caps?.focusMode) advanced.focusMode = 'continuous';
-                            if (caps?.torch) advanced.torch = false;
+                            if (caps?.torch) setTorchSupported(true);
                             if (Object.keys(advanced).length > 0) {
                                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                 track.applyConstraints({ advanced: [advanced] } as any)
@@ -473,7 +487,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                             const settings = track.getSettings();
                             const w = settings.width ?? 0;
                             const h = settings.height ?? 0;
-                            addLog(`Camera: ${w}x${h}${settings.facingMode ? ` (${settings.facingMode})` : ''}`);
+                            addLog(`Camera: ${w}x${h}${settings.facingMode ? ` (${settings.facingMode})` : ''}${caps?.torch ? ' (torch available)' : ''}`);
                         }
                     } catch { /* best effort */ }
                 }}
@@ -532,6 +546,18 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                     {getSimpleHint()}
                 </p>
             </div>
+
+            {torchSupported && cameraReady && !cameraError && (
+                <button
+                    type="button"
+                    onClick={toggleTorch}
+                    className={`${s.torchBtn} ${torchOn ? s.torchBtnActive : ''}`}
+                    aria-label={torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
+                    aria-pressed={torchOn}
+                >
+                    <Flashlight size={18} />
+                </button>
+            )}
 
             {continuousActiveRef.current && !processing && (
                 <div className={s.scanIndicator}>
@@ -673,7 +699,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                                 className={`glass ${s.suggestionBtn} ${s.repairBtn}`}
                                 title={`Corrected from ${original}`}
                                 aria-label={`Use ISBN ${repaired}`}>
-                                <strong>{repaired}</strong> <Check size={14} />
+                                <strong>{formatIsbnForDisplay(repaired)}</strong> <Check size={14} />
                             </button>
                         ))}
                         {isbnSuggestions.filter(c => !Object.keys(repairedMap).includes(c)).map((candidate, idx) => (
@@ -684,7 +710,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                                 }}
                                 className={`glass ${s.suggestionBtn}`}
                                 title={isValidIsbn(candidate) ? 'Tap to add this book' : 'Tap to edit and verify'}>
-                                {candidate}
+                                {formatIsbnForDisplay(candidate)}
                                 {isValidIsbn(candidate)
                                     ? <Check size={14} style={{ color: '#22c55e' }} />
                                     : <span className={s.suggestionNote}>edit</span>}

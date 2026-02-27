@@ -89,3 +89,19 @@ export const normalizeToIsbn13 = (isbn: string): string => {
   }
   return digits || isbn;
 };
+
+/**
+ * Format an ISBN-13 for display with hyphens: 978-X-XX-XXXXXX-X.
+ * Uses a simple grouping: prefix-group-publisher-title-check.
+ * Falls back to raw digits for ISBN-10 or non-standard formats.
+ */
+export const formatIsbnForDisplay = (isbn: string): string => {
+  const digits = isbn.replace(/[^0-9X]/g, '');
+  if (digits.length === 13) {
+    return `${digits.slice(0, 3)}-${digits[3]}-${digits.slice(4, 6)}-${digits.slice(6, 12)}-${digits[12]}`;
+  }
+  if (digits.length === 10) {
+    return `${digits[0]}-${digits.slice(1, 4)}-${digits.slice(4, 9)}-${digits[9]}`;
+  }
+  return isbn;
+};

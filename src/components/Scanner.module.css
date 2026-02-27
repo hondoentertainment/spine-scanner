@@ -162,6 +162,34 @@
 .guideHintBlurry,
 .guideHintDark { color: #fbbf24; }
 
+/* ── Torch toggle button ──────────────────────── */
+
+.torchBtn {
+  position: absolute;
+  top: 0.75rem;
+  left: 3.5rem;
+  padding: 0.625rem;
+  border-radius: 50%;
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  z-index: 100;
+  -webkit-tap-highlight-color: transparent;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.torchBtnActive {
+  background: rgba(251, 191, 36, 0.85);
+  border-color: rgba(251, 191, 36, 0.9);
+  color: #000;
+}
+
 /* ── Live scanning indicator ──────────────────── */
 
 .scanIndicator {

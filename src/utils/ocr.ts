@@ -35,7 +35,7 @@ const fixOcrDigitsAggressive = (str: string): string =>
  * Common OCR ambiguity map: digit/letter → alternatives to try when checksum fails.
  * Shared by tryFixChecksum() and getNearMissCandidates() to ensure consistent repair.
  *
- * Digit confusions: 0↔6↔8↔9, 1↔7↔4, 2↔7↔3, 3↔8, 5↔6↔8↔9, 7↔1, 8↔0↔3↔6↔9
+ * Digit confusions: 0↔6↔8↔9, 1↔7↔4, 2↔7↔3, 3↔8↔5, 5↔3↔6↔8↔9, 7↔1↔2, 9↔4
  * Letter→digit (OCR best-practice): O→0, I→1, S→5, B→8, G→9, Z→2
  * X→0 (ISBN-10 check digit: X=10 can be misread as digit)
  */
@@ -43,13 +43,13 @@ export const OCR_AMBIGUITY_MAP: Record<string, string[]> = {
   '0': ['6', '8', '9'],
   '1': ['7', '4'],
   '2': ['7', '3'],
-  '3': ['8'],
+  '3': ['8', '5'],
   '4': ['1', '9'],
-  '5': ['6', '8', '9'],
+  '5': ['6', '8', '9', '3'],
   '6': ['0', '5', '8'],
-  '7': ['1'],
+  '7': ['1', '2'],
   '8': ['0', '3', '6', '9'],
-  '9': ['0', '7'],
+  '9': ['0', '7', '4'],
   'X': ['0'],
   /* Letter alternatives for near-valid candidates that slipped through with letters */
   'O': ['0'], 'o': ['0'], 'I': ['1'], 'l': ['1'], 'S': ['5'], 's': ['5'],
