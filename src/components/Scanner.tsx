@@ -459,7 +459,9 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
 
     /* ── Render ────────────────────────────────────────────────── */
     return (
-        <div ref={containerRef} className="scanner-container glass" style={{ position: 'relative', overflow: 'hidden' }} tabIndex={0} aria-label="Book scanner: press Space or Enter to capture" aria-busy={processing || isScanning}>
+        <div ref={containerRef} className="scanner-container glass" style={{ display: 'flex', flexDirection: 'column' }} tabIndex={0} aria-label="Book scanner: press Space or Enter to capture" aria-busy={processing || isScanning}>
+            {/* Camera viewfinder area — position: relative for overlays */}
+            <div className={s.cameraWrapper}>
             <Webcam
                 audio={false}
                 ref={webcamRef}
@@ -572,6 +574,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 show={showDebug}
                 onToggle={() => setShowDebug(prev => !prev)}
             />
+            </div>{/* end cameraWrapper */}
 
             <div className={s.controls}>
                 {/* Simple status text */}
