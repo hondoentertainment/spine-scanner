@@ -12,6 +12,7 @@ import { useAuthStore } from '../useAuthStore';
 const mockGetSession = vi.fn();
 const mockSignUp = vi.fn();
 const mockSignInWithPassword = vi.fn();
+const mockSignInWithOtp = vi.fn();
 const mockSignInWithOAuth = vi.fn();
 const mockSignOut = vi.fn();
 const mockOnAuthStateChange = vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } }));
@@ -27,6 +28,7 @@ vi.mock('../../lib/supabase', () => ({
       getSession: () => mockGetSession(),
       signUp: (creds: { email: string; password: string }) => mockSignUp(creds),
       signInWithPassword: (creds: { email: string; password: string }) => mockSignInWithPassword(creds),
+      signInWithOtp: (opts: unknown) => mockSignInWithOtp(opts),
       signInWithOAuth: (opts: unknown) => mockSignInWithOAuth(opts),
       signOut: () => mockSignOut(),
       onAuthStateChange: (cb: (...args: unknown[]) => void) => mockOnAuthStateChange(cb),
@@ -46,6 +48,7 @@ describe('useAuthStore', () => {
       profile: null,
       loading: true,
       error: null,
+      magicLinkSent: false,
     });
 
     vi.clearAllMocks();
@@ -161,6 +164,49 @@ describe('useAuthStore', () => {
     });
   });
 
+  /* ── signInWithMagicLink ────────────────────────────────── */
+  describe('signInWithMagicLink', () => {
+    it('calls supabase.auth.signInWithOtp and sets magicLinkSent on success', async () => {
+      mockSignInWithOtp.mockResolvedValue({ error: null });
+
+      await useAuthStore.getState().signInWithMagicLink('test@test.com');
+
+      expect(mockSignInWithOtp).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'test@test.com',
+          options: expect.objectContaining({ emailRedirectTo: expect.any(String) }),
+        })
+      );
+      const state = useAuthStore.getState();
+      expect(state.magicLinkSent).toBe(true);
+      expect(state.loading).toBe(false);
+      expect(state.error).toBeNull();
+    });
+
+    it('sets error on signInWithOtp failure', async () => {
+      mockSignInWithOtp.mockResolvedValue({ error: { message: 'Rate limit exceeded' } });
+
+      await useAuthStore.getState().signInWithMagicLink('test@test.com');
+
+      const state = useAuthStore.getState();
+      expect(state.error).toBe('Rate limit exceeded');
+      expect(state.loading).toBe(false);
+      expect(state.magicLinkSent).toBe(false);
+    });
+
+    it('sets loading true while in progress', async () => {
+      let resolveOtp: (val: { error: null }) => void;
+      mockSignInWithOtp.mockReturnValue(new Promise((r) => { resolveOtp = r; }));
+
+      const promise = useAuthStore.getState().signInWithMagicLink('test@test.com');
+      expect(useAuthStore.getState().loading).toBe(true);
+
+      resolveOtp!({ error: null });
+      await promise;
+      expect(useAuthStore.getState().loading).toBe(false);
+    });
+  });
+
   /* ── signInWithGoogle ────────────────────────────────────── */
   describe('signInWithGoogle', () => {
     it('calls supabase.auth.signInWithOAuth with google provider', async () => {
@@ -224,6 +270,17 @@ describe('useAuthStore', () => {
       useAuthStore.getState().clearError();
 
       expect(useAuthStore.getState().error).toBeNull();
+    });
+  });
+
+  /* ── clearMagicLinkSent ────────────────────────────────── */
+  describe('clearMagicLinkSent', () => {
+    it('resets magicLinkSent to false', () => {
+      useAuthStore.setState({ magicLinkSent: true });
+
+      useAuthStore.getState().clearMagicLinkSent();
+
+      expect(useAuthStore.getState().magicLinkSent).toBe(false);
     });
   });
 });

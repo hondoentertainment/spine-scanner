@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuthStore } from '../store/useAuthStore.ts';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
 import { upsertProfile } from '../lib/profiles.ts';
-import { LogIn, LogOut, UserPlus, Cloud, CloudOff, AlertCircle, Loader, X, WifiOff } from 'lucide-react';
+import { LogIn, LogOut, UserPlus, Cloud, CloudOff, AlertCircle, Loader, X, WifiOff, Mail, ArrowLeft } from 'lucide-react';
 import s from './AuthPanel.module.css';
 
 interface AuthPanelProps {
@@ -14,8 +14,8 @@ interface AuthPanelProps {
 }
 
 const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, online, pendingChanges }) => {
-  const { user, profile, loading, error, signIn, signUp, signInWithGoogle, signOut, loadProfile, clearError } = useAuthStore();
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const { user, profile, loading, error, signIn, signUp, signInWithMagicLink, signInWithGoogle, signOut, loadProfile, clearError, magicLinkSent, clearMagicLinkSent } = useAuthStore();
+  const [mode, setMode] = useState<'magic' | 'signin' | 'signup'>('magic');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -25,7 +25,9 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, o
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (mode === 'signup') {
+    if (mode === 'magic') {
+      await signInWithMagicLink(email);
+    } else if (mode === 'signup') {
       const userId = await signUp(email, password, username.trim() || undefined);
       if (userId && username.trim()) {
         await upsertProfile(userId, { username: username.trim() });
@@ -34,7 +36,7 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, o
     } else {
       await signIn(email, password);
     }
-    setPassword('');
+    if (mode !== 'magic') setPassword('');
   };
 
   // Signed-in user badge
@@ -99,6 +101,42 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, o
     );
   }
 
+  // Magic link sent confirmation
+  if (magicLinkSent) {
+    return (
+      <div className={`glass ${s.formPanel}`}>
+        <button onClick={() => { setShowPanel(false); clearMagicLinkSent(); clearError(); }}
+          aria-label="Close sign-in panel" className={s.formClose}>
+          <X size={16} />
+        </button>
+
+        <div className={s.magicLinkSent}>
+          <Mail size={32} style={{ color: 'var(--accent-blue)' }} />
+          <h3 className={s.formTitle}>Check your email</h3>
+          <p className={s.magicLinkText}>
+            We sent a sign-in link to <strong>{email}</strong>. Click the link in the email to sign in.
+          </p>
+          <button
+            type="button"
+            onClick={() => signInWithMagicLink(email)}
+            disabled={loading}
+            className={s.resendBtn}
+          >
+            {loading ? <Loader size={14} className="animate-spin" /> : <Mail size={14} />}
+            Resend link
+          </button>
+          <button
+            type="button"
+            onClick={() => { clearMagicLinkSent(); clearError(); }}
+            className={s.modeBtn}
+          >
+            <ArrowLeft size={14} /> Back to sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Auth form
   return (
     <div className={`glass ${s.formPanel}`}>
@@ -108,7 +146,9 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, o
       </button>
 
       <div className={s.formHeader}>
-        <h3 className={s.formTitle}>{mode === 'signin' ? 'Sign In' : 'Create Account'}</h3>
+        <h3 className={s.formTitle}>
+          {mode === 'magic' ? 'Sign In' : mode === 'signin' ? 'Sign In with Password' : 'Create Account'}
+        </h3>
         <p className={s.formSubtitle}>Sync your library across devices</p>
       </div>
 
@@ -148,6 +188,7 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, o
           )}
         </button>
         <div className={s.formDivider}>or</div>
+
         {mode === 'signup' && (
           <input type="text" placeholder="Username (optional)" value={username}
             onChange={(e) => setUsername(e.target.value)} autoComplete="username"
@@ -155,8 +196,12 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, o
         )}
         <input type="email" placeholder="Email" value={email}
           onChange={(e) => setEmail(e.target.value)} required className={s.formInput} />
-        <input type="password" placeholder="Password" value={password}
-          onChange={(e) => setPassword(e.target.value)} required minLength={6} className={s.formInput} />
+
+        {mode !== 'magic' && (
+          <input type="password" placeholder="Password" value={password}
+            onChange={(e) => setPassword(e.target.value)} required minLength={6} className={s.formInput} />
+        )}
+
         <button type="submit" disabled={loading || !online}
           className={s.submitBtn}
           style={{
@@ -165,15 +210,41 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, o
             cursor: loading || !online ? 'not-allowed' : 'pointer',
           }}>
           {loading ? <Loader size={16} className="animate-spin" /> :
-            mode === 'signin' ? <><LogIn size={16} /> Sign In</> : <><UserPlus size={16} /> Create Account</>}
+            mode === 'magic' ? <><Mail size={16} /> Send Magic Link</> :
+            mode === 'signin' ? <><LogIn size={16} /> Sign In</> :
+            <><UserPlus size={16} /> Create Account</>}
         </button>
       </form>
 
       <div className={s.modeToggle}>
-        <button onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); clearError(); }}
-          className={s.modeBtn}>
-          {mode === 'signin' ? 'Need an account? Sign up' : 'Already have an account? Sign in'}
-        </button>
+        {mode === 'magic' ? (
+          <>
+            <button onClick={() => { setMode('signin'); clearError(); }} className={s.modeBtn}>
+              Use password instead
+            </button>
+            <button onClick={() => { setMode('signup'); clearError(); }} className={s.modeBtn}>
+              Create an account
+            </button>
+          </>
+        ) : mode === 'signin' ? (
+          <>
+            <button onClick={() => { setMode('magic'); clearError(); }} className={s.modeBtn}>
+              Use magic link instead
+            </button>
+            <button onClick={() => { setMode('signup'); clearError(); }} className={s.modeBtn}>
+              Need an account? Sign up
+            </button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => { setMode('magic'); clearError(); }} className={s.modeBtn}>
+              Use magic link instead
+            </button>
+            <button onClick={() => { setMode('signin'); clearError(); }} className={s.modeBtn}>
+              Already have an account? Sign in
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

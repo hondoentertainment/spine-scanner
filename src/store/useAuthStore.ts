@@ -15,13 +15,16 @@ interface AuthStore {
   profile: AuthProfile | null;
   loading: boolean;
   error: string | null;
+  magicLinkSent: boolean;
   initialize: () => Promise<void>;
   signUp: (email: string, password: string, username?: string) => Promise<string | undefined>;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithMagicLink: (email: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   loadProfile: () => Promise<void>;
   clearError: () => void;
+  clearMagicLinkSent: () => void;
 }
 
 export const useAuthStore = create<AuthStore>((set, get) => ({
@@ -30,6 +33,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   profile: null,
   loading: true,
   error: null,
+  magicLinkSent: false,
 
   initialize: async () => {
     if (!supabase) {
@@ -104,6 +108,23 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
   },
 
+  signInWithMagicLink: async (email: string) => {
+    if (!supabase) return;
+    set({ loading: true, error: null, magicLinkSent: false });
+
+    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '') || window.location.origin;
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: redirectTo },
+    });
+
+    if (error) {
+      set({ error: error.message, loading: false });
+    } else {
+      set({ loading: false, magicLinkSent: true });
+    }
+  },
+
   signInWithGoogle: async () => {
     if (!supabase) return;
     set({ loading: true, error: null });
@@ -156,4 +177,5 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+  clearMagicLinkSent: () => set({ magicLinkSent: false }),
 }));
