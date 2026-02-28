@@ -7,6 +7,7 @@ export interface AuthProfile {
   username: string | null;
   displayName: string | null;
   avatarUrl: string | null;
+  preferences?: import('../types.ts').ProfilePreferences | null;
 }
 
 interface AuthStore {
@@ -150,7 +151,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
     set({
       profile: p
-        ? { username: p.username, displayName: p.displayName, avatarUrl: p.avatarUrl }
+        ? { username: p.username, displayName: p.displayName, avatarUrl: p.avatarUrl, preferences: p.preferences ?? null }
         : null,
     });
   },

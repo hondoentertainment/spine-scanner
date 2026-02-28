@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuthStore } from '../store/useAuthStore.ts';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
 import { upsertProfile } from '../lib/profiles.ts';
-import { LogIn, LogOut, UserPlus, Cloud, CloudOff, AlertCircle, Loader, X, WifiOff } from 'lucide-react';
+import { LogIn, LogOut, UserPlus, Cloud, CloudOff, AlertCircle, Loader, X, WifiOff, Settings } from 'lucide-react';
 import s from './AuthPanel.module.css';
 
 interface AuthPanelProps {
@@ -11,9 +11,10 @@ interface AuthPanelProps {
   lastSynced: string | null;
   online: boolean;
   pendingChanges: number;
+  onOpenProfile?: () => void;
 }
 
-const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, online, pendingChanges }) => {
+const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, online, pendingChanges, onOpenProfile }) => {
   const { user, profile, loading, error, signIn, signUp, signInWithGoogle, signOut, loadProfile, clearError } = useAuthStore();
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
@@ -47,6 +48,11 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, o
           </div>
         )}
 
+        {onOpenProfile && (
+          <button onClick={onOpenProfile} className={`glass ${s.settingsBtn}`} aria-label="Profile and settings">
+            <Settings size={16} />
+          </button>
+        )}
         <div className={`glass ${s.userBadge}`}>
           {(profile?.avatarUrl ?? user.user_metadata?.avatar_url) ? (
             <img src={profile?.avatarUrl ?? user.user_metadata?.avatar_url} alt="" className={s.avatar} width={18} height={18} />
@@ -93,9 +99,16 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, o
   // Collapsed
   if (!showPanel) {
     return (
-      <button onClick={() => setShowPanel(true)} className={`glass ${s.signInBtn}`}>
-        <CloudOff size={14} /> Sign in to sync
-      </button>
+      <div className={s.wrap}>
+        {onOpenProfile && (
+          <button onClick={onOpenProfile} className={`glass ${s.settingsBtn}`} aria-label="Profile and settings">
+            <Settings size={16} />
+          </button>
+        )}
+        <button onClick={() => setShowPanel(true)} className={`glass ${s.signInBtn}`}>
+          <CloudOff size={14} /> Sign in to sync
+        </button>
+      </div>
     );
   }
 

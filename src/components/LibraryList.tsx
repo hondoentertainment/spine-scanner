@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
+import { useProfileStore } from '../store/useProfileStore.ts';
 import BookCard from './BookCard.tsx';
 import BookDetail from './BookDetail.tsx';
 import ShelfManager from './ShelfManager.tsx';
@@ -25,15 +26,23 @@ interface LibraryListProps {
 
 const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn, onOpenComplete }) => {
     const { books, shelves } = useBookStore();
+    const { preferences, updatePreferences } = useProfileStore();
     const [searchTerm, setSearchTerm] = useState('');
-    const [sortBy, setSortBy] = useState<SortField>('dateAdded');
-    const [sortAsc, setSortAsc] = useState(false);
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+    const sortBy = preferences.librarySortBy;
+    const sortAsc = preferences.librarySortAsc;
+    const statusFilter = preferences.libraryStatusFilter;
+    const viewMode = preferences.libraryViewMode;
+    const showStats = preferences.showStatsDefault;
+    const showShelves = preferences.showShelvesDefault;
     const [shelfFilter, setShelfFilter] = useState<string | null>(null);
-    const [showStats, setShowStats] = useState(false);
-    const [showShelves, setShowShelves] = useState(false);
-    const [viewMode, setViewMode] = useState<ViewMode>('grid');
     const [selectedBook, setSelectedBook] = useState<BookEntry | null>(null);
+
+    const setSortBy = useCallback((v: SortField) => updatePreferences({ librarySortBy: v }), [updatePreferences]);
+    const setSortAsc = useCallback((v: boolean) => updatePreferences({ librarySortAsc: v }), [updatePreferences]);
+    const setStatusFilter = useCallback((v: StatusFilter) => updatePreferences({ libraryStatusFilter: v }), [updatePreferences]);
+    const setViewMode = useCallback((v: ViewMode) => updatePreferences({ libraryViewMode: v }), [updatePreferences]);
+    const setShowStats = useCallback((v: boolean) => updatePreferences({ showStatsDefault: v }), [updatePreferences]);
+    const setShowShelves = useCallback((v: boolean) => updatePreferences({ showShelvesDefault: v }), [updatePreferences]);
 
     const listParentRef = useRef<HTMLDivElement>(null);
     const gridParentRef = useRef<HTMLDivElement>(null);
@@ -109,7 +118,10 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
 
     const handleSortToggle = (field: SortField) => {
         if (sortBy === field) setSortAsc(!sortAsc);
-        else { setSortBy(field); setSortAsc(field === 'title' || field === 'author'); }
+        else {
+            setSortBy(field);
+            setSortAsc(field === 'title' || field === 'author');
+        }
     };
 
     const countBooksOnShelf = (shelfId: string) =>

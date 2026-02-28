@@ -1,8 +1,10 @@
 import { supabase } from './supabase.ts';
+import type { ProfilePreferences } from '../types.ts';
+import { DEFAULT_PREFERENCES } from '../types.ts';
 
 /**
  * Profiles table schema: see supabase/migrations/001_profiles.sql
- * Fields: id (=user_id), username, display_name, avatar_url, updated_at
+ * Fields: id (=user_id), username, display_name, avatar_url, preferences, updated_at
  */
 
 export interface Profile {
@@ -10,10 +12,11 @@ export interface Profile {
   username: string | null;
   displayName: string | null;
   avatarUrl: string | null;
+  preferences?: ProfilePreferences;
   updated_at?: string;
 }
 
-type ProfileUpdate = { username?: string; displayName?: string; avatarUrl?: string };
+type ProfileUpdate = { username?: string; displayName?: string; avatarUrl?: string; preferences?: ProfilePreferences };
 
 /**
  * Upsert a profile row for the given user. Creates or updates the profile.
@@ -52,7 +55,7 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, display_name, avatar_url, updated_at')
+    .select('id, username, display_name, avatar_url, preferences, updated_at')
     .eq('id', userId)
     .maybeSingle();
 
@@ -62,12 +65,25 @@ export async function getProfile(userId: string): Promise<Profile | null> {
     return null;
   }
   if (!data) return null;
-  const row = data as { id: string; username?: string; display_name?: string; avatar_url?: string; updated_at?: string };
+  const row = data as {
+    id: string;
+    username?: string;
+    display_name?: string;
+    avatar_url?: string;
+    preferences?: ProfilePreferences;
+    updated_at?: string;
+  };
+  const prefs = row.preferences;
+  const preferences: ProfilePreferences = prefs && typeof prefs === 'object'
+    ? { ...DEFAULT_PREFERENCES, ...prefs }
+    : DEFAULT_PREFERENCES;
+
   return {
     id: row.id,
     username: row.username ?? null,
     displayName: row.display_name ?? null,
     avatarUrl: row.avatar_url ?? null,
+    preferences,
     updated_at: row.updated_at,
   };
 }

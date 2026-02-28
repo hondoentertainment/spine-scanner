@@ -5,6 +5,20 @@
   flex-wrap: wrap;
 }
 
+/* ---- Settings btn ---- */
+.settingsBtn {
+  padding: 0.4rem 0.6rem;
+  display: flex;
+  align-items: center;
+  border-radius: 9999px;
+  color: var(--text-muted);
+}
+
+.settingsBtn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+}
+
 /* ---- Signed-in badges ---- */
 .offlineBadge {
   padding: 0.35rem 0.65rem;
