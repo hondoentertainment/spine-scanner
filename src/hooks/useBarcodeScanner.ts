@@ -2,6 +2,7 @@ import { useRef, useCallback, useEffect } from 'react';
 import type { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
 import { isValidIsbn } from '../utils/isbnValidation.ts';
 import { tryFixChecksum } from '../utils/ocr.ts';
+import { hapticSuccess } from '../utils/haptics.ts';
 
 /* ================================================================
  *  Constants
@@ -216,6 +217,7 @@ export function useBarcodeScanner({
         }
 
         bumpTelemetry('confirmed', 1, true);
+        hapticSuccess();
         addLog(`Barcode (live ${source}): ${isbn} ✓`);
         lastLiveAcceptedRef.current = { isbn, at: Date.now() };
         onScan(isbn);

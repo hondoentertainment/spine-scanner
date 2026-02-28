@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isValidIsbn10, isValidIsbn13, isValidIsbn, isbn13To10, isbn10To13, normalizeToIsbn13 } from '../isbnValidation';
+import { isValidIsbn10, isValidIsbn13, isValidIsbn, isbn13To10, isbn10To13, normalizeToIsbn13, formatIsbnForDisplay } from '../isbnValidation';
 
 describe('isValidIsbn10', () => {
   it('validates correct ISBN-10', () => {
@@ -201,5 +201,27 @@ describe('normalizeToIsbn13', () => {
 
   it('handles 979 prefix (no ISBN-10 equivalent)', () => {
     expect(normalizeToIsbn13('9791032305690')).toBe('9791032305690');
+  });
+});
+
+describe('formatIsbnForDisplay', () => {
+  it('formats ISBN-13 with hyphens', () => {
+    expect(formatIsbnForDisplay('9780141036144')).toBe('978-0-14-103614-4');
+  });
+
+  it('formats ISBN-10 with hyphens', () => {
+    expect(formatIsbnForDisplay('0743273567')).toBe('0-743-27356-7');
+  });
+
+  it('formats ISBN-10 ending in X', () => {
+    expect(formatIsbnForDisplay('080442957X')).toBe('0-804-42957-X');
+  });
+
+  it('strips existing hyphens before formatting', () => {
+    expect(formatIsbnForDisplay('978-0-14-103614-4')).toBe('978-0-14-103614-4');
+  });
+
+  it('returns raw string for non-ISBN length', () => {
+    expect(formatIsbnForDisplay('12345')).toBe('12345');
   });
 });

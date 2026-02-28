@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { isValidIsbn } from '../utils/isbnValidation.ts';
-import { extractIsbnCandidates, tryFixChecksum, tryFixChecksumDouble, getNearMissCandidates } from '../utils/ocr.ts';
+import { extractIsbnCandidates, tryFixChecksum, tryFixChecksumDouble, getNearMissCandidates, getCharConfidenceWeights } from '../utils/ocr.ts';
 import type { OcrResult } from './useOcrEngine.ts';
 import { PSM } from './useOcrEngine.ts';
 import { applyOtsuBinarization, applyAdaptiveThreshold, applyMedianFilter, applyMorphClose, applyCLAHE, detectSkewAngle, measureContrast } from '../utils/imageProcessing.ts';
@@ -655,7 +655,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
             const repaired = tryFixChecksum(isbn);
             if (repaired) {
                 addLog(`ISBN via barcode (repaired): ${isbn} → ${repaired}`);
-                setStatus(`Found ISBN: ${repaired}`);
+                safeSetStatus(`Found ISBN: ${repaired}`);
                 reportProgress({ phase: 'done' });
                 return { isbn: repaired, suggestions: [] };
             }
@@ -717,6 +717,8 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
 
         /** Track best ISBN found so far when confidence is below threshold. */
         let bestResult: { isbn: string; confidence?: number } | null = null;
+        /** Map candidate → per-char confidence weights for targeted double-fix. */
+        const candidateConfidences = new Map<string, number[]>();
 
         for (let i = 0; i < ocrPasses.length; i++) {
             const pass = ocrPasses[i];
@@ -737,6 +739,15 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                 });
                 ocrPassesAttempted += 1;
                 result.allCandidates.forEach(c => allCandidates.add(c));
+                // Store per-char confidence weights for targeted double-fix later
+                if (result.symbolConfidences?.length) {
+                    const weights = getCharConfidenceWeights(result.symbolConfidences);
+                    for (const c of result.allCandidates) {
+                        if (!candidateConfidences.has(c) && weights.length === c.length) {
+                            candidateConfidences.set(c, weights);
+                        }
+                    }
+                }
                 const repairable = Array.from(allCandidates).filter(c => !isValidIsbn(c)).flatMap(c => {
                     const fix = tryFixChecksum(c);
                     return fix ? [fix] : [];
@@ -809,11 +820,12 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                     addLog(`Checksum repair: ${c} → ${fix} (suggested)`);
                 }
                 if (!fix) {
-                    const doubleFix = tryFixChecksumDouble(c);
+                    const charConf = candidateConfidences.get(c);
+                    const doubleFix = tryFixChecksumDouble(c, charConf);
                     if (doubleFix && !candidateList.includes(doubleFix) && !repaired.includes(doubleFix)) {
                         repaired.push(doubleFix);
                         repairedMap[doubleFix] = c;
-                        addLog(`Checksum double-repair: ${c} → ${doubleFix} (suggested)`);
+                        addLog(`Checksum double-repair: ${c} → ${doubleFix}${charConf ? ' (confidence-guided)' : ''} (suggested)`);
                     }
                 }
                 const misses = getNearMissCandidates(c);

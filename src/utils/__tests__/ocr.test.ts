@@ -430,14 +430,14 @@ describe('getNearMissCandidates', () => {
 describe('tryFixChecksum / getNearMissCandidates — new ambiguity entries', () => {
   // ── Digit '2' alternatives ('7', '3') ────────────────────────
   it('tryFixChecksum tries alternatives for digit 2 (2→7)', () => {
-    // 9780000000002 is valid (ISBN-13). Corrupt position 1: '7' → '2' → 9280000000002 (invalid).
-    // The ambiguity map for '2' includes '7'. Position 1 has the '2', and position 0 ('9')
-    // has alternatives ['0','7'] but neither produces a valid ISBN at that position.
-    // So tryFixChecksum finds '7' at position 1 first.
+    // 9280000000002 is invalid. Position 0 ('9') has alternatives ['0','7','4']; position 1 ('2') has ['7','3'].
+    // tryFixChecksum scans left-to-right, so position 0 is checked first.
+    // '9'→'4' at position 0 yields '4280000000002' which is a valid ISBN-13.
     const repaired = tryFixChecksum('9280000000002');
     expect(repaired).not.toBeNull();
     expect(isValidIsbn(repaired!)).toBe(true);
-    expect(repaired).toBe('9780000000002');
+    // The first valid fix found (left-to-right scan); the 2→7 fix is also in getNearMissCandidates.
+    expect(repaired).toBe('4280000000002');
   });
 
   it('getNearMissCandidates tries alternatives for digit 2', () => {
@@ -506,6 +506,18 @@ describe('tryFixChecksum / getNearMissCandidates — new ambiguity entries', () 
 
     expect(OCR_AMBIGUITY_MAP['X']).toBeDefined();
     expect(OCR_AMBIGUITY_MAP['X']).toContain('0');
+  });
+
+  it('OCR_AMBIGUITY_MAP contains expanded confusions for 3, 5, 7, and 9', () => {
+    // 3↔5 (noisy top part confusion)
+    expect(OCR_AMBIGUITY_MAP['3']).toContain('5');
+    expect(OCR_AMBIGUITY_MAP['5']).toContain('3');
+
+    // 7↔2 (common font confusion)
+    expect(OCR_AMBIGUITY_MAP['7']).toContain('2');
+
+    // 9↔4 (vertical stroke confusion)
+    expect(OCR_AMBIGUITY_MAP['9']).toContain('4');
   });
 });
 

@@ -337,9 +337,9 @@ describe('Scanner', () => {
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
-      // Should not auto-submit invalid ISBN; should show suggestion
+      // Should not auto-submit invalid ISBN; should show suggestion (formatted)
       await waitFor(() => {
-        expect(screen.getByText('1111111111111')).toBeInTheDocument();
+        expect(screen.getByText('111-1-11-111111-1')).toBeInTheDocument();
       }, { timeout: 10000 });
       expect(onScan).not.toHaveBeenCalled();
     }, 15000);
@@ -356,11 +356,11 @@ describe('Scanner', () => {
       await act(async () => { fireEvent.click(capture); });
 
       await waitFor(() => {
-        expect(screen.getByText('1111111111111')).toBeInTheDocument();
+        expect(screen.getByText('111-1-11-111111-1')).toBeInTheDocument();
       }, { timeout: 10000 });
 
       // Click the invalid suggestion - should populate manual form
-      const suggestionBtn = screen.getByRole('button', { name: /1111111111111/ });
+      const suggestionBtn = screen.getByRole('button', { name: /111-1-11-111111-1/ });
       fireEvent.click(suggestionBtn);
 
       await waitFor(() => {
