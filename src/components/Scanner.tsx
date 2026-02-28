@@ -1,7 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import { Camera, Loader2, Edit3, Check, ImagePlus, Zap, Image as ImageIcon, X, Flashlight, Maximize2, HelpCircle, Settings } from 'lucide-react';
-import { isValidIsbn } from '../utils/isbnValidation.ts';
+import { isValidIsbn, formatIsbnForDisplay } from '../utils/isbnValidation.ts';
 import { getNearMissCandidates } from '../utils/ocr.ts';
 import { useToast } from './Toast.tsx';
 import { useOcrEngine } from '../hooks/useOcrEngine.ts';
@@ -387,7 +387,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
 
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const cleanIsbn = manualIsbn.replace(/[^0-9X]/g, '');
+        const cleanIsbn = manualIsbn.toUpperCase().replace(/[^0-9X]/g, '');
         if (cleanIsbn.length !== 10 && cleanIsbn.length !== 13) {
             toast('Enter a 10 or 13 digit ISBN.', 'warning');
             return;
@@ -458,16 +458,16 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const getSimpleHint = (): string => {
         if (liveQualityHint === 'ready') return 'Ready — tap Scan';
         if (liveQualityHint === 'blurry') return 'Hold steady...';
-        if (liveQualityHint === 'dark') return 'Need more light';
-        if (liveQualityHint === 'blurry-dark') return 'Hold steady, need more light';
+        if (liveQualityHint === 'dark') return hasTorch && !torchOn ? 'Too dark — tap flashlight' : 'Need more light';
+        if (liveQualityHint === 'blurry-dark') return hasTorch && !torchOn ? 'Hold steady — tap flashlight' : 'Hold steady, need more light';
         return 'Center the barcode in the frame';
     };
 
     const getProgressPercent = (): number => {
         if (!scanProgress || scanProgress.totalPasses == null || scanProgress.totalPasses <= 0) return 0;
-        const passFrac = (scanProgress.currentPass ?? 0) / scanProgress.totalPasses;
+        const completedPasses = Math.max(0, (scanProgress.currentPass ?? 0) - 1);
         const withinPass = (scanProgress.passProgress ?? 0) / 100;
-        return Math.min(100, (passFrac - 1 / scanProgress.totalPasses + withinPass / scanProgress.totalPasses) * 100);
+        return Math.min(100, Math.max(0, ((completedPasses + withinPass) / scanProgress.totalPasses) * 100));
     };
 
     /* ── Render ────────────────────────────────────────────────── */
@@ -556,7 +556,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                         </button>
                         {showManual && (
                             <form onSubmit={handleManualSubmit} className={s.manualForm}>
-                                <input type="text" inputMode="numeric" placeholder="Enter ISBN..." value={manualIsbn}
+                                <input type="text" inputMode="text" pattern="[0-9Xx\-]{10,17}" placeholder="Enter ISBN..." value={manualIsbn}
                                     onChange={(e) => setManualIsbn(e.target.value)} aria-label="Enter ISBN manually"
                                     className={s.manualInput} autoFocus />
                                 <button type="submit" disabled={manualIsbn.length < 5 || isScanning}
@@ -569,7 +569,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 ) : showManual ? (
                     <div className={s.manualSection}>
                         <form onSubmit={handleManualSubmit} className={s.manualForm}>
-                            <input type="text" inputMode="numeric" placeholder="Type ISBN number..." value={manualIsbn}
+                            <input type="text" inputMode="text" pattern="[0-9Xx\-]{10,17}" placeholder="Type ISBN number..." value={manualIsbn}
                                 onChange={(e) => setManualIsbn(e.target.value)} aria-label="Enter ISBN manually"
                                 className={s.manualInput} autoFocus />
                             <button type="submit" disabled={manualIsbn.length < 5 || isScanning}
@@ -623,7 +623,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                                 className={`${s.suggestionBtn} ${s.repairBtn}`}
                                 title={`Corrected from ${original}`}
                                 aria-label={`Use ISBN ${repaired}`}>
-                                <strong>{repaired}</strong> <Check size={14} />
+                                <strong>{formatIsbnForDisplay(repaired)}</strong> <Check size={14} />
                             </button>
                         ))}
                         {isbnSuggestions.filter(c => !Object.keys(repairedMap).includes(c)).map((candidate, idx) => (
@@ -634,7 +634,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                                 }}
                                 className={s.suggestionBtn}
                                 title={isValidIsbn(candidate) ? 'Tap to add this book' : 'Tap to edit and verify'}>
-                                {candidate}
+                                {formatIsbnForDisplay(candidate)}
                                 {isValidIsbn(candidate)
                                     ? <Check size={14} style={{ color: '#22c55e' }} />
                                     : <span className={s.suggestionNote}>edit</span>}
@@ -685,7 +685,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                             const settings = track.getSettings();
                             const w = settings.width ?? 0;
                             const h = settings.height ?? 0;
-                            addLog(`Camera: ${w}x${h}${settings.facingMode ? ` (${settings.facingMode})` : ''}`);
+                            addLog(`Camera: ${w}x${h}${settings.facingMode ? ` (${settings.facingMode})` : ''}${caps?.torch ? ' (torch available)' : ''}`);
                         }
                     } catch { /* best effort */ }
                 }}
