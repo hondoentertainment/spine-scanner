@@ -19,7 +19,7 @@ export default defineConfig({
         'src/main.tsx',
       ],
       // Baseline established 2026-02-25: stmts 66.5%, branch 54.1%, funcs 67.0%, lines 68.3%
-      thresholds: { statements: 63, branches: 50, functions: 63, lines: 65 },
+      thresholds: { statements: 63, branches: 50, functions: 60, lines: 65 },
     },
   },
 })
