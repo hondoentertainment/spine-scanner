@@ -45,11 +45,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         if (lastReload && now - parseInt(lastReload) < 10_000) return;
         sessionStorage.setItem(reloadKey, String(now));
 
-        if ('caches' in window) {
-            caches.keys().then(names => Promise.all(names.map(n => caches.delete(n))))
-                .finally(() => window.location.reload());
+        const w = window as Window;
+        if (typeof w.caches !== 'undefined') {
+            w.caches.keys().then(names => Promise.all(names.map(n => w.caches.delete(n))))
+                .finally(() => w.location.reload());
         } else {
-            window.location.reload();
+            w.location.reload();
         }
     }
 
