@@ -23,6 +23,7 @@ const Scanner = lazy(() => import('./components/Scanner.tsx'));
 const LibraryList = lazy(() => import('./components/LibraryList.tsx'));
 const DataManagement = lazy(() => import('./components/DataManagement.tsx'));
 const ProfileSettings = lazy(() => import('./components/ProfileSettings.tsx'));
+const PasswordReset = lazy(() => import('./components/PasswordReset.tsx'));
 const preloadScanner = () => import('./components/Scanner.tsx');
 const preloadLibrary = () => import('./components/LibraryList.tsx');
 const preloadData = () => import('./components/DataManagement.tsx');
@@ -31,7 +32,7 @@ function App() {
   const [view, setView] = useState<'scan' | 'library' | 'data'>('scan');
   const { lookupByIsbn, loading, error } = useBookLookup();
   const { addBook, books, setBooks, shelves, setShelves } = useBookStore();
-  const { user, initialize: initAuth } = useAuthStore();
+  const { user, recoveryMode, initialize: initAuth } = useAuthStore();
   const { preferences, loadFromCloud, saveToCloud, updatePreferences } = useProfileStore();
   const { pendingChanges, markDirty, markSynced, flushing, setFlushing } = useSyncQueue();
   const { online, justReconnected, clearReconnected } = useOnlineStatus();
@@ -447,6 +448,12 @@ function App() {
       {showProfile && (
         <Suspense fallback={null}>
           <ProfileSettings onClose={() => setShowProfile(false)} />
+        </Suspense>
+      )}
+
+      {recoveryMode && (
+        <Suspense fallback={null}>
+          <PasswordReset onComplete={() => useAuthStore.setState({ recoveryMode: false })} />
         </Suspense>
       )}
 

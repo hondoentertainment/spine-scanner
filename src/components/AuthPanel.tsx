@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuthStore } from '../store/useAuthStore.ts';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
 import { upsertProfile } from '../lib/profiles.ts';
-import { LogIn, LogOut, UserPlus, Cloud, CloudOff, AlertCircle, Loader, X, WifiOff, Settings } from 'lucide-react';
+import { LogIn, LogOut, UserPlus, Cloud, CloudOff, AlertCircle, Loader, X, WifiOff, Settings, Mail, ArrowLeft, CheckCircle2, KeyRound } from 'lucide-react';
 import s from './AuthPanel.module.css';
 
 interface AuthPanelProps {
@@ -14,15 +14,28 @@ interface AuthPanelProps {
   onOpenProfile?: () => void;
 }
 
+type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset-sent' | 'confirm-pending';
+
 const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, online, pendingChanges, onOpenProfile }) => {
-  const { user, profile, loading, error, signIn, signUp, signInWithGoogle, signOut, loadProfile, clearError } = useAuthStore();
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const {
+    user, profile, loading, error, confirmationPending,
+    signIn, signUp, signInWithGoogle, signOut, loadProfile,
+    resetPassword, resendConfirmation, clearError, clearConfirmation,
+  } = useAuthStore();
+  const [mode, setMode] = useState<AuthMode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [showPanel, setShowPanel] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(false);
 
   if (!isSupabaseConfigured()) return null;
+
+  // Sync confirmation state from store
+  if (confirmationPending && mode !== 'confirm-pending') {
+    setMode('confirm-pending');
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,13 +45,40 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, o
         await upsertProfile(userId, { username: username.trim() });
         await loadProfile();
       }
-    } else {
+      setPassword('');
+    } else if (mode === 'signin') {
       await signIn(email, password);
+      setPassword('');
     }
-    setPassword('');
   };
 
-  // Signed-in user badge
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const target = resetEmail || email;
+    if (!target) return;
+    const ok = await resetPassword(target);
+    if (ok) {
+      setMode('reset-sent');
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    if (resendCooldown || !email) return;
+    const ok = await resendConfirmation(email);
+    if (ok) {
+      setResendCooldown(true);
+      setTimeout(() => setResendCooldown(false), 30_000);
+    }
+  };
+
+  const resetToSignIn = () => {
+    setMode('signin');
+    setResetEmail('');
+    clearError();
+    clearConfirmation();
+  };
+
+  // === Signed-in user badge ===
   if (user) {
     return (
       <div className={s.wrap}>
@@ -96,7 +136,7 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, o
     );
   }
 
-  // Collapsed
+  // === Collapsed ===
   if (!showPanel) {
     return (
       <div className={s.wrap}>
@@ -112,7 +152,108 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, o
     );
   }
 
-  // Auth form
+  // === Email confirmation pending ===
+  if (mode === 'confirm-pending') {
+    return (
+      <div className={`glass ${s.formPanel}`}>
+        <button onClick={() => { setShowPanel(false); resetToSignIn(); }}
+          aria-label="Close" className={s.formClose}>
+          <X size={16} />
+        </button>
+        <div className={s.successPanel}>
+          <div className={s.successIcon}>
+            <Mail size={28} />
+          </div>
+          <h3 className={s.formTitle}>Check your email</h3>
+          <p className={s.formSubtitle}>
+            We sent a confirmation link to <strong>{email}</strong>. Click the link to activate your account.
+          </p>
+          {error && (
+            <div className={s.errorBox}>
+              <AlertCircle size={14} /> {error}
+            </div>
+          )}
+          <button type="button" onClick={handleResendConfirmation}
+            disabled={loading || resendCooldown}
+            className={s.resendBtn}>
+            {loading ? <Loader size={14} className="animate-spin" /> : <Mail size={14} />}
+            {resendCooldown ? 'Email sent! Check your inbox' : 'Resend confirmation email'}
+          </button>
+          <button type="button" onClick={resetToSignIn} className={s.modeBtn}>
+            <ArrowLeft size={12} /> Back to sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // === Password reset sent ===
+  if (mode === 'reset-sent') {
+    return (
+      <div className={`glass ${s.formPanel}`}>
+        <button onClick={() => { setShowPanel(false); resetToSignIn(); }}
+          aria-label="Close" className={s.formClose}>
+          <X size={16} />
+        </button>
+        <div className={s.successPanel}>
+          <div className={s.successIcon} style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8' }}>
+            <CheckCircle2 size={28} />
+          </div>
+          <h3 className={s.formTitle}>Reset link sent</h3>
+          <p className={s.formSubtitle}>
+            Check <strong>{resetEmail || email}</strong> for a password reset link. It may take a minute to arrive.
+          </p>
+          <button type="button" onClick={resetToSignIn} className={s.modeBtn}>
+            <ArrowLeft size={12} /> Back to sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // === Forgot password form ===
+  if (mode === 'forgot') {
+    return (
+      <div className={`glass ${s.formPanel}`}>
+        <button onClick={() => { setShowPanel(false); resetToSignIn(); }}
+          aria-label="Close" className={s.formClose}>
+          <X size={16} />
+        </button>
+        <div className={s.formHeader}>
+          <h3 className={s.formTitle}>Reset Password</h3>
+          <p className={s.formSubtitle}>Enter your email and we'll send a reset link</p>
+        </div>
+
+        {error && (
+          <div className={s.errorBox}>
+            <AlertCircle size={14} /> {error}
+          </div>
+        )}
+
+        <form onSubmit={handleForgotPassword} className={s.form}>
+          <input type="email" placeholder="Email address" value={resetEmail || email}
+            onChange={(e) => setResetEmail(e.target.value)} required className={s.formInput} autoFocus />
+          <button type="submit" disabled={loading || !online}
+            className={s.submitBtn}
+            style={{
+              background: !online ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, var(--primary), var(--accent-purple))',
+              opacity: loading || !online ? 0.7 : 1,
+              cursor: loading || !online ? 'not-allowed' : 'pointer',
+            }}>
+            {loading ? <Loader size={16} className="animate-spin" /> : <><KeyRound size={16} /> Send Reset Link</>}
+          </button>
+        </form>
+
+        <div className={s.modeToggle}>
+          <button onClick={resetToSignIn} className={s.modeBtn}>
+            <ArrowLeft size={12} /> Back to sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // === Sign in / Sign up form ===
   return (
     <div className={`glass ${s.formPanel}`}>
       <button onClick={() => { setShowPanel(false); clearError(); }}
@@ -168,7 +309,7 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, o
         )}
         <input type="email" placeholder="Email" value={email}
           onChange={(e) => setEmail(e.target.value)} required className={s.formInput} />
-        <input type="password" placeholder="Password" value={password}
+        <input type="password" placeholder="Password (min 6 characters)" value={password}
           onChange={(e) => setPassword(e.target.value)} required minLength={6} className={s.formInput} />
         <button type="submit" disabled={loading || !online}
           className={s.submitBtn}
@@ -183,6 +324,11 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, o
       </form>
 
       <div className={s.modeToggle}>
+        {mode === 'signin' && (
+          <button onClick={() => { setMode('forgot'); clearError(); }} className={s.forgotBtn}>
+            Forgot password?
+          </button>
+        )}
         <button onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); clearError(); }}
           className={s.modeBtn}>
           {mode === 'signin' ? 'Need an account? Sign up' : 'Already have an account? Sign in'}
