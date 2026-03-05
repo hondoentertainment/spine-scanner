@@ -15,7 +15,7 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onComplete }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [success, setSuccess] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
-  const trapRef = useFocusTrap(true);
+  const trapRef = useFocusTrap<HTMLDivElement>();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
