@@ -1,6 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
-import { Camera, Loader2, Edit3, Check, ImagePlus, Zap, Image as ImageIcon, X, Flashlight, Maximize2, HelpCircle, Settings } from 'lucide-react';
+import { Camera, Loader2, Edit3, Check, ImagePlus, Zap, Image as ImageIcon, X, Flashlight, Maximize2, HelpCircle, Settings, SwitchCamera, ZoomIn, ZoomOut } from 'lucide-react';
 import { isValidIsbn, formatIsbnForDisplay } from '../utils/isbnValidation.ts';
 import { getNearMissCandidates } from '../utils/ocr.ts';
 import { useToast } from './Toast.tsx';
@@ -32,8 +32,8 @@ const EMPTY_TELEMETRY: LiveScanTelemetry = {
     confirmed: 0, cooldownSuppressed: 0, busySuppressed: 0,
 };
 
-const getVideoConstraints = (): MediaTrackConstraints => ({
-    facingMode: 'environment',
+const getVideoConstraints = (facing: 'environment' | 'user' = 'environment'): MediaTrackConstraints => ({
+    facingMode: facing,
     width: { ideal: 1920, min: 640 },
     height: { ideal: 1080, min: 480 },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -69,6 +69,10 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const [ocrFallbackDismissed, setOcrFallbackDismissed] = useState(false);
     const [torchOn, setTorchOn] = useState(false);
     const [hasTorch, setHasTorch] = useState(false);
+    const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+    const [zoomLevel, setZoomLevel] = useState(1);
+    const [zoomRange, setZoomRange] = useState<{ min: number; max: number; step: number } | null>(null);
+    const [scanMode, setScanMode] = useState<ScanMode>('auto');
 
     const abortControllerRef = useRef<AbortController | null>(null);
     useEffect(() => {
@@ -455,6 +459,28 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
         }
     }, []);
 
+    const switchCamera = useCallback(() => {
+        const next = facingMode === 'environment' ? 'user' : 'environment';
+        setFacingMode(next);
+        setCameraReady(false);
+        setHasTorch(false);
+        setTorchOn(false);
+        setZoomLevel(1);
+        setZoomRange(null);
+        addLog(`Switching camera to ${next}`);
+    }, [facingMode, addLog]);
+
+    const changeZoom = useCallback(async (level: number) => {
+        const track = videoTrackRef.current;
+        if (!track || !zoomRange) return;
+        const clamped = Math.min(zoomRange.max, Math.max(zoomRange.min, level));
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await track.applyConstraints({ advanced: [{ zoom: clamped } as any] });
+            setZoomLevel(clamped);
+        } catch { /* zoom not supported */ }
+    }, [zoomRange]);
+
     const getSimpleHint = (): string => {
         if (liveQualityHint === 'ready') return 'Ready — tap Scan';
         if (liveQualityHint === 'blurry') return 'Hold steady...';
@@ -490,6 +516,22 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 <p className={s.panelDescription}>
                     Position the barcode within the frame. The system will automatically detect and capture the details.
                 </p>
+
+                {/* Scan mode selector */}
+                <div className={s.scanModeSelector} role="radiogroup" aria-label="Scan mode">
+                    {([['auto', 'Auto'], ['barcode', 'Barcode'], ['ocr', 'OCR']] as const).map(([mode, label]) => (
+                        <button key={mode} type="button"
+                            role="radio" aria-checked={scanMode === mode}
+                            className={`${s.scanModeBtn} ${scanMode === mode ? s.scanModeBtnActive : ''}`}
+                            onClick={() => {
+                                setScanMode(mode);
+                                setAutoScan(mode === 'auto');
+                                addLog(`Scan mode: ${label}`);
+                            }}>
+                            {label}
+                        </button>
+                    ))}
+                </div>
 
                 {ocrState === 'fallback' && !ocrFallbackDismissed && (
                     <div className={s.ocrFallbackBanner} role="alert">
@@ -662,7 +704,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 audio={false}
                 ref={webcamRef}
                 screenshotFormat="image/jpeg"
-                videoConstraints={getVideoConstraints()}
+                videoConstraints={getVideoConstraints(facingMode)}
                 onUserMedia={(stream) => {
                     setCameraError(null);
                     setCameraReady(true);
@@ -676,6 +718,12 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                             const advanced: Record<string, any> = {};
                             if (caps?.focusMode) advanced.focusMode = 'continuous';
                             if (caps?.torch) { advanced.torch = false; setHasTorch(true); }
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const zCaps = caps?.zoom as any;
+                            if (zCaps && typeof zCaps === 'object' && zCaps.min != null && zCaps.max != null) {
+                                setZoomRange({ min: zCaps.min, max: zCaps.max, step: zCaps.step ?? 0.1 });
+                                setZoomLevel(1);
+                            }
                             if (Object.keys(advanced).length > 0) {
                                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                 track.applyConstraints({ advanced: [advanced] } as any)
@@ -685,7 +733,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                             const settings = track.getSettings();
                             const w = settings.width ?? 0;
                             const h = settings.height ?? 0;
-                            addLog(`Camera: ${w}x${h}${settings.facingMode ? ` (${settings.facingMode})` : ''}${caps?.torch ? ' (torch available)' : ''}`);
+                            addLog(`Camera: ${w}x${h}${settings.facingMode ? ` (${settings.facingMode})` : ''}${caps?.torch ? ' torch' : ''}${zCaps ? ` zoom ${zCaps.min}-${zCaps.max}x` : ''}`);
                         }
                     } catch { /* best effort */ }
                 }}
@@ -736,12 +784,38 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                                 <Flashlight size={16} />
                             </button>
                         )}
+                        <button type="button" onClick={switchCamera} className={s.cameraControlBtn}
+                            aria-label={facingMode === 'environment' ? 'Switch to front camera' : 'Switch to rear camera'}>
+                            <SwitchCamera size={16} />
+                        </button>
                         <button type="button" onClick={toggleFullscreen} className={s.cameraControlBtn} aria-label="Toggle fullscreen">
                             <Maximize2 size={16} />
                         </button>
                         <button type="button" onClick={() => setShowDebug(prev => !prev)} className={s.cameraControlBtn} aria-label="Toggle debug info">
                             <X size={16} />
                         </button>
+                    </div>
+                )}
+
+                {/* Zoom controls */}
+                {cameraReady && !cameraError && zoomRange && zoomRange.max > 1 && (
+                    <div className={s.zoomControls}>
+                        <button type="button" onClick={() => changeZoom(zoomLevel - (zoomRange.step * 2 || 0.5))}
+                            disabled={zoomLevel <= zoomRange.min}
+                            className={s.zoomBtn} aria-label="Zoom out">
+                            <ZoomOut size={14} />
+                        </button>
+                        <input type="range" className={s.zoomSlider}
+                            min={zoomRange.min} max={zoomRange.max} step={zoomRange.step}
+                            value={zoomLevel}
+                            onChange={(e) => changeZoom(parseFloat(e.target.value))}
+                            aria-label={`Zoom level ${zoomLevel.toFixed(1)}x`} />
+                        <button type="button" onClick={() => changeZoom(zoomLevel + (zoomRange.step * 2 || 0.5))}
+                            disabled={zoomLevel >= zoomRange.max}
+                            className={s.zoomBtn} aria-label="Zoom in">
+                            <ZoomIn size={14} />
+                        </button>
+                        <span className={s.zoomLabel}>{zoomLevel.toFixed(1)}x</span>
                     </div>
                 )}
 
