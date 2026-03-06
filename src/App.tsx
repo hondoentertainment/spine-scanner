@@ -34,11 +34,6 @@ type ScanRequestOptions = {
   source?: 'scan' | 'manual' | 'ocr' | 'barcode' | 'suggestion';
 };
 
-type ScanRequestOptions = {
-  allowReview?: boolean;
-  source?: 'scan' | 'manual' | 'ocr' | 'barcode' | 'suggestion';
-};
-
 function App() {
   const [view, setView] = useState<'scan' | 'library' | 'data' | 'profile'>('scan');
   const { lookupByIsbn, loading, error } = useBookLookup();
