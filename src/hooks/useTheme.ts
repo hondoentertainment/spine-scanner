@@ -1,35 +1,44 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
+import { useProfileStore } from '../store/useProfileStore.ts';
 
 export type Theme = 'dark' | 'light';
 
-const STORAGE_KEY = 'spine-scanner-theme';
-
-const getInitialTheme = (): Theme => {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === 'light' || stored === 'dark') return stored;
-  } catch {
-    // ignore
-  }
-  // Default to dark (original design)
+/** Resolves 'system' to actual theme based on prefers-color-scheme */
+function resolveTheme(pref: 'dark' | 'light' | 'system'): Theme {
+  if (pref === 'light' || pref === 'dark') return pref;
+  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: light)').matches) return 'light';
   return 'dark';
-};
+}
 
 export const useTheme = () => {
-  const [theme, setThemeState] = useState<Theme>(getInitialTheme);
+  const { preferences, updatePreferences } = useProfileStore();
+  const themePreference = preferences.theme;
+  const theme = resolveTheme(themePreference);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    try {
-      localStorage.setItem(STORAGE_KEY, theme);
-    } catch {
-      // ignore
-    }
   }, [theme]);
 
-  const toggleTheme = useCallback(() => {
-    setThemeState((prev) => (prev === 'dark' ? 'light' : 'dark'));
-  }, []);
+  // When theme is 'system', react to OS preference changes
+  useEffect(() => {
+    if (themePreference !== 'system') return;
+    const mq = window.matchMedia?.('(prefers-color-scheme: light)');
+    if (!mq) return;
+    const handler = () => {
+      document.documentElement.setAttribute('data-theme', mq.matches ? 'light' : 'dark');
+    };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [themePreference]);
 
-  return { theme, toggleTheme } as const;
+  const toggleTheme = useCallback(() => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    updatePreferences({ theme: next });
+  }, [theme, updatePreferences]);
+
+  const setTheme = useCallback((t: 'dark' | 'light' | 'system') => {
+    updatePreferences({ theme: t });
+  }, [updatePreferences]);
+
+  return { theme, themePreference, toggleTheme, setTheme } as const;
 };

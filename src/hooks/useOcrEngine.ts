@@ -273,7 +273,7 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
 
         try {
         // Path A: Persistent worker
-        let currentWorker = await getWorker();
+        const currentWorker = await getWorker();
         let confidence: number | undefined;
         let symbolConfidences: Array<{text: string, confidence: number}> | undefined;
         if (currentWorker) {

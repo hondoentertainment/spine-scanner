@@ -5,6 +5,7 @@ import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { useBookLookup } from './hooks/useBookLookup.ts';
 import { useBookStore } from './store/useBookStore.ts';
 import { useAuthStore } from './store/useAuthStore.ts';
+import { useProfileStore } from './store/useProfileStore.ts';
 import { useSyncQueue } from './store/useSyncQueue.ts';
 import { useOnlineStatus } from './hooks/useOnlineStatus.ts';
 import { useTheme } from './hooks/useTheme.ts';
@@ -21,6 +22,8 @@ import styles from './components/App.module.css';
 const Scanner = lazy(() => import('./components/Scanner.tsx'));
 const LibraryList = lazy(() => import('./components/LibraryList.tsx'));
 const DataManagement = lazy(() => import('./components/DataManagement.tsx'));
+const ProfileSettings = lazy(() => import('./components/ProfileSettings.tsx'));
+const PasswordReset = lazy(() => import('./components/PasswordReset.tsx'));
 const preloadScanner = () => import('./components/Scanner.tsx');
 const preloadLibrary = () => import('./components/LibraryList.tsx');
 const preloadData = () => import('./components/DataManagement.tsx');
@@ -29,14 +32,16 @@ function App() {
   const [view, setView] = useState<'scan' | 'library' | 'data'>('scan');
   const { lookupByIsbn, loading, error } = useBookLookup();
   const { addBook, books, setBooks, shelves, setShelves } = useBookStore();
-  const { user, initialize: initAuth } = useAuthStore();
+  const { user, recoveryMode, initialize: initAuth } = useAuthStore();
+  const { preferences, loadFromCloud, saveToCloud, updatePreferences } = useProfileStore();
   const { pendingChanges, markDirty, markSynced, flushing, setFlushing } = useSyncQueue();
   const { online, justReconnected, clearReconnected } = useOnlineStatus();
   const { theme, toggleTheme } = useTheme();
   const { toast, confirm } = useToast();
   const { track } = useAnalyticsStore();
   const [openBookIsbn, setOpenBookIsbn] = useState<string | null>(null);
-  const [batchMode, setBatchMode] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const batchMode = preferences.batchModeDefault;
 
   // Track whether initial sync has completed to avoid marking dirty during hydration
   const initialSyncDone = useRef(false);
@@ -47,6 +52,36 @@ function App() {
   useEffect(() => {
     initAuth();
   }, [initAuth]);
+
+  // One-time migration: move theme from legacy localStorage key into profile preferences
+  useEffect(() => {
+    try {
+      const legacy = localStorage.getItem('spine-scanner-theme');
+      if (legacy === 'light' || legacy === 'dark') {
+        localStorage.removeItem('spine-scanner-theme');
+        updatePreferences({ theme: legacy });
+      }
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load profile preferences from cloud when user signs in
+  useEffect(() => {
+    if (user?.id) {
+      loadFromCloud(user.id);
+    }
+  }, [user?.id, loadFromCloud]);
+
+  // Sync preferences to cloud when they change (debounced)
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    if (!user?.id) return;
+    clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => saveToCloud(user.id), 800);
+    return () => { clearTimeout(saveTimeoutRef.current); };
+  }, [user?.id, preferences, saveToCloud]);
 
   // Handle deep links (#book-ISBN or #book-photo-id)
   useEffect(() => {
@@ -305,6 +340,7 @@ function App() {
             lastSynced={useSyncQueue.getState().lastSyncedAt}
             online={online}
             pendingChanges={pendingChanges}
+            onOpenProfile={() => setShowProfile(true)}
           />
         </div>
 
@@ -355,7 +391,7 @@ function App() {
                   <p className={styles.scanSubtitle}>Scan ISBN, capture a book photo, or enter manually.</p>
                   <button
                     type="button"
-                    onClick={() => setBatchMode(b => !b)}
+                    onClick={() => updatePreferences({ batchModeDefault: !batchMode })}
                     className={`glass ${styles.batchToggle} ${batchMode ? styles.batchToggleActive : ''}`}
                     aria-pressed={batchMode}
                     title={batchMode ? 'Exit batch mode' : 'Batch add: stay on scanner after each add'}
@@ -408,6 +444,18 @@ function App() {
           </ErrorBoundary>
         )}
       </main>
+
+      {showProfile && (
+        <Suspense fallback={null}>
+          <ProfileSettings onClose={() => setShowProfile(false)} />
+        </Suspense>
+      )}
+
+      {recoveryMode && (
+        <Suspense fallback={null}>
+          <PasswordReset onComplete={() => useAuthStore.setState({ recoveryMode: false })} />
+        </Suspense>
+      )}
 
       <style>{`
         .app-container { opacity: 0; animation: fadeIn 0.8s ease-out forwards; }

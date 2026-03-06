@@ -32,3 +32,26 @@ export const SHELF_COLORS = [
   '#ef4444', // red
   '#3b82f6', // blue
 ] as const;
+
+/** User profile preferences stored per-profile (local or cloud). */
+export interface ProfilePreferences {
+  theme: 'light' | 'dark' | 'system';
+  librarySortBy: 'title' | 'author' | 'dateAdded' | 'pageCount';
+  librarySortAsc: boolean;
+  libraryViewMode: 'grid' | 'list';
+  libraryStatusFilter: 'all' | 'to-read' | 'reading' | 'read' | 'dnf';
+  batchModeDefault: boolean;
+  showStatsDefault: boolean;
+  showShelvesDefault: boolean;
+}
+
+export const DEFAULT_PREFERENCES: ProfilePreferences = {
+  theme: 'dark',
+  librarySortBy: 'dateAdded',
+  librarySortAsc: false,
+  libraryViewMode: 'grid',
+  libraryStatusFilter: 'all',
+  batchModeDefault: false,
+  showStatsDefault: false,
+  showShelvesDefault: false,
+};

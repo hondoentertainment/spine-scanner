@@ -28,9 +28,37 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         console.error('[ErrorBoundary] Caught error:', error, info);
         captureException(error, { componentStack: info.componentStack ?? '' });
         this.props.onError?.(error, info);
+
+        if (this.isChunkLoadError(error)) {
+            this.handleChunkError();
+        }
+    }
+
+    private isChunkLoadError(error: Error): boolean {
+        return /Failed to fetch dynamically imported module|Loading chunk|Loading CSS chunk/i.test(error.message);
+    }
+
+    private handleChunkError() {
+        const reloadKey = 'spine-scanner-chunk-reload';
+        const lastReload = sessionStorage.getItem(reloadKey);
+        const now = Date.now();
+        if (lastReload && now - parseInt(lastReload) < 10_000) return;
+        sessionStorage.setItem(reloadKey, String(now));
+
+        const w = window as Window;
+        if (typeof w.caches !== 'undefined') {
+            w.caches.keys().then(names => Promise.all(names.map(n => w.caches.delete(n))))
+                .finally(() => w.location.reload());
+        } else {
+            w.location.reload();
+        }
     }
 
     handleRetry = () => {
+        if (this.state.error && this.isChunkLoadError(this.state.error)) {
+            this.handleChunkError();
+            return;
+        }
         this.setState({ hasError: false, error: null });
     };
 

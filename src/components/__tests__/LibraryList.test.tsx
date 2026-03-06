@@ -4,6 +4,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import LibraryList from '../LibraryList';
 import { ToastProvider } from '../Toast';
 import { useBookStore } from '../../store/useBookStore';
+import { useProfileStore } from '../../store/useProfileStore';
+import { DEFAULT_PREFERENCES } from '../../types';
 import type { BookEntry, Shelf } from '../../types';
 
 /* ================================================================
@@ -62,6 +64,7 @@ const renderWithToast = (ui: React.ReactElement) =>
 describe('LibraryList', () => {
   beforeEach(() => {
     useBookStore.setState({ books: [], shelves: [] });
+    useProfileStore.setState({ preferences: { ...DEFAULT_PREFERENCES } });
   });
 
   /* ── Empty state ─────────────────────────────────────────── */

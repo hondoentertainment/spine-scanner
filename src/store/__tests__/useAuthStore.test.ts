@@ -16,6 +16,9 @@ const mockSignInWithOtp = vi.fn();
 const mockSignInWithOAuth = vi.fn();
 const mockSignOut = vi.fn();
 const mockOnAuthStateChange = vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } }));
+const mockResetPasswordForEmail = vi.fn();
+const mockUpdateUser = vi.fn();
+const mockResend = vi.fn();
 
 vi.mock('../../lib/profiles', () => ({
   getProfile: vi.fn().mockResolvedValue(null),
@@ -32,6 +35,9 @@ vi.mock('../../lib/supabase', () => ({
       signInWithOAuth: (opts: unknown) => mockSignInWithOAuth(opts),
       signOut: () => mockSignOut(),
       onAuthStateChange: (cb: (...args: unknown[]) => void) => mockOnAuthStateChange(cb),
+      resetPasswordForEmail: (email: string, opts: unknown) => mockResetPasswordForEmail(email, opts),
+      updateUser: (data: unknown) => mockUpdateUser(data),
+      resend: (opts: unknown) => mockResend(opts),
     },
   },
 }));
@@ -49,6 +55,8 @@ describe('useAuthStore', () => {
       loading: true,
       error: null,
       magicLinkSent: false,
+      confirmationPending: false,
+      recoveryMode: false,
     });
 
     vi.clearAllMocks();
@@ -281,6 +289,83 @@ describe('useAuthStore', () => {
       useAuthStore.getState().clearMagicLinkSent();
 
       expect(useAuthStore.getState().magicLinkSent).toBe(false);
+    });
+  });
+
+  /* ── resetPassword ─────────────────────────────────────── */
+  describe('resetPassword', () => {
+    it('calls supabase.auth.resetPasswordForEmail and returns true on success', async () => {
+      mockResetPasswordForEmail.mockResolvedValue({ error: null });
+
+      const ok = await useAuthStore.getState().resetPassword('test@test.com');
+
+      expect(mockResetPasswordForEmail).toHaveBeenCalledWith('test@test.com', expect.objectContaining({ redirectTo: expect.any(String) }));
+      expect(ok).toBe(true);
+      expect(useAuthStore.getState().loading).toBe(false);
+    });
+
+    it('sets error and returns false on failure', async () => {
+      mockResetPasswordForEmail.mockResolvedValue({ error: { message: 'User not found' } });
+
+      const ok = await useAuthStore.getState().resetPassword('bad@test.com');
+
+      expect(ok).toBe(false);
+      expect(useAuthStore.getState().error).toBe('User not found');
+    });
+  });
+
+  /* ── updatePassword ────────────────────────────────────── */
+  describe('updatePassword', () => {
+    it('calls supabase.auth.updateUser and clears recoveryMode on success', async () => {
+      useAuthStore.setState({ recoveryMode: true, loading: false });
+      mockUpdateUser.mockResolvedValue({ error: null });
+
+      const ok = await useAuthStore.getState().updatePassword('newpass123');
+
+      expect(mockUpdateUser).toHaveBeenCalledWith({ password: 'newpass123' });
+      expect(ok).toBe(true);
+      expect(useAuthStore.getState().recoveryMode).toBe(false);
+    });
+
+    it('sets error on failure', async () => {
+      mockUpdateUser.mockResolvedValue({ error: { message: 'Weak password' } });
+
+      const ok = await useAuthStore.getState().updatePassword('123');
+
+      expect(ok).toBe(false);
+      expect(useAuthStore.getState().error).toBe('Weak password');
+    });
+  });
+
+  /* ── resendConfirmation ────────────────────────────────── */
+  describe('resendConfirmation', () => {
+    it('calls supabase.auth.resend and returns true on success', async () => {
+      mockResend.mockResolvedValue({ error: null });
+
+      const ok = await useAuthStore.getState().resendConfirmation('test@test.com');
+
+      expect(mockResend).toHaveBeenCalledWith({ type: 'signup', email: 'test@test.com' });
+      expect(ok).toBe(true);
+    });
+
+    it('sets error on failure', async () => {
+      mockResend.mockResolvedValue({ error: { message: 'Rate limited' } });
+
+      const ok = await useAuthStore.getState().resendConfirmation('test@test.com');
+
+      expect(ok).toBe(false);
+      expect(useAuthStore.getState().error).toBe('Rate limited');
+    });
+  });
+
+  /* ── confirmationPending ───────────────────────────────── */
+  describe('confirmationPending', () => {
+    it('sets confirmationPending when signUp returns user without session', async () => {
+      mockSignUp.mockResolvedValue({ data: { user: { id: 'u1' }, session: null }, error: null });
+
+      await useAuthStore.getState().signUp('test@test.com', 'pass1234');
+
+      expect(useAuthStore.getState().confirmationPending).toBe(true);
     });
   });
 });

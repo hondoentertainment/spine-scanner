@@ -617,7 +617,7 @@ export function detectTextRegions(
     }
 
     // Convert to BoundingBox array
-    let regions: BoundingBox[] = Array.from(boxes.values()).map((b) => ({
+    const regions: BoundingBox[] = Array.from(boxes.values()).map((b) => ({
       x: b.minX,
       y: b.minY,
       w: b.maxX - b.minX + 1,

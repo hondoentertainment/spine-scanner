@@ -27,6 +27,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         // Exclude WASM core files from precache — they're ~3.8 MB each and
         // the browser only needs ONE variant. Let the HTTP cache handle them.

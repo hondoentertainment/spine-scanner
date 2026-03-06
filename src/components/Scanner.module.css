@@ -1,67 +1,456 @@
-.debugBtn {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  padding: 0.625rem;
+/* ═══════════════════════════════════════════════
+   Scanner — Two-Panel Layout
+   Left: controls / Right: camera feed
+   ═══════════════════════════════════════════════ */
+
+.scannerLayout {
+  display: flex;
+  gap: 1.25rem;
+  width: 100%;
+  min-height: 420px;
+  max-height: 80vh;
+}
+
+/* ── Left panel: Controls ──────────────────────── */
+
+.controlsPanel {
+  flex: 0 0 340px;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  background: rgba(13, 17, 23, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.25rem;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  overflow-y: auto;
+}
+
+.systemStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #22c55e;
+  margin-bottom: 0.75rem;
+}
+
+.systemDot {
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+}
+
+.systemDotWarning {
+  background: #fbbf24;
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.6);
+}
+
+.systemDotError {
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+}
+
+.panelTitle {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #fff;
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+}
+
+.panelDescription {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.5;
+  margin: 0 0 1.25rem;
+}
+
+/* ── Scan mode selector ────────────────────── */
+
+.scanModeSelector {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.scanModeBtn {
+  flex: 1;
+  padding: 0.45rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  background: transparent;
+  border: none;
+  border-radius: 0.55rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 36px;
+}
+
+.scanModeBtn:hover {
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.scanModeBtnActive {
+  color: #fff;
+  background: rgba(99, 102, 241, 0.3) !important;
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
+}
+
+/* ── Status line (Ready to scan) ────────────── */
+
+.statusLine {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  margin-bottom: 1rem;
+}
+
+.statusHeading {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+}
+
+.statusText {
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
+  line-height: 1.3;
+}
+
+/* ── Primary CTA button ────────────────────── */
+
+.primaryBtn {
+  width: 100%;
+  padding: 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
   color: white;
+  font-size: 1.1rem;
+  font-weight: 700;
+  border-radius: 1rem;
+  min-height: 100px;
+  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #818cf8 100%) !important;
   border: none;
   cursor: pointer;
-  z-index: 100;
   -webkit-tap-highlight-color: transparent;
-  min-width: 44px;
-  min-height: 44px;
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+  box-shadow: 0 8px 32px rgba(99, 102, 241, 0.35);
+  margin-bottom: 1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.primaryBtn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.12), transparent 60%);
+  border-radius: inherit;
+}
+
+.primaryBtn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.primaryBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.ctaIcon {
+  width: 44px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.debugPanel {
-  position: absolute;
-  top: 3.5rem;
-  right: 0.75rem;
-  width: min(260px, calc(100% - 1.5rem));
-  background: rgba(0, 0, 0, 0.85);
-  padding: 0.75rem;
-  border-radius: 0.5rem;
+.ctaSubtext {
   font-size: 0.65rem;
-  color: #00ff00;
-  font-family: monospace;
-  pointer-events: none;
-  z-index: 100;
-  border: 1px solid #00ff00;
-  max-height: 200px;
-  overflow-y: auto;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.65);
 }
 
-.debugHeader {
-  margin-bottom: 0.5rem;
-  border-bottom: 1px solid #00ff00;
-  padding-bottom: 0.2rem;
-  font-weight: bold;
+/* ── Secondary action buttons ────────────────── */
+
+.secondaryRow {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.secondaryBtn {
+  flex: 1;
+  padding: 0.75rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  min-height: 64px;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.secondaryBtn:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.secondaryBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.secondaryBtnIcon {
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Panel footer ─────────────────────────── */
+
+.panelFooter {
+  margin-top: auto;
+  padding-top: 1rem;
+  display: flex;
   justify-content: space-between;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.footerLink {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.35);
+  font-weight: 500;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem 0;
+  transition: color 0.15s;
+}
+
+.footerLink:hover {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* ── Right panel: Camera feed ──────────────── */
+
+.cameraPanel {
+  flex: 1;
+  position: relative;
+  border-radius: 1.25rem;
+  overflow: hidden;
+  background: #0d1117;
+  min-height: 380px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cameraPanel video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Camera overlay controls ────────────────── */
+
+.liveFeedBadge {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  background: rgba(34, 197, 94, 0.85);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 9999px;
+  z-index: 20;
+  letter-spacing: 0.02em;
+  backdrop-filter: blur(8px);
+}
+
+.cameraControls {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
   gap: 0.5rem;
+  z-index: 20;
 }
 
-.debugLine {
-  margin-bottom: 0.2rem;
+.cameraControlBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.copyLogsBtn {
-  pointer-events: auto;
+.cameraControlBtn:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.cameraControlBtnActive {
+  background: rgba(99, 102, 241, 0.7);
+  border-color: rgba(99, 102, 241, 0.8);
+}
+
+/* ── Zoom controls ─────────────────────────── */
+
+.zoomControls {
+  position: absolute;
+  bottom: 2.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem;
   background: rgba(0, 0, 0, 0.6);
-  color: #00ff00;
-  border: 1px solid #00ff00;
-  border-radius: 0.35rem;
-  padding: 0.15rem 0.35rem;
-  font-size: 0.6rem;
-  font-family: inherit;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  z-index: 20;
+}
+
+.zoomBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.zoomBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.zoomBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.zoomSlider {
+  width: 90px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+  outline: none;
   cursor: pointer;
 }
 
-/* ── Viewfinder overlay ──────────────────────── */
+.zoomSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #6366f1;
+  border: 2px solid white;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.zoomSlider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #6366f1;
+  border: 2px solid white;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.zoomLabel {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  min-width: 2rem;
+  text-align: center;
+}
+
+.autoDetectBadge {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 9999px;
+  z-index: 20;
+}
+
+/* ── Viewfinder overlay ────────────────────── */
 
 .viewfinderOverlay {
   position: absolute;
@@ -76,58 +465,49 @@
 
 .barcodeGuide {
   position: relative;
-  width: min(80%, 320px);
-  height: clamp(80px, 18vh, 140px);
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  width: min(75%, 340px);
+  height: 180px;
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .guideCorner {
   position: absolute;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border-color: #22c55e;
   border-style: solid;
   border-width: 0;
 }
 
 .guideTopLeft {
-  top: -1px;
-  left: -1px;
-  border-top-width: 3px;
-  border-left-width: 3px;
-  border-top-left-radius: 8px;
+  top: -1px; left: -1px;
+  border-top-width: 3px; border-left-width: 3px;
+  border-top-left-radius: 12px;
 }
 
 .guideTopRight {
-  top: -1px;
-  right: -1px;
-  border-top-width: 3px;
-  border-right-width: 3px;
-  border-top-right-radius: 8px;
+  top: -1px; right: -1px;
+  border-top-width: 3px; border-right-width: 3px;
+  border-top-right-radius: 12px;
 }
 
 .guideBottomLeft {
-  bottom: -1px;
-  left: -1px;
-  border-bottom-width: 3px;
-  border-left-width: 3px;
-  border-bottom-left-radius: 8px;
+  bottom: -1px; left: -1px;
+  border-bottom-width: 3px; border-left-width: 3px;
+  border-bottom-left-radius: 12px;
 }
 
 .guideBottomRight {
-  bottom: -1px;
-  right: -1px;
-  border-bottom-width: 3px;
-  border-right-width: 3px;
-  border-bottom-right-radius: 8px;
+  bottom: -1px; right: -1px;
+  border-bottom-width: 3px; border-right-width: 3px;
+  border-bottom-right-radius: 12px;
 }
 
 .scanLine {
   position: absolute;
-  left: 10%;
-  right: 10%;
+  left: 8%; right: 8%;
   height: 2px;
   background: linear-gradient(90deg, transparent, #22c55e 20%, #22c55e 80%, transparent);
   top: 50%;
@@ -137,21 +517,14 @@
 }
 
 @keyframes scan-sweep {
-  0%, 100% { top: 20%; }
-  50% { top: 80%; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .scanLine { animation: none; }
-  .scanIndicator { animation: none; }
-  .cameraLoadingSkeleton { animation: none; }
-  .successFlash { animation: none; }
+  0%, 100% { top: 15%; }
+  50% { top: 85%; }
 }
 
 .guideHint {
   margin-top: 0.75rem;
-  font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.7);
   font-weight: 600;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
   text-align: center;
@@ -162,35 +535,7 @@
 .guideHintBlurry,
 .guideHintDark { color: #fbbf24; }
 
-/* ── Torch toggle button ──────────────────────── */
-
-.torchBtn {
-  position: absolute;
-  top: 0.75rem;
-  right: 3.5rem;
-  padding: 0.625rem;
-  border-radius: 50%;
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  cursor: pointer;
-  z-index: 100;
-  -webkit-tap-highlight-color: transparent;
-  min-width: 44px;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.torchBtnActive {
-  background: rgba(251, 191, 36, 0.85);
-  border-color: rgba(251, 191, 36, 0.9);
-  color: #000;
-}
-
-/* ── Live scanning indicator ──────────────────── */
+/* ── Scan indicator (top-left live feed) ─────── */
 
 .scanIndicator {
   position: absolute;
@@ -215,303 +560,66 @@
   50% { opacity: 1; box-shadow: 0 0 12px rgba(34, 197, 94, 0.6); }
 }
 
-/* ── Camera wrapper (holds viewfinder + overlays) ── */
-
-.cameraWrapper {
-  position: relative;
-  overflow: hidden;
-  background: #000;
-}
-
-/* ── Controls panel (below camera, in normal flow) ── */
-
-.controls {
-  padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
-  background: var(--card-bg, rgba(0, 0, 0, 0.92));
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.statusLine {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  text-align: center;
-  width: 100%;
-}
-
-.statusText {
-  color: #fff;
-  font-size: 0.9rem;
-  font-weight: 500;
-  margin: 0;
-  line-height: 1.3;
-}
-
-/* ── Primary scan button ─────────────────────── */
-
-.primaryBtn {
-  width: 100%;
-  max-width: 340px;
-  padding: 1rem 1.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
-  color: white;
-  font-size: 1.1rem;
-  font-weight: 700;
-  border-radius: 14px;
-  min-height: 56px;
-  background: var(--primary) !important;
-  border: none;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: transform 0.1s ease, opacity 0.15s ease;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-}
-
-.primaryBtn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.primaryBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ── Secondary action buttons ────────────────── */
-
-.secondaryRow {
-  display: flex;
-  gap: 0.75rem;
-  width: 100%;
-  max-width: 340px;
-}
-
-.secondaryBtn {
-  flex: 1;
-  padding: 0.75rem 0.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 0.85rem;
-  font-weight: 600;
-  border-radius: 10px;
-  min-height: 48px;
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: background 0.15s ease;
-}
-
-.secondaryBtn:hover {
-  background: rgba(255, 255, 255, 0.14) !important;
-}
-
-.secondaryBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ── Advanced options section ────────────────── */
-
-.advancedSection {
-  width: 100%;
-  max-width: 340px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.advancedSummary {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.5);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  list-style: none;
-  justify-content: center;
-}
-
-.advancedSummary::-webkit-details-marker {
-  display: none;
-}
-
-.advancedContent {
-  padding: 0.5rem 0.75rem 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.optionRow {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.optionLabel {
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.5);
-  font-weight: 600;
-  min-width: 70px;
-}
-
-.optionBtns {
-  display: flex;
-  gap: 0.35rem;
-  flex-wrap: wrap;
-}
-
-.optionBtn {
-  padding: 0.3rem 0.6rem;
-  font-size: 0.7rem;
-  font-weight: 600;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  -webkit-tap-highlight-color: transparent;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.optionBtnActive {
-  background: var(--accent-blue);
-  border-color: var(--accent-blue);
-  color: white;
-}
-
-.toolRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.toolBtn {
-  padding: 0.4rem 0.7rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border-radius: 9999px;
-  color: rgba(255, 255, 255, 0.8);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  -webkit-tap-highlight-color: transparent;
-  min-height: 36px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.toolBtn:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.toolBtnActive {
-  background: var(--accent-blue) !important;
-  border-color: var(--accent-blue);
-  color: white;
-}
-
-.statusDetails {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  padding-top: 0.25rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-/* ── Manual entry section ────────────────────── */
-
-.manualSection {
-  width: 100%;
-  max-width: 340px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.backToScanBtn {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.6);
-  background: none;
-  border: none;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.backToScanBtn:hover {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-/* ── Progress bar ────────────────────────────── */
+/* ── Progress bar ──────────────────────────── */
 
 .progressContainer {
   width: 100%;
-  max-width: 340px;
+  margin-bottom: 0.5rem;
 }
 
 .progressBarTrack {
   width: 100%;
   height: 4px;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 9999px;
   overflow: hidden;
 }
 
 .progressBarFill {
   height: 100%;
-  background: var(--accent-blue);
+  background: linear-gradient(90deg, #7c3aed, #6366f1);
   border-radius: 9999px;
   transition: width 0.3s ease-out;
 }
 
-/* ── Cancel scan ─────────────────────────────── */
+/* ── Cancel scan ────────────────────────────── */
 
 .cancelScanBtn {
   padding: 0.4rem 0.75rem;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: #f87171;
-  border: 1px solid rgba(248, 113, 113, 0.4);
+  border: 1px solid rgba(248, 113, 113, 0.3);
   border-radius: 9999px;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   -webkit-tap-highlight-color: transparent;
-  min-height: 40px;
+  min-height: 36px;
+  background: rgba(248, 113, 113, 0.08);
+  cursor: pointer;
+  margin-bottom: 0.5rem;
 }
 
 .cancelScanBtn:hover {
   background: rgba(248, 113, 113, 0.15);
 }
 
-/* ── Camera states ───────────────────────────── */
+/* ── Camera error ───────────────────────────── */
+
+.cameraError {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  border-radius: 0.75rem;
+  text-align: center;
+  width: 100%;
+  margin-bottom: 0.75rem;
+}
+
+/* ── Camera loading ─────────────────────────── */
 
 .cameraLoadingOverlay {
   position: absolute;
@@ -522,18 +630,17 @@
   align-items: center;
   justify-content: center;
   gap: 1rem;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.9));
-  backdrop-filter: blur(8px);
+  background: rgba(13, 17, 23, 0.95);
 }
 
 .cameraLoadingSkeleton {
-  width: min(80%, 280px);
+  width: min(70%, 260px);
   height: 140px;
   border-radius: 12px;
   background: linear-gradient(90deg,
-    rgba(255, 255, 255, 0.06) 0%,
-    rgba(255, 255, 255, 0.12) 50%,
-    rgba(255, 255, 255, 0.06) 100%);
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 100%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
 }
@@ -544,10 +651,12 @@
 }
 
 .cameraLoadingText {
-  color: var(--text-muted);
-  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.9rem;
   font-weight: 500;
 }
+
+/* ── Success flash ──────────────────────────── */
 
 .successFlash {
   position: absolute;
@@ -556,7 +665,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(34, 197, 94, 0.2);
+  background: rgba(34, 197, 94, 0.15);
   color: #22c55e;
   pointer-events: none;
   animation: success-flash 0.8s ease-out forwards;
@@ -569,80 +678,27 @@
   100% { opacity: 0; transform: scale(1); }
 }
 
-.cameraError {
-  padding: 0.5rem 0.75rem;
-  font-size: 0.8rem;
-  color: #f87171;
-  background: rgba(248, 113, 113, 0.1);
-  border: 1px solid rgba(248, 113, 113, 0.25);
-  border-radius: 10px;
-  text-align: center;
-  width: 100%;
-  max-width: 340px;
-}
-
-.cameraStatus {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.7rem;
-  color: var(--text-muted);
-}
-
-.cameraDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.cameraDotReady { background: #22c55e; }
-.cameraDotError { background: #ef4444; }
-.cameraDotPending { background: #f59e0b; }
-
-.cameraLabel {
-  font-weight: 600;
-}
-
-.ocrReadyBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.65rem;
-  color: #22c55e;
-  font-weight: 600;
-}
-
-.resolutionHint {
-  width: 100%;
-  margin: 0;
-  font-size: 0.7rem;
-  color: #fbbf24;
-  font-weight: 500;
-}
-
-/* ── OCR fallback banner ─────────────────────── */
+/* ── OCR fallback banner ────────────────────── */
 
 .ocrFallbackBanner {
   width: 100%;
-  max-width: 340px;
-  padding: 0.75rem 1rem;
-  margin-bottom: 0.5rem;
-  background: rgba(251, 191, 36, 0.12);
-  border: 1px solid rgba(251, 191, 36, 0.35);
-  border-radius: 10px;
-  font-size: 0.8rem;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.75rem;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: 0.75rem;
+  font-size: 0.78rem;
 }
 
 .ocrFallbackTitle {
   font-weight: 700;
   color: #fbbf24;
-  margin: 0 0 0.25rem;
+  margin: 0 0 0.2rem;
 }
 
 .ocrFallbackText {
-  color: rgba(255, 255, 255, 0.85);
-  margin: 0 0 0.5rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0 0 0.4rem;
   line-height: 1.4;
 }
 
@@ -652,27 +708,25 @@
 }
 
 .ocrFallbackBtn {
-  padding: 0.4rem 0.75rem;
-  font-size: 0.75rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.72rem;
   font-weight: 600;
   border-radius: 9999px;
   background: var(--accent-blue);
   color: white;
   border: none;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 
 .ocrFallbackDismiss {
-  padding: 0.4rem 0.75rem;
-  font-size: 0.75rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 9999px;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 
 /* ── Fallback actions (no camera) ────────────── */
@@ -682,38 +736,50 @@
   flex-direction: column;
   gap: 0.75rem;
   width: 100%;
-  max-width: 340px;
   align-items: stretch;
 }
 
 /* ── Manual ISBN form ────────────────────────── */
 
+.manualSection {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .manualForm {
   display: flex;
   gap: 0.5rem;
   width: 100%;
-  max-width: 340px;
 }
 
 .manualInput {
   flex: 1;
-  padding: 0.75rem 1rem;
-  border: none;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
   color: white;
-  font-size: 1rem;
-  min-height: 48px;
+  font-size: 0.95rem;
+  min-height: 44px;
   font-family: inherit;
   outline: none;
-  border-radius: 10px;
+  border-radius: 0.75rem;
+  transition: border-color 0.15s;
+}
+
+.manualInput:focus {
+  border-color: rgba(99, 102, 241, 0.5);
 }
 
 .submitBtn {
-  padding: 0.75rem;
-  background: var(--accent-blue);
+  padding: 0.7rem;
+  background: linear-gradient(135deg, #7c3aed, #6366f1);
   color: white;
-  border-radius: 10px;
-  min-width: 48px;
-  min-height: 48px;
+  border-radius: 0.75rem;
+  min-width: 44px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -721,20 +787,36 @@
   cursor: pointer;
 }
 
-/* ── Suggestions ─────────────────────────────── */
+.backToScanBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.45);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.backToScanBtn:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ── Suggestions ──────────────────────────── */
 
 .suggestionSection {
   width: 100%;
-  max-width: 340px;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
 .suggestionHeader {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.8);
   margin: 0;
   text-align: center;
 }
@@ -747,148 +829,162 @@
 }
 
 .suggestionBtn {
-  padding: 0.5rem 0.75rem;
-  font-size: 0.8rem;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--text-main);
-  border-radius: 10px;
+  border-radius: 0.6rem;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  min-height: 40px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.06);
+  gap: 0.35rem;
+  min-height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 
 .suggestionBtn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .repairBtn {
-  background: rgba(34, 197, 94, 0.15) !important;
-  border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.1) !important;
+  border-color: rgba(34, 197, 94, 0.3);
 }
 
 .repairBtn:hover {
-  background: rgba(34, 197, 94, 0.25) !important;
+  background: rgba(34, 197, 94, 0.2) !important;
 }
 
 .suggestionNote {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.68rem;
   font-weight: 500;
 }
 
-/* ── Scanning tips ───────────────────────────── */
+/* ── Debug panel ─────────────────────────── */
 
-.scanningTips {
-  width: 100%;
-  max-width: 340px;
-  margin-top: 0.25rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.scanningTipsSummary {
+.debugBtn {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  padding: 0.5rem;
+  border-radius: 50%;
+  color: white;
+  border: none;
+  cursor: pointer;
+  z-index: 100;
+  -webkit-tap-highlight-color: transparent;
+  min-width: 36px;
+  min-height: 36px;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.45);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  list-style: none;
   justify-content: center;
 }
 
-.scanningTipsSummary::-webkit-details-marker {
-  display: none;
+.debugPanel {
+  position: absolute;
+  top: 3rem;
+  right: 0.75rem;
+  width: min(260px, calc(100% - 1.5rem));
+  background: rgba(0, 0, 0, 0.9);
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.65rem;
+  color: #00ff00;
+  font-family: monospace;
+  pointer-events: none;
+  z-index: 100;
+  border: 1px solid #00ff00;
+  max-height: 200px;
+  overflow-y: auto;
 }
 
-.tipsChevronDown {
-  display: inline-flex;
+.debugHeader {
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid #00ff00;
+  padding-bottom: 0.2rem;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
-.tipsChevronUp {
-  display: none;
+.debugLine { margin-bottom: 0.2rem; }
+
+.copyLogsBtn {
+  pointer-events: auto;
+  background: rgba(0, 0, 0, 0.6);
+  color: #00ff00;
+  border: 1px solid #00ff00;
+  border-radius: 0.35rem;
+  padding: 0.15rem 0.35rem;
+  font-size: 0.6rem;
+  font-family: inherit;
+  cursor: pointer;
 }
 
-.scanningTips[open] .tipsChevronDown,
-.advancedSection[open] .tipsChevronDown {
-  display: none;
+/* ── Reduced motion ─────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .scanLine,
+  .scanIndicator,
+  .cameraLoadingSkeleton,
+  .successFlash { animation: none; }
 }
 
-.scanningTips[open] .tipsChevronUp,
-.advancedSection[open] .tipsChevronUp {
-  display: inline-flex;
+/* ── Responsive: stack on mobile ────────── */
+
+@media (max-width: 768px) {
+  .scannerLayout {
+    flex-direction: column-reverse;
+    max-height: none;
+    gap: 0.75rem;
+  }
+
+  .controlsPanel {
+    flex: none;
+    border-radius: 1rem;
+    padding: 1.25rem;
+  }
+
+  .cameraPanel {
+    flex: none;
+    height: 50vh;
+    min-height: 280px;
+    max-height: 400px;
+    border-radius: 1rem;
+  }
+
+  .primaryBtn {
+    min-height: 80px;
+    padding: 1rem;
+  }
+
+  .barcodeGuide {
+    height: 120px;
+  }
+
+  .panelFooter {
+    display: none;
+  }
 }
 
-.scanningTipsList {
-  margin: 0;
-  padding: 0.5rem 0.75rem 0.75rem 1.25rem;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.8);
-  line-height: 1.6;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
+@media (max-width: 480px) {
+  .controlsPanel {
+    padding: 1rem;
+  }
 
-.scanningTipsList li {
-  margin-bottom: 0.35rem;
-}
+  .panelTitle {
+    font-size: 1.25rem;
+  }
 
-.scanningTipsList li:last-child {
-  margin-bottom: 0;
-}
-
-/* ── Focus-visible & active states (accessibility + tactile feedback) ── */
-
-.primaryBtn:focus-visible,
-.secondaryBtn:focus-visible,
-.suggestionBtn:focus-visible,
-.torchBtn:focus-visible,
-.cancelScanBtn:focus-visible,
-.submitBtn:focus-visible,
-.backToScanBtn:focus-visible,
-.toolBtn:focus-visible,
-.debugBtn:focus-visible {
-  outline: 2px solid #60a5fa;
-  outline-offset: 2px;
-}
-
-.secondaryBtn:active:not(:disabled),
-.suggestionBtn:active:not(:disabled),
-.cancelScanBtn:active:not(:disabled),
-.submitBtn:active:not(:disabled),
-.toolBtn:active:not(:disabled),
-.torchBtn:active:not(:disabled) {
-  transform: scale(0.96);
-}
-
-/* ── Monospace ISBN digits in suggestion buttons ── */
-
-.suggestionBtn {
-  font-variant-numeric: tabular-nums;
-  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', Menlo, Consolas, monospace;
-  letter-spacing: 0.02em;
-}
-
-/* ── Prevent text selection on interactive elements ── */
-
-.primaryBtn,
-.secondaryBtn,
-.suggestionBtn,
-.torchBtn,
-.cancelScanBtn,
-.toolBtn,
-.scanIndicator,
-.guideHint {
-  user-select: none;
-  -webkit-user-select: none;
+  .cameraPanel {
+    height: 45vh;
+    min-height: 240px;
+  }
 }
 
 /* ── Legacy class aliases (keep tests passing) ── */
@@ -897,16 +993,39 @@
 .manualEntryBtn { composes: secondaryBtn; }
 .closeBtn { composes: backToScanBtn; }
 .captureBtn { composes: primaryBtn; }
-.roundBtn { composes: toolBtn; }
-.btnRow { composes: toolRow; }
-.scanModeRow { composes: optionRow; }
-.scanModeLabel { composes: optionLabel; }
-.scanModeBtn { composes: optionBtn; }
-.scanModeBtnActive { composes: optionBtnActive; }
-.languageRow { composes: optionRow; }
-.languageLabel { composes: optionLabel; }
-.languageBtn { composes: optionBtn; }
-.languageBtnActive { composes: optionBtnActive; }
+.roundBtn { composes: cameraControlBtn; }
+.toolBtn { composes: cameraControlBtn; }
+.btnRow { composes: secondaryRow; }
+.optionRow { composes: secondaryRow; }
+.optionLabel { composes: statusText; }
+.optionBtn { composes: secondaryBtn; }
+.optionBtnActive { composes: secondaryBtn; }
+.toolBtnActive { composes: cameraControlBtnActive; }
+.scanModeRow { composes: secondaryRow; }
+.scanModeLabel { composes: statusText; }
+.scanModeBtn { composes: secondaryBtn; }
+.scanModeBtnActive { composes: secondaryBtn; }
+.languageRow { composes: secondaryRow; }
+.languageLabel { composes: statusText; }
+.languageBtn { composes: secondaryBtn; }
+.languageBtnActive { composes: secondaryBtn; }
 .phaseLabel { composes: statusText; font-size: 0.75rem; }
 .progressLabel { composes: statusText; font-size: 0.7rem; }
 .resolutionBanner { composes: cameraError; color: #fbbf24; }
+.advancedSection { display: none; }
+.advancedSummary { display: none; }
+.advancedContent { display: none; }
+.statusDetails { display: none; }
+.cameraStatus { display: none; }
+.cameraDot { display: none; }
+.cameraDotReady { display: none; }
+.cameraDotError { display: none; }
+.cameraDotPending { display: none; }
+.cameraLabel { display: none; }
+.ocrReadyBadge { display: none; }
+.resolutionHint { display: none; }
+.scanningTips { display: none; }
+.scanningTipsSummary { display: none; }
+.tipsChevronDown { display: none; }
+.tipsChevronUp { display: none; }
+.scanningTipsList { display: none; }

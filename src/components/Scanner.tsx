@@ -1,6 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
-import { Camera, Loader2, Edit3, Check, ImagePlus, Zap, Image as ImageIcon, X, Flashlight } from 'lucide-react';
+import { Camera, Loader2, Edit3, Check, ImagePlus, Zap, Image as ImageIcon, X, Flashlight, Maximize2, HelpCircle, Settings, SwitchCamera, ZoomIn, ZoomOut } from 'lucide-react';
 import { isValidIsbn, formatIsbnForDisplay } from '../utils/isbnValidation.ts';
 import { getNearMissCandidates } from '../utils/ocr.ts';
 import { useToast } from './Toast.tsx';
@@ -32,8 +32,8 @@ const EMPTY_TELEMETRY: LiveScanTelemetry = {
     confirmed: 0, cooldownSuppressed: 0, busySuppressed: 0,
 };
 
-const getVideoConstraints = (): MediaTrackConstraints => ({
-    facingMode: 'environment',
+const getVideoConstraints = (facing: 'environment' | 'user' = 'environment'): MediaTrackConstraints => ({
+    facingMode: facing,
     width: { ideal: 1920, min: 640 },
     height: { ideal: 1080, min: 480 },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -68,8 +68,11 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const [successAnnouncement, setSuccessAnnouncement] = useState('');
     const [ocrFallbackDismissed, setOcrFallbackDismissed] = useState(false);
     const [torchOn, setTorchOn] = useState(false);
-    const [torchSupported, setTorchSupported] = useState(false);
-    const videoTrackRef = useRef<MediaStreamTrack | null>(null);
+    const [hasTorch, setHasTorch] = useState(false);
+    const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+    const [zoomLevel, setZoomLevel] = useState(1);
+    const [zoomRange, setZoomRange] = useState<{ min: number; max: number; step: number } | null>(null);
+    const [scanMode, setScanMode] = useState<ScanMode>('auto');
 
     const abortControllerRef = useRef<AbortController | null>(null);
     useEffect(() => {
@@ -78,6 +81,8 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     }, []);
     const processingRef = useRef(false);
     const autoScanRef = useRef(false);
+    const videoTrackRef = useRef<MediaStreamTrack | null>(null);
+    const cameraPanelRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const photoOnlyInputRef = useRef<HTMLInputElement>(null);
     const firstSuggestionRef = useRef<HTMLButtonElement | null>(null);
@@ -432,21 +437,55 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
         addLog('Scan cancelled by user');
     }, [addLog]);
 
-    const toggleTorch = useCallback(() => {
+    const toggleTorch = useCallback(async () => {
         const track = videoTrackRef.current;
         if (!track) return;
         const next = !torchOn;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        track.applyConstraints({ advanced: [{ torch: next }] } as any)
-            .then(() => { setTorchOn(next); addLog(`Torch ${next ? 'on' : 'off'}`); })
-            .catch(() => addLog('Torch toggle failed'));
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await track.applyConstraints({ advanced: [{ torch: next } as any] });
+            setTorchOn(next);
+            addLog(`Torch ${next ? 'on' : 'off'}`);
+        } catch { /* torch not supported */ }
     }, [torchOn, addLog]);
+
+    const toggleFullscreen = useCallback(() => {
+        const el = cameraPanelRef.current;
+        if (!el) return;
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+        } else {
+            el.requestFullscreen().catch(() => {});
+        }
+    }, []);
+
+    const switchCamera = useCallback(() => {
+        const next = facingMode === 'environment' ? 'user' : 'environment';
+        setFacingMode(next);
+        setCameraReady(false);
+        setHasTorch(false);
+        setTorchOn(false);
+        setZoomLevel(1);
+        setZoomRange(null);
+        addLog(`Switching camera to ${next}`);
+    }, [facingMode, addLog]);
+
+    const changeZoom = useCallback(async (level: number) => {
+        const track = videoTrackRef.current;
+        if (!track || !zoomRange) return;
+        const clamped = Math.min(zoomRange.max, Math.max(zoomRange.min, level));
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await track.applyConstraints({ advanced: [{ zoom: clamped } as any] });
+            setZoomLevel(clamped);
+        } catch { /* zoom not supported */ }
+    }, [zoomRange]);
 
     const getSimpleHint = (): string => {
         if (liveQualityHint === 'ready') return 'Ready — tap Scan';
         if (liveQualityHint === 'blurry') return 'Hold steady...';
-        if (liveQualityHint === 'dark') return torchSupported && !torchOn ? 'Too dark — tap flashlight' : 'Need more light';
-        if (liveQualityHint === 'blurry-dark') return torchSupported && !torchOn ? 'Hold steady — tap flashlight' : 'Hold steady, need more light';
+        if (liveQualityHint === 'dark') return hasTorch && !torchOn ? 'Too dark — tap flashlight' : 'Need more light';
+        if (liveQualityHint === 'blurry-dark') return hasTorch && !torchOn ? 'Hold steady — tap flashlight' : 'Hold steady, need more light';
         return 'Center the barcode in the frame';
     };
 
@@ -458,15 +497,214 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     };
 
     /* ── Render ────────────────────────────────────────────────── */
+
+    const systemStatusLabel = cameraError ? 'Camera Unavailable' : !cameraReady ? 'Initializing' : 'System Ready';
+    const systemDotClass = cameraError ? s.systemDotError : !cameraReady ? s.systemDotWarning : '';
+
     return (
-        <div ref={containerRef} className="scanner-container glass" style={{ display: 'flex', flexDirection: 'column' }} tabIndex={0} aria-label="Book scanner: press Space or Enter to capture" aria-busy={processing || isScanning}>
-            {/* Camera viewfinder area — position: relative for overlays */}
-            <div className={s.cameraWrapper}>
-            <Webcam
+        <div ref={containerRef} className={s.scannerLayout} tabIndex={0} aria-label="Book scanner: press Space or Enter to capture" aria-busy={processing || isScanning}>
+
+            {/* ═══════ LEFT PANEL: Controls ═══════ */}
+            <div className={s.controlsPanel}>
+                <div className={s.systemStatus} role="status" aria-live="polite">
+                    <span className={`${s.systemDot} ${systemDotClass}`} />
+                    {systemStatusLabel}
+                    {(isScanning || processing) && <Loader2 size={12} className="animate-spin" />}
+                </div>
+
+                <h2 className={s.panelTitle}>Scan Barcode</h2>
+                <p className={s.panelDescription}>
+                    Position the barcode within the frame. The system will automatically detect and capture the details.
+                </p>
+
+                {/* Scan mode selector */}
+                <div className={s.scanModeSelector} role="radiogroup" aria-label="Scan mode">
+                    {([['auto', 'Auto'], ['barcode', 'Barcode'], ['ocr', 'OCR']] as const).map(([mode, label]) => (
+                        <button key={mode} type="button"
+                            role="radio" aria-checked={scanMode === mode}
+                            className={`${s.scanModeBtn} ${scanMode === mode ? s.scanModeBtnActive : ''}`}
+                            onClick={() => {
+                                setScanMode(mode);
+                                setAutoScan(mode === 'auto');
+                                addLog(`Scan mode: ${label}`);
+                            }}>
+                            {label}
+                        </button>
+                    ))}
+                </div>
+
+                {ocrState === 'fallback' && !ocrFallbackDismissed && (
+                    <div className={s.ocrFallbackBanner} role="alert">
+                        <p className={s.ocrFallbackTitle}>Text recognition loaded in compatibility mode</p>
+                        <p className={s.ocrFallbackText}>Scanning still works but may be slower.</p>
+                        <div className={s.ocrFallbackActions}>
+                            <button type="button" onClick={() => setOcrFallbackDismissed(true)} className={s.ocrFallbackDismiss}>
+                                OK
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                <div className={s.statusLine} role="status" aria-live="polite" aria-atomic="true">
+                    <p className={s.statusHeading} id="status-text">
+                        {processing ? 'Scanning...' : cameraError ? 'No camera' : 'Ready to scan'}
+                    </p>
+                    <p className={s.statusText}>{status}</p>
+                </div>
+
+                {processing && scanProgress && (scanProgress.phase === 'ocr' || scanProgress.phase === 'ocr-multilang') && scanProgress.totalPasses != null && scanProgress.totalPasses > 0 && (
+                    <div className={s.progressContainer} role="progressbar" aria-valuenow={Math.round(getProgressPercent())} aria-valuemin={0} aria-valuemax={100} aria-label="Scan progress">
+                        <div className={s.progressBarTrack}>
+                            <div className={s.progressBarFill} style={{ width: `${getProgressPercent()}%` }} />
+                        </div>
+                    </div>
+                )}
+
+                {processing && scanProgress && (scanProgress.phase === 'ocr' || scanProgress.phase === 'ocr-multilang') && (
+                    <button type="button" onClick={cancelScan} className={s.cancelScanBtn} aria-label="Cancel scan">
+                        <X size={16} /> Cancel
+                    </button>
+                )}
+
+                {cameraError && (
+                    <div className={s.cameraError}>{cameraError}</div>
+                )}
+
+                {/* Hidden file inputs */}
+                <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
+                    onChange={handleFileUpload} style={{ display: 'none' }} aria-hidden="true" />
+                <input ref={photoOnlyInputRef} type="file" accept="image/*" capture="environment"
+                    onChange={handlePhotoOnlyFileUpload} style={{ display: 'none' }} aria-hidden="true" />
+
+                {cameraError ? (
+                    <div className={s.fallbackActions}>
+                        <button onClick={() => fileInputRef.current?.click()} disabled={processing || isScanning}
+                            className={s.primaryBtn}>
+                            {processing ? <Loader2 className="animate-spin" size={24} /> : (
+                                <span className={s.ctaIcon}><ImagePlus size={22} /></span>
+                            )}
+                            {processing ? 'Scanning...' : 'Upload a Photo'}
+                        </button>
+                        {onPhotoCapture && (
+                            <button onClick={() => photoOnlyInputRef.current?.click()} disabled={processing || isScanning}
+                                className={s.secondaryBtn}>
+                                <span className={s.secondaryBtnIcon}><ImageIcon size={16} /></span>
+                                Add by photo
+                            </button>
+                        )}
+                        <button onClick={() => setShowManual(true)} className={s.secondaryBtn}>
+                            <span className={s.secondaryBtnIcon}><Edit3 size={16} /></span>
+                            Type ISBN manually
+                        </button>
+                        {showManual && (
+                            <form onSubmit={handleManualSubmit} className={s.manualForm}>
+                                <input type="text" inputMode="text" pattern="[0-9Xx\-]{10,17}" placeholder="Enter ISBN..." value={manualIsbn}
+                                    onChange={(e) => setManualIsbn(e.target.value)} aria-label="Enter ISBN manually"
+                                    className={s.manualInput} autoFocus />
+                                <button type="submit" disabled={manualIsbn.length < 5 || isScanning}
+                                    aria-label="Submit ISBN" className={s.submitBtn}>
+                                    {isScanning ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
+                                </button>
+                            </form>
+                        )}
+                    </div>
+                ) : showManual ? (
+                    <div className={s.manualSection}>
+                        <form onSubmit={handleManualSubmit} className={s.manualForm}>
+                            <input type="text" inputMode="text" pattern="[0-9Xx\-]{10,17}" placeholder="Type ISBN number..." value={manualIsbn}
+                                onChange={(e) => setManualIsbn(e.target.value)} aria-label="Enter ISBN manually"
+                                className={s.manualInput} autoFocus />
+                            <button type="submit" disabled={manualIsbn.length < 5 || isScanning}
+                                aria-label="Submit ISBN" className={s.submitBtn}>
+                                {isScanning ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
+                            </button>
+                        </form>
+                        <button type="button" onClick={() => setShowManual(false)} className={s.backToScanBtn}>
+                            <Camera size={16} /> Back to scanning
+                        </button>
+                    </div>
+                ) : (
+                    <>
+                        <button onClick={capture} disabled={processing || isScanning || !cameraReady || liveQualityHint === 'blurry' || liveQualityHint === 'blurry-dark'}
+                            aria-label={processing ? 'Scanning in progress' : (liveQualityHint === 'blurry' || liveQualityHint === 'blurry-dark') ? 'Hold steady to scan' : 'Scan book'}
+                            aria-describedby="status-text"
+                            className={s.primaryBtn}>
+                            {processing ? <Loader2 className="animate-spin" size={24} /> : (
+                                <span className={s.ctaIcon}><Camera size={24} /></span>
+                            )}
+                            {processing ? 'Scanning...' : 'Capture Scan'}
+                            {!processing && <span className={s.ctaSubtext}>Tap to freeze</span>}
+                        </button>
+
+                        <div className={s.secondaryRow}>
+                            <button onClick={() => { hapticHoldSteady(); fileInputRef.current?.click(); }} disabled={processing || isScanning}
+                                className={s.secondaryBtn}>
+                                <span className={s.secondaryBtnIcon}><ImagePlus size={16} /></span>
+                                Upload Photo
+                            </button>
+                            <button onClick={() => { hapticHoldSteady(); setShowManual(true); }}
+                                className={s.secondaryBtn}>
+                                <span className={s.secondaryBtnIcon}><Edit3 size={16} /></span>
+                                Type ISBN
+                            </button>
+                        </div>
+                    </>
+                )}
+
+                {(isbnSuggestions.length > 0 || Object.keys(repairedMap).length > 0) && (
+                    <div className={s.suggestionSection} role="group" aria-label="Possible matches" aria-live="polite">
+                        <p className={s.suggestionHeader}>
+                            {Object.keys(repairedMap).length > 0
+                                ? 'Did you mean one of these?'
+                                : 'Possible matches — tap to add:'}
+                        </p>
+                        <div className={s.suggestionRow}>
+                        {Object.entries(repairedMap).map(([repaired, original], idx) => (
+                            <button key={`rep-${repaired}`} ref={idx === 0 ? firstSuggestionRef : undefined} type="button"
+                                onClick={() => onScan(repaired)}
+                                className={`${s.suggestionBtn} ${s.repairBtn}`}
+                                title={`Corrected from ${original}`}
+                                aria-label={`Use ISBN ${repaired}`}>
+                                <strong>{formatIsbnForDisplay(repaired)}</strong> <Check size={14} />
+                            </button>
+                        ))}
+                        {isbnSuggestions.filter(c => !Object.keys(repairedMap).includes(c)).map((candidate, idx) => (
+                            <button key={candidate} ref={Object.keys(repairedMap).length === 0 && idx === 0 ? firstSuggestionRef : undefined} type="button"
+                                onClick={() => {
+                                    if (isValidIsbn(candidate)) onScan(candidate);
+                                    else { setManualIsbn(candidate); setShowManual(true); }
+                                }}
+                                className={s.suggestionBtn}
+                                title={isValidIsbn(candidate) ? 'Tap to add this book' : 'Tap to edit and verify'}>
+                                {formatIsbnForDisplay(candidate)}
+                                {isValidIsbn(candidate)
+                                    ? <Check size={14} style={{ color: '#22c55e' }} />
+                                    : <span className={s.suggestionNote}>edit</span>}
+                            </button>
+                        ))}
+                        </div>
+                    </div>
+                )}
+
+                <div className={s.panelFooter}>
+                    <button type="button" className={s.footerLink} onClick={() => setShowDebug(prev => !prev)}>
+                        <HelpCircle size={12} style={{ marginRight: '0.25rem', verticalAlign: 'middle' }} />
+                        Help Center
+                    </button>
+                    <button type="button" className={s.footerLink} onClick={() => setShowDebug(prev => !prev)}>
+                        <Settings size={12} style={{ marginRight: '0.25rem', verticalAlign: 'middle' }} />
+                        Scanner Settings
+                    </button>
+                </div>
+            </div>
+
+            {/* ═══════ RIGHT PANEL: Camera Feed ═══════ */}
+            <div ref={cameraPanelRef} className={s.cameraPanel}>
+                <Webcam
                 audio={false}
                 ref={webcamRef}
                 screenshotFormat="image/jpeg"
-                videoConstraints={getVideoConstraints()}
+                videoConstraints={getVideoConstraints(facingMode)}
                 onUserMedia={(stream) => {
                     setCameraError(null);
                     setCameraReady(true);
@@ -479,7 +717,13 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             const advanced: Record<string, any> = {};
                             if (caps?.focusMode) advanced.focusMode = 'continuous';
-                            if (caps?.torch) setTorchSupported(true);
+                            if (caps?.torch) { advanced.torch = false; setHasTorch(true); }
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const zCaps = caps?.zoom as any;
+                            if (zCaps && typeof zCaps === 'object' && zCaps.min != null && zCaps.max != null) {
+                                setZoomRange({ min: zCaps.min, max: zCaps.max, step: zCaps.step ?? 0.1 });
+                                setZoomLevel(1);
+                            }
                             if (Object.keys(advanced).length > 0) {
                                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                 track.applyConstraints({ advanced: [advanced] } as any)
@@ -489,7 +733,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                             const settings = track.getSettings();
                             const w = settings.width ?? 0;
                             const h = settings.height ?? 0;
-                            addLog(`Camera: ${w}x${h}${settings.facingMode ? ` (${settings.facingMode})` : ''}${caps?.torch ? ' (torch available)' : ''}`);
+                            addLog(`Camera: ${w}x${h}${settings.facingMode ? ` (${settings.facingMode})` : ''}${caps?.torch ? ' torch' : ''}${zCaps ? ` zoom ${zCaps.min}-${zCaps.max}x` : ''}`);
                         }
                     } catch { /* best effort */ }
                 }}
@@ -499,230 +743,110 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                     setStatus('No camera — upload a photo or type the ISBN');
                     addLog(`Camera error: ${msg}`);
                 }}
-                style={{ width: '100%', height: 'auto', display: 'block', minHeight: '220px', maxHeight: '45vh' }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                 playsInline
             />
-            <canvas ref={canvasRef} style={{ display: 'none' }} />
+                <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-            {!cameraReady && !cameraError && (
-                <div className={s.cameraLoadingOverlay} aria-hidden="true">
-                    <div className={s.cameraLoadingSkeleton} />
-                    <p className={s.cameraLoadingText}>Starting camera…</p>
-                </div>
-            )}
-
-            {ocrState === 'fallback' && !ocrFallbackDismissed && cameraReady && !cameraError && (
-                <div className={s.ocrFallbackBanner} role="alert">
-                    <p className={s.ocrFallbackTitle}>Text recognition loaded in compatibility mode</p>
-                    <p className={s.ocrFallbackText}>Scanning still works but may be slower.</p>
-                    <div className={s.ocrFallbackActions}>
-                        <button type="button" onClick={() => setOcrFallbackDismissed(true)} className={s.ocrFallbackDismiss}>
-                            OK
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {scanSuccessFlash && (
-                <div className={s.successFlash} role="status" aria-live="polite">
-                    <Check size={48} strokeWidth={3} />
-                </div>
-            )}
-
-            {successAnnouncement && (
-                <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-                    {successAnnouncement}
-                </div>
-            )}
-
-            {/* Viewfinder overlay with simple hint */}
-            <div className={s.viewfinderOverlay} role="img" aria-label="Camera viewfinder">
-                <div className={s.barcodeGuide} aria-hidden="true">
-                    <div className={`${s.guideCorner} ${s.guideTopLeft}`} />
-                    <div className={`${s.guideCorner} ${s.guideTopRight}`} />
-                    <div className={`${s.guideCorner} ${s.guideBottomLeft}`} />
-                    <div className={`${s.guideCorner} ${s.guideBottomRight}`} />
-                    <div className={s.scanLine} />
-                </div>
-                <p className={`${s.guideHint} ${liveQualityHint === 'ready' ? s.guideHintReady : (liveQualityHint === 'blurry' || liveQualityHint === 'dark' || liveQualityHint === 'blurry-dark') ? s.guideHintBlurry : ''}`} id="viewfinder-hint" aria-live="polite" aria-atomic="true">
-                    {getSimpleHint()}
-                </p>
-            </div>
-
-            {torchSupported && cameraReady && !cameraError && (
-                <button
-                    type="button"
-                    onClick={toggleTorch}
-                    className={`${s.torchBtn} ${torchOn ? s.torchBtnActive : ''}`}
-                    aria-label={torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
-                    aria-pressed={torchOn}
-                >
-                    <Flashlight size={18} />
-                </button>
-            )}
-
-            {continuousActiveRef.current && !processing && (
-                <div className={s.scanIndicator}>
-                    <Zap size={14} />
-                    <span>Scanning</span>
-                </div>
-            )}
-
-            <DebugPanel
-                logs={debugLogs}
-                telemetry={liveTelemetry}
-                show={showDebug}
-                onToggle={() => setShowDebug(prev => !prev)}
-            />
-            </div>{/* end cameraWrapper */}
-
-            <div className={s.controls}>
-                {/* Simple status text */}
-                <div className={s.statusLine} role="status" aria-live="polite" aria-atomic="true">
-                    <p className={s.statusText} id="status-text">{status}</p>
-                    {(isScanning || processing) && (
-                        <Loader2 size={16} className="animate-spin" style={{ color: 'var(--accent-blue)' }} />
-                    )}
-                </div>
-
-                {/* Progress indicator (simplified) */}
-                {processing && scanProgress && (scanProgress.phase === 'ocr' || scanProgress.phase === 'ocr-multilang') && scanProgress.totalPasses != null && scanProgress.totalPasses > 0 && (
-                    <div className={s.progressContainer} role="progressbar" aria-valuenow={Math.round(getProgressPercent())} aria-valuemin={0} aria-valuemax={100} aria-label="Scan progress">
-                        <div className={s.progressBarTrack}>
-                            <div className={s.progressBarFill} style={{ width: `${getProgressPercent()}%` }} />
-                        </div>
+                {!cameraReady && !cameraError && (
+                    <div className={s.cameraLoadingOverlay} aria-hidden="true">
+                        <div className={s.cameraLoadingSkeleton} />
+                        <p className={s.cameraLoadingText}>Starting camera…</p>
                     </div>
                 )}
 
-                {/* Cancel during long scans */}
-                {processing && scanProgress && (scanProgress.phase === 'ocr' || scanProgress.phase === 'ocr-multilang') && (
-                    <button type="button" onClick={cancelScan} className={`glass ${s.cancelScanBtn}`} aria-label="Cancel scan">
-                        <X size={18} /> Cancel
-                    </button>
-                )}
-
-                {cameraError && (
-                    <div className={s.cameraError}>
-                        {cameraError}
+                {scanSuccessFlash && (
+                    <div className={s.successFlash} role="status" aria-live="polite">
+                        <Check size={48} strokeWidth={3} />
                     </div>
                 )}
 
-                {/* Hidden file inputs */}
-                <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
-                    onChange={handleFileUpload} style={{ display: 'none' }} aria-hidden="true" />
-                <input ref={photoOnlyInputRef} type="file" accept="image/*" capture="environment"
-                    onChange={handlePhotoOnlyFileUpload} style={{ display: 'none' }} aria-hidden="true" />
+                {successAnnouncement && (
+                    <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                        {successAnnouncement}
+                    </div>
+                )}
 
-                {cameraError ? (
-                    /* ── No-camera fallback: clear primary + secondary actions ── */
-                    <div className={s.fallbackActions}>
-                        <button onClick={() => fileInputRef.current?.click()} disabled={processing || isScanning}
-                            className={`glass ${s.primaryBtn}`}>
-                            {processing ? <Loader2 className="animate-spin" size={22} /> : <ImagePlus size={22} />}
-                            {processing ? 'Scanning...' : 'Upload a Photo'}
-                        </button>
-                        {onPhotoCapture && (
-                            <button onClick={() => photoOnlyInputRef.current?.click()} disabled={processing || isScanning}
-                                className={`glass ${s.secondaryBtn}`}>
-                                <ImageIcon size={18} /> Add book by photo only
+                {/* Live Feed badge */}
+                {cameraReady && !cameraError && (
+                    <div className={s.liveFeedBadge}>
+                        <Zap size={12} /> Live Feed
+                    </div>
+                )}
+
+                {/* Camera control buttons */}
+                {cameraReady && !cameraError && (
+                    <div className={s.cameraControls}>
+                        {hasTorch && (
+                            <button type="button" onClick={toggleTorch}
+                                className={`${s.cameraControlBtn} ${torchOn ? s.cameraControlBtnActive : ''}`}
+                                aria-label={torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}>
+                                <Flashlight size={16} />
                             </button>
                         )}
-                        <button onClick={() => setShowManual(true)} className={`glass ${s.secondaryBtn}`}>
-                            <Edit3 size={18} /> Type ISBN manually
+                        <button type="button" onClick={switchCamera} className={s.cameraControlBtn}
+                            aria-label={facingMode === 'environment' ? 'Switch to front camera' : 'Switch to rear camera'}>
+                            <SwitchCamera size={16} />
                         </button>
-                        {showManual && (
-                            <form onSubmit={handleManualSubmit} className={s.manualForm}>
-                                <input type="text" inputMode="text" pattern="[0-9Xx\-]{10,17}" placeholder="Enter ISBN..." value={manualIsbn}
-                                    onChange={(e) => setManualIsbn(e.target.value)} aria-label="Enter ISBN manually"
-                                    className={`glass ${s.manualInput}`} autoFocus />
-                                <button type="submit" disabled={manualIsbn.length < 5 || isScanning}
-                                    aria-label="Submit ISBN" className={`glass ${s.submitBtn}`}>
-                                    {isScanning ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
-                                </button>
-                            </form>
-                        )}
-                    </div>
-                ) : showManual ? (
-                    /* ── Manual ISBN entry (full-width form) ── */
-                    <div className={s.manualSection}>
-                        <form onSubmit={handleManualSubmit} className={s.manualForm}>
-                            <input type="text" inputMode="text" pattern="[0-9Xx\-]{10,17}" placeholder="Type ISBN number..." value={manualIsbn}
-                                onChange={(e) => setManualIsbn(e.target.value)} aria-label="Enter ISBN manually"
-                                className={`glass ${s.manualInput}`} autoFocus />
-                            <button type="submit" disabled={manualIsbn.length < 5 || isScanning}
-                                aria-label="Submit ISBN" className={`glass ${s.submitBtn}`}>
-                                {isScanning ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
-                            </button>
-                        </form>
-                        <button type="button" onClick={() => setShowManual(false)} className={s.backToScanBtn}>
-                            <Camera size={16} /> Back to scanning
+                        <button type="button" onClick={toggleFullscreen} className={s.cameraControlBtn} aria-label="Toggle fullscreen">
+                            <Maximize2 size={16} />
                         </button>
-                    </div>
-                ) : (
-                    /* ── Main scanning UI: clear 3-action layout ── */
-                    <>
-                        {/* Primary action: big Scan button */}
-                        <button onClick={capture} disabled={processing || isScanning || !cameraReady || liveQualityHint === 'blurry' || liveQualityHint === 'blurry-dark'}
-                            aria-label={processing ? 'Scanning in progress' : (liveQualityHint === 'blurry' || liveQualityHint === 'blurry-dark') ? 'Hold steady to scan' : 'Scan book'}
-                            aria-describedby="status-text"
-                            className={`glass ${s.primaryBtn}`}
-                            style={{ background: processing ? 'rgba(255,255,255,0.1)' : undefined }}>
-                            {processing ? <Loader2 className="animate-spin" size={22} /> : <Camera size={22} />}
-                            {processing ? 'Scanning...' : 'Scan'}
+                        <button type="button" onClick={() => setShowDebug(prev => !prev)} className={s.cameraControlBtn} aria-label="Toggle debug info">
+                            <X size={16} />
                         </button>
-
-                        {/* Secondary actions: Upload + Type ISBN */}
-                        <div className={s.secondaryRow}>
-                            <button onClick={() => { hapticHoldSteady(); fileInputRef.current?.click(); }} disabled={processing || isScanning}
-                                className={`glass ${s.secondaryBtn}`}>
-                                <ImagePlus size={18} /> Upload Photo
-                            </button>
-                            <button onClick={() => { hapticHoldSteady(); setShowManual(true); }}
-                                className={`glass ${s.secondaryBtn}`}>
-                                <Edit3 size={18} /> Type ISBN
-                            </button>
-                        </div>
-
-                        {/* Torch overlay is on the camera feed, not here */}
-                    </>
-                )}
-
-                {/* ISBN suggestions (friendly language) */}
-                {(isbnSuggestions.length > 0 || Object.keys(repairedMap).length > 0) && (
-                    <div className={s.suggestionSection} role="group" aria-label="Possible matches" aria-live="polite">
-                        <p className={s.suggestionHeader}>
-                            {Object.keys(repairedMap).length > 0
-                                ? 'Did you mean one of these?'
-                                : 'Possible matches — tap to add:'}
-                        </p>
-                        <div className={s.suggestionRow}>
-                        {Object.entries(repairedMap).map(([repaired, original], idx) => (
-                            <button key={`rep-${repaired}`} ref={idx === 0 ? firstSuggestionRef : undefined} type="button"
-                                onClick={() => onScan(repaired)}
-                                className={`glass ${s.suggestionBtn} ${s.repairBtn}`}
-                                title={`Corrected from ${original}`}
-                                aria-label={`Use ISBN ${repaired}`}>
-                                <strong>{formatIsbnForDisplay(repaired)}</strong> <Check size={14} />
-                            </button>
-                        ))}
-                        {isbnSuggestions.filter(c => !Object.keys(repairedMap).includes(c)).map((candidate, idx) => (
-                            <button key={candidate} ref={Object.keys(repairedMap).length === 0 && idx === 0 ? firstSuggestionRef : undefined} type="button"
-                                onClick={() => {
-                                    if (isValidIsbn(candidate)) onScan(candidate);
-                                    else { setManualIsbn(candidate); setShowManual(true); }
-                                }}
-                                className={`glass ${s.suggestionBtn}`}
-                                title={isValidIsbn(candidate) ? 'Tap to add this book' : 'Tap to edit and verify'}>
-                                {formatIsbnForDisplay(candidate)}
-                                {isValidIsbn(candidate)
-                                    ? <Check size={14} style={{ color: '#22c55e' }} />
-                                    : <span className={s.suggestionNote}>edit</span>}
-                            </button>
-                        ))}
-                        </div>
                     </div>
                 )}
 
+                {/* Zoom controls */}
+                {cameraReady && !cameraError && zoomRange && zoomRange.max > 1 && (
+                    <div className={s.zoomControls}>
+                        <button type="button" onClick={() => changeZoom(zoomLevel - (zoomRange.step * 2 || 0.5))}
+                            disabled={zoomLevel <= zoomRange.min}
+                            className={s.zoomBtn} aria-label="Zoom out">
+                            <ZoomOut size={14} />
+                        </button>
+                        <input type="range" className={s.zoomSlider}
+                            min={zoomRange.min} max={zoomRange.max} step={zoomRange.step}
+                            value={zoomLevel}
+                            onChange={(e) => changeZoom(parseFloat(e.target.value))}
+                            aria-label={`Zoom level ${zoomLevel.toFixed(1)}x`} />
+                        <button type="button" onClick={() => changeZoom(zoomLevel + (zoomRange.step * 2 || 0.5))}
+                            disabled={zoomLevel >= zoomRange.max}
+                            className={s.zoomBtn} aria-label="Zoom in">
+                            <ZoomIn size={14} />
+                        </button>
+                        <span className={s.zoomLabel}>{zoomLevel.toFixed(1)}x</span>
+                    </div>
+                )}
+
+                {/* Viewfinder overlay */}
+                <div className={s.viewfinderOverlay} role="img" aria-label="Camera viewfinder">
+                    <div className={s.barcodeGuide} aria-hidden="true">
+                        <div className={`${s.guideCorner} ${s.guideTopLeft}`} />
+                        <div className={`${s.guideCorner} ${s.guideTopRight}`} />
+                        <div className={`${s.guideCorner} ${s.guideBottomLeft}`} />
+                        <div className={`${s.guideCorner} ${s.guideBottomRight}`} />
+                        <div className={s.scanLine} />
+                    </div>
+                    <p className={`${s.guideHint} ${liveQualityHint === 'ready' ? s.guideHintReady : (liveQualityHint === 'blurry' || liveQualityHint === 'dark' || liveQualityHint === 'blurry-dark') ? s.guideHintBlurry : ''}`} id="viewfinder-hint" aria-live="polite" aria-atomic="true">
+                        {getSimpleHint()}
+                    </p>
+                </div>
+
+                {/* Auto-detect badge */}
+                {continuousActiveRef.current && !processing && (
+                    <div className={s.autoDetectBadge}>
+                        <Zap size={10} />
+                        Auto-Detect Active
+                    </div>
+                )}
+
+                <DebugPanel
+                    logs={debugLogs}
+                    telemetry={liveTelemetry}
+                    show={showDebug}
+                    onToggle={() => setShowDebug(prev => !prev)}
+                />
             </div>
         </div>
     );

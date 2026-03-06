@@ -7,6 +7,7 @@ export interface AuthProfile {
   username: string | null;
   displayName: string | null;
   avatarUrl: string | null;
+  preferences?: import('../types.ts').ProfilePreferences | null;
 }
 
 interface AuthStore {
@@ -16,6 +17,8 @@ interface AuthStore {
   loading: boolean;
   error: string | null;
   magicLinkSent: boolean;
+  confirmationPending: boolean;
+  recoveryMode: boolean;
   initialize: () => Promise<void>;
   signUp: (email: string, password: string, username?: string) => Promise<string | undefined>;
   signIn: (email: string, password: string) => Promise<void>;
@@ -23,8 +26,12 @@ interface AuthStore {
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   loadProfile: () => Promise<void>;
+  resetPassword: (email: string) => Promise<boolean>;
+  updatePassword: (newPassword: string) => Promise<boolean>;
+  resendConfirmation: (email: string) => Promise<boolean>;
   clearError: () => void;
   clearMagicLinkSent: () => void;
+  clearConfirmation: () => void;
 }
 
 export const useAuthStore = create<AuthStore>((set, get) => ({
@@ -34,6 +41,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   loading: true,
   error: null,
   magicLinkSent: false,
+  confirmationPending: false,
+  recoveryMode: false,
 
   initialize: async () => {
     if (!supabase) {
@@ -52,14 +61,16 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         get().loadProfile();
       }
 
-      // Listen for auth state changes (login, logout, token refresh)
-      supabase.auth.onAuthStateChange((_event, session) => {
+      supabase.auth.onAuthStateChange((event, session) => {
+        const isRecovery = event === 'PASSWORD_RECOVERY';
         set({
           session,
           user: session?.user ?? null,
-          profile: null,
+          profile: isRecovery ? get().profile : null,
+          recoveryMode: isRecovery || get().recoveryMode,
         });
-        if (session?.user?.id) {
+
+        if (event === 'SIGNED_IN' && session?.user?.id) {
           get().loadProfile();
         }
       });
@@ -68,9 +79,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
   },
 
-  signUp: async (email: string, password: string, _username?: string): Promise<string | undefined> => {
+  signUp: async (email: string, password: string, username?: string): Promise<string | undefined> => {
     if (!supabase) return undefined;
-    set({ loading: true, error: null });
+    set({ loading: true, error: null, confirmationPending: false });
 
     const { data, error } = await supabase.auth.signUp({ email, password });
 
@@ -78,12 +89,30 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       set({ error: error.message, loading: false });
       return undefined;
     }
+
+    // Supabase returns a user but no session when email confirmation is required
+    if (data.user && !data.session) {
+      // Save username to profile if provided (will be available after confirmation)
+      if (username) {
+        await upsertProfile(data.user.id, { username });
+      }
+      set({ confirmationPending: true, loading: false, error: null });
+      return data.user.id;
+    }
+
+    // Session exists = email confirmation disabled or auto-confirmed
+    if (data.user?.id && username) {
+      await upsertProfile(data.user.id, { username });
+    }
     set({
       session: data.session,
       user: data.user,
       loading: false,
       error: null,
     });
+    if (data.user?.id) {
+      get().loadProfile();
+    }
     return data.user?.id;
   },
 
@@ -94,13 +123,18 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      set({ error: error.message, loading: false });
+      if (error.message === 'Email not confirmed') {
+        set({ error: 'Please check your email and confirm your account before signing in.', loading: false });
+      } else {
+        set({ error: error.message, loading: false });
+      }
     } else {
       set({
         session: data.session,
         user: data.user,
         loading: false,
         error: null,
+        confirmationPending: false,
       });
       if (data.user?.id) {
         get().loadProfile();
@@ -138,8 +172,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (error) {
       set({ error: error.message, loading: false });
     }
-    // On success, Supabase redirects to Google; after OAuth completes, user returns
-    // to this app and onAuthStateChange (in initialize) picks up the new session.
   },
 
   signOut: async () => {
@@ -151,7 +183,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (error) {
       set({ error: error.message, loading: false });
     } else {
-      set({ user: null, session: null, profile: null, loading: false, error: null });
+      set({ user: null, session: null, profile: null, loading: false, error: null, confirmationPending: false, recoveryMode: false });
     }
   },
 
@@ -159,7 +191,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     const user = get().user;
     if (!user?.id || !supabase) return;
     let p = await getProfile(user.id);
-    // Auto-create/update profile for Google OAuth users from user_metadata
     const meta = user.user_metadata;
     const fromOAuth = meta?.avatar_url ?? meta?.full_name;
     if (fromOAuth && (!p || !p.displayName)) {
@@ -171,11 +202,55 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
     set({
       profile: p
-        ? { username: p.username, displayName: p.displayName, avatarUrl: p.avatarUrl }
+        ? { username: p.username, displayName: p.displayName, avatarUrl: p.avatarUrl, preferences: p.preferences ?? null }
         : null,
     });
   },
 
+  resetPassword: async (email: string): Promise<boolean> => {
+    if (!supabase) return false;
+    set({ loading: true, error: null });
+
+    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '') || window.location.origin;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+
+    if (error) {
+      set({ error: error.message, loading: false });
+      return false;
+    }
+    set({ loading: false });
+    return true;
+  },
+
+  updatePassword: async (newPassword: string): Promise<boolean> => {
+    if (!supabase) return false;
+    set({ loading: true, error: null });
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+    if (error) {
+      set({ error: error.message, loading: false });
+      return false;
+    }
+    set({ loading: false, recoveryMode: false });
+    return true;
+  },
+
+  resendConfirmation: async (email: string): Promise<boolean> => {
+    if (!supabase) return false;
+    set({ loading: true, error: null });
+
+    const { error } = await supabase.auth.resend({ type: 'signup', email });
+
+    if (error) {
+      set({ error: error.message, loading: false });
+      return false;
+    }
+    set({ loading: false });
+    return true;
+  },
+
   clearError: () => set({ error: null }),
   clearMagicLinkSent: () => set({ magicLinkSent: false }),
+  clearConfirmation: () => set({ confirmationPending: false }),
 }));
