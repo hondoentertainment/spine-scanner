@@ -12,7 +12,7 @@ import { useTheme } from './hooks/useTheme.ts';
 import { useToast } from './components/Toast.tsx';
 import { mergeSync, pushBooks } from './lib/syncBooks.ts';
 import type { BookEntry } from './types.ts';
-import { BookOpen, Library, Scan, AlertCircle, Database, Layers } from 'lucide-react';
+import { BookOpen, Library, Scan, AlertCircle, Database, Layers, User } from 'lucide-react';
 import { generateAmazonLink } from './utils/amazonLink.ts';
 import { isValidIsbn, normalizeToIsbn13 } from './utils/isbnValidation.ts';
 import { isbnExistsInLibrary } from './utils/libraryUtils.ts';
@@ -27,6 +27,12 @@ const PasswordReset = lazy(() => import('./components/PasswordReset.tsx'));
 const preloadScanner = () => import('./components/Scanner.tsx');
 const preloadLibrary = () => import('./components/LibraryList.tsx');
 const preloadData = () => import('./components/DataManagement.tsx');
+const preloadProfile = () => import('./components/ProfileSettings.tsx');
+
+type ScanRequestOptions = {
+  allowReview?: boolean;
+  source?: 'scan' | 'manual' | 'ocr' | 'barcode' | 'suggestion';
+};
 
 type ScanRequestOptions = {
   allowReview?: boolean;
@@ -34,7 +40,7 @@ type ScanRequestOptions = {
 };
 
 function App() {
-  const [view, setView] = useState<'scan' | 'library' | 'data'>('scan');
+  const [view, setView] = useState<'scan' | 'library' | 'data' | 'profile'>('scan');
   const { lookupByIsbn, loading, error } = useBookLookup();
   const { addBook, books, setBooks, shelves, setShelves } = useBookStore();
   const { user, recoveryMode, initialize: initAuth } = useAuthStore();
@@ -45,7 +51,6 @@ function App() {
   const { toast, confirm } = useToast();
   const { track } = useAnalyticsStore();
   const [openBookIsbn, setOpenBookIsbn] = useState<string | null>(null);
-  const [showProfile, setShowProfile] = useState(false);
   const batchMode = preferences.batchModeDefault;
 
   // Track whether initial sync has completed to avoid marking dirty during hydration
@@ -329,8 +334,13 @@ function App() {
 
   // Screen reader announcement for view changes
   const [srAnnouncement, setSrAnnouncement] = useState('');
-  const handleViewChange = useCallback((newView: 'scan' | 'library' | 'data') => {
-    const labels: Record<string, string> = { scan: 'Scanner view', library: 'Library view', data: 'Data management view' };
+  const handleViewChange = useCallback((newView: 'scan' | 'library' | 'data' | 'profile') => {
+    const labels: Record<string, string> = {
+      scan: 'Scanner view',
+      library: 'Library view',
+      data: 'Data management view',
+      profile: 'Profile view',
+    };
     setView(newView);
     setSrAnnouncement(labels[newView]);
   }, []);
@@ -365,7 +375,7 @@ function App() {
             lastSynced={useSyncQueue.getState().lastSyncedAt}
             online={online}
             pendingChanges={pendingChanges}
-            onOpenProfile={() => setShowProfile(true)}
+            onOpenProfile={() => handleViewChange('profile')}
           />
         </div>
 
@@ -374,11 +384,12 @@ function App() {
             ['scan', 'Scanner', <Scan key="s" size={18} />],
             ['library', 'Library', <Library key="l" size={18} />],
             ['data', 'Data', <Database key="d" size={18} />],
+            ['profile', 'Profile', <User key="p" size={18} />],
           ] as [string, string, React.ReactNode][]).map(([key, label, icon]) => (
             <button
               key={key}
               role="tab"
-              onClick={() => handleViewChange(key as 'scan' | 'library' | 'data')}
+              onClick={() => handleViewChange(key as 'scan' | 'library' | 'data' | 'profile')}
               aria-label={`${label} tab`}
               aria-selected={view === key}
               aria-current={view === key ? 'page' : undefined}
@@ -386,11 +397,13 @@ function App() {
                 if (key === 'scan') void preloadScanner();
                 if (key === 'library') void preloadLibrary();
                 if (key === 'data') void preloadData();
+                if (key === 'profile') void preloadProfile();
               }}
               onFocus={() => {
                 if (key === 'scan') void preloadScanner();
                 if (key === 'library') void preloadLibrary();
                 if (key === 'data') void preloadData();
+                if (key === 'profile') void preloadProfile();
               }}
               className={`${styles.navBtn} ${view === key ? styles.navBtnActive : ''}`}
             >
@@ -468,13 +481,20 @@ function App() {
             </Suspense>
           </ErrorBoundary>
         )}
+        {view === 'profile' && (
+          <ErrorBoundary>
+            <Suspense
+              fallback={
+                <div className={styles.lazyFallback}>
+                  <span className={styles.lazyText}>Loading profile...</span>
+                </div>
+              }
+            >
+              <ProfileSettings inline />
+            </Suspense>
+          </ErrorBoundary>
+        )}
       </main>
-
-      {showProfile && (
-        <Suspense fallback={null}>
-          <ProfileSettings onClose={() => setShowProfile(false)} />
-        </Suspense>
-      )}
 
       {recoveryMode && (
         <Suspense fallback={null}>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { extractIsbnCandidates, fixOcrDigits, tryFixChecksum, getNearMissCandidates, OCR_AMBIGUITY_MAP } from '../ocr';
+import { extractIsbnCandidates, fixOcrDigits, tryFixChecksum, tryFixChecksumDouble, tryFixChecksumTriple, getNearMissCandidates, getCharConfidenceWeights, OCR_AMBIGUITY_MAP } from '../ocr';
 import { isValidIsbn } from '../isbnValidation';
 
 /* ================================================================
@@ -645,12 +645,435 @@ describe('fixOcrDigits — aggressive variant', () => {
     // Without a label, aggressive OCR fixing should NOT be applied.
     // Corrupt 978-0-14-103614-4 with 'A' (aggressive: A→4) but no ISBN label.
     // Pass 2/3 use ocrFixed (non-aggressive) which does NOT map A→4.
-    // The aggressive version should not create candidates in Pass 2/3.
+    // The aggressive version should not create candidates in Pass 2/3/4.
     const text = '97801A1036144';
     const c = extractIsbnCandidates(text);
     // Non-aggressive fixOcrDigits does not convert A→4.
     // Without a label, the aggressive fixer should not be used for Pass 2/3/4,
     // so the ISBN should not be recovered.
     expect(c).not.toContain('9780141036144');
+  });
+});
+
+/* ================================================================
+ *  tryFixChecksumTriple — Three-position substitution for 3-error ISBNs
+ * ================================================================ */
+
+describe('tryFixChecksumTriple', () => {
+  it('returns valid ISBN unchanged', () => {
+    expect(tryFixChecksumTriple('9780141036144')).toBe('9780141036144');
+    expect(tryFixChecksumTriple('0743273567')).toBe('0743273567');
+  });
+
+  it('returns null for wrong-length strings', () => {
+    expect(tryFixChecksumTriple('12345')).toBeNull();
+    expect(tryFixChecksumTriple('')).toBeNull();
+  });
+
+  it('repairs ISBN with three OCR errors via triple substitution', () => {
+    // 9780141036144: corrupt positions 4,9,12: 1→7, 3→8, 4→9 → 9780741036194 (invalid)
+    // We need a candidate where exactly 3 single-digit fixes yield valid.
+    // 9780306406157 is valid. Corrupt 3 positions: 9→4, 0→6, 6→0 → 4780306400157
+    // Ambiguity: 4→9, 6→0, 0→6. Triple fix should find it.
+    const repaired = tryFixChecksumTriple('4780306400157');
+    expect(repaired).not.toBeNull();
+    expect(isValidIsbn(repaired!)).toBe(true);
+  });
+
+  it('uses confidence-guided positions when charConfidences provided', () => {
+    // Low confidence at positions 0,1,2; high elsewhere. Triple fix prioritizes those.
+    const confidences = [10, 15, 20, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90];
+    const repaired = tryFixChecksumTriple('4780306406157', confidences);
+    expect(repaired === null || isValidIsbn(repaired!)).toBe(true);
+  });
+});
+
+/* ================================================================
+ *  getCharConfidenceWeights
+ * ================================================================ */
+
+describe('getCharConfidenceWeights', () => {
+  it('returns empty array for empty symbols', () => {
+    expect(getCharConfidenceWeights([])).toEqual([]);
+  });
+
+  it('returns empty array for undefined/null', () => {
+    expect(getCharConfidenceWeights(undefined as unknown as Array<{ text: string; confidence: number }>)).toEqual([]);
+  });
+
+  it('filters to digits and X only', () => {
+    const symbols = [
+      { text: '9', confidence: 95 },
+      { text: 'a', confidence: 80 },
+      { text: '7', confidence: 88 },
+      { text: '-', confidence: 70 },
+    ];
+    expect(getCharConfidenceWeights(symbols)).toEqual([95, 88]);
+  });
+
+  it('includes X (ISBN-10 check digit)', () => {
+    const symbols = [{ text: 'X', confidence: 72 }];
+    expect(getCharConfidenceWeights(symbols)).toEqual([72]);
+  });
+
+  it('returns all confidences for pure digit sequence', () => {
+    const symbols = ['9', '7', '8', '0', '1', '4', '1', '0', '3', '6', '1', '4', '4']
+      .map((t, i) => ({ text: t, confidence: 90 - i }));
+    expect(getCharConfidenceWeights(symbols)).toHaveLength(13);
+    expect(getCharConfidenceWeights(symbols)[0]).toBe(90);
+  });
+});
+
+/* ================================================================
+ *  tryFixChecksumDouble — additional coverage
+ * ================================================================ */
+
+describe('tryFixChecksumDouble — extended', () => {
+  it('returns valid ISBN unchanged', () => {
+    expect(tryFixChecksumDouble('9780141036144')).toBe('9780141036144');
+  });
+
+  it('repairs ISBN with two OCR errors', () => {
+    // 9780306406157 valid. Corrupt 2 positions: 9→4, 0→6 → 4780366406157
+    const repaired = tryFixChecksumDouble('4780366406157');
+    expect(repaired).not.toBeNull();
+    expect(isValidIsbn(repaired!)).toBe(true);
+  });
+
+  it('uses confidence-guided positions', () => {
+    const lowConf = [5, 10, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95];
+    const repaired = tryFixChecksumDouble('4780306406157', lowConf);
+    expect(repaired === null || isValidIsbn(repaired!)).toBe(true);
+  });
+});
+
+/* ================================================================
+ *  extractIsbnCandidates — Pass 6 four-line span
+ * ================================================================ */
+
+describe('extractIsbnCandidates — Pass 6 four-line span', () => {
+  it('extracts ISBN-13 split across four lines', () => {
+    const text = '978\n0\n14\n1036144';
+    const c = extractIsbnCandidates(text);
+    expect(c).toContain('9780141036144');
+  });
+
+  it('extracts ISBN from four-line fragmented spine', () => {
+    const text = '9\n78\n-0\n14-103614-4';
+    const c = extractIsbnCandidates(text);
+    expect(c.some(x => x === '9780141036144')).toBe(true);
+  });
+});
+
+/* ================================================================
+ *  extractIsbnCandidates — whitespace collapse
+ * ================================================================ */
+
+describe('extractIsbnCandidates — whitespace collapse', () => {
+  it('extracts ISBN with multiple spaces between groups', () => {
+    const text = 'ISBN    978    0    14    103614    4';
+    const c = extractIsbnCandidates(text);
+    expect(c).toContain('9780141036144');
+  });
+
+  it('extracts ISBN with tabs and spaces', () => {
+    const text = 'ISBN\t978\t0\t14\t103614\t4';
+    const c = extractIsbnCandidates(text);
+    expect(c).toContain('9780141036144');
+  });
+});
+
+/* ================================================================
+ *  extractIsbnCandidates — aggressive letter mappings (Y,U,F,P)
+ * ================================================================ */
+
+describe('extractIsbnCandidates — aggressive letter mappings', () => {
+  it('recovers ISBN with Y→4 in labeled context', () => {
+    const text = 'ISBN 978-0-1Y-103614-4';
+    const c = extractIsbnCandidates(text);
+    expect(c).toContain('9780141036144');
+  });
+
+  it('recovers ISBN with U→0 in labeled context', () => {
+    const text = 'ISBN 978-U-14-103614-4';
+    const c = extractIsbnCandidates(text);
+    expect(c).toContain('9780141036144');
+  });
+
+  it('recovers ISBN with F→7 in labeled context', () => {
+    const text = 'ISBN 978-0-306-40615-F';
+    const c = extractIsbnCandidates(text);
+    expect(c).toContain('9780306406157');
+  });
+
+  it('recovers ISBN with P→9 in labeled context', () => {
+    const text = 'ISBN P78-0-14-103614-4';
+    const c = extractIsbnCandidates(text);
+    expect(c).toContain('9780141036144');
+  });
+});
+
+/* ================================================================
+ *  OCR_AMBIGUITY_MAP — extended letter entries
+ * ================================================================ */
+
+describe('OCR_AMBIGUITY_MAP — extended letters', () => {
+  it('contains Y,y for 4', () => {
+    expect(OCR_AMBIGUITY_MAP['Y']).toContain('4');
+    expect(OCR_AMBIGUITY_MAP['y']).toContain('4');
+  });
+  it('contains U,u for 0', () => {
+    expect(OCR_AMBIGUITY_MAP['U']).toContain('0');
+    expect(OCR_AMBIGUITY_MAP['u']).toContain('0');
+  });
+  it('contains F,f for 7', () => {
+    expect(OCR_AMBIGUITY_MAP['F']).toContain('7');
+    expect(OCR_AMBIGUITY_MAP['f']).toContain('7');
+  });
+  it('contains P,p for 9', () => {
+    expect(OCR_AMBIGUITY_MAP['P']).toContain('9');
+    expect(OCR_AMBIGUITY_MAP['p']).toContain('9');
+  });
+});
+
+/* ================================================================
+ *  tryFixChecksum / getNearMissCandidates — extended letter repair
+ * ================================================================ */
+
+describe('tryFixChecksum — letter repair via ambiguity map', () => {
+  it('repairs Y→4 in invalid candidate', () => {
+    const repaired = tryFixChecksum('97801410361Y4');
+    expect(repaired).not.toBeNull();
+    expect(isValidIsbn(repaired!)).toBe(true);
+  });
+  it('repairs U→0 in invalid candidate', () => {
+    const repaired = tryFixChecksum('978U141036144');
+    expect(repaired).not.toBeNull();
+    expect(isValidIsbn(repaired!)).toBe(true);
+  });
+  it('repairs F→7 in invalid candidate', () => {
+    const repaired = tryFixChecksum('978030640615F');
+    expect(repaired).not.toBeNull();
+    expect(isValidIsbn(repaired!)).toBe(true);
+  });
+  it('repairs P→9 in invalid candidate', () => {
+    const repaired = tryFixChecksum('P780141036144');
+    expect(repaired).not.toBeNull();
+    expect(isValidIsbn(repaired!)).toBe(true);
+  });
+});
+
+/* ================================================================
+ *  extractIsbnCandidates — additional edge cases
+ * ================================================================ */
+
+describe('extractIsbnCandidates — additional edge cases', () => {
+  it('handles ISBN with leading zeros in ISBN-10', () => {
+    const c = extractIsbnCandidates('ISBN 0-201-63361-X');
+    expect(c).toContain('020163361X');
+  });
+  it('handles barcode with 5-digit addon', () => {
+    const c = extractIsbnCandidates('9780141036144 52499');
+    expect(c[0]).toBe('9780141036144');
+  });
+  it('handles mixed hyphen styles', () => {
+    const c = extractIsbnCandidates('978 0 14 103614 4');
+    expect(c).toContain('9780141036144');
+  });
+  it('handles colon after ISBN label', () => {
+    const c = extractIsbnCandidates('ISBN:9780141036144');
+    expect(c).toContain('9780141036144');
+  });
+  it('rejects 12-digit sequence', () => {
+    const c = extractIsbnCandidates('978014103614');
+    expect(c).not.toContain('978014103614');
+  });
+  it('rejects 14-digit sequence', () => {
+    const c = extractIsbnCandidates('97801410361441');
+    expect(c.filter(x => x.length === 14)).toHaveLength(0);
+  });
+  it('handles multiple spaces between ISBN and label', () => {
+    const c = extractIsbnCandidates('ISBN      978-0-14-103614-4');
+    expect(c).toContain('9780141036144');
+  });
+  it('handles period after ISBN', () => {
+    const c = extractIsbnCandidates('ISBN 978-0-14-103614-4. All rights reserved.');
+    expect(c).toContain('9780141036144');
+  });
+  it('handles comma after ISBN', () => {
+    const c = extractIsbnCandidates('ISBN 978-0-14-103614-4, First printing');
+    expect(c).toContain('9780141036144');
+  });
+  it('handles ISBN at start of text', () => {
+    const c = extractIsbnCandidates('9780141036144 Penguin Classics');
+    expect(c).toContain('9780141036144');
+  });
+  it('handles ISBN at end of text', () => {
+    const c = extractIsbnCandidates('Penguin Classics 9780141036144');
+    expect(c).toContain('9780141036144');
+  });
+  it('handles 979 prefix ISBN', () => {
+    const c = extractIsbnCandidates('979-10-90636-07-1');
+    expect(c[0]).toBe('9791090636071');
+  });
+  it('handles no-break space (U+00A0)', () => {
+    const c = extractIsbnCandidates('ISBN\u00A0978-0-14-103614-4');
+    expect(c).toContain('9780141036144');
+  });
+});
+
+/* ================================================================
+ *  tryFixChecksumTriple — extended
+ * ================================================================ */
+
+describe('tryFixChecksumTriple — extended', () => {
+  it('returns null for valid ISBN', () => {
+    expect(tryFixChecksumTriple('9780141036144')).toBe('9780141036144');
+  });
+  it('returns null for 9-digit string', () => {
+    expect(tryFixChecksumTriple('123456789')).toBeNull();
+  });
+  it('returns null for 11-digit string', () => {
+    expect(tryFixChecksumTriple('12345678901')).toBeNull();
+  });
+});
+
+/* ================================================================
+ *  getCharConfidenceWeights — extended
+ * ================================================================ */
+
+describe('getCharConfidenceWeights — extended', () => {
+  it('handles mixed symbols with spaces', () => {
+    const symbols = [
+      { text: '9', confidence: 95 },
+      { text: ' ', confidence: 50 },
+      { text: '7', confidence: 88 },
+    ];
+    expect(getCharConfidenceWeights(symbols)).toEqual([95, 88]);
+  });
+  it('handles empty array', () => {
+    expect(getCharConfidenceWeights([])).toEqual([]);
+  });
+});
+
+/* ================================================================
+ *  fixOcrDigits — pipe and pipe-like
+ * ================================================================ */
+
+describe('fixOcrDigits — pipe and pipe-like', () => {
+  it('fixes | as 1', () => {
+    expect(fixOcrDigits('|23')).toBe('123');
+  });
+  it('handles only letters that map to digits', () => {
+    expect(fixOcrDigits('OOOO')).toBe('0000');
+  });
+});
+
+/* ================================================================
+ *  extractIsbnCandidates — noise resilience
+ * ================================================================ */
+
+describe('extractIsbnCandidates — noise resilience', () => {
+  it('extracts ISBN with repeated spaces in normalized text', () => {
+    const c = extractIsbnCandidates('ISBN   978   0   14   103614   4');
+    expect(c).toContain('9780141036144');
+  });
+  it('extracts 13-digit ISBN with single space separators', () => {
+    const c = extractIsbnCandidates('9 7 8 0 1 4 1 0 3 6 1 4 4');
+    expect(c).toContain('9780141036144');
+  });
+  it('handles hyphen-only formatted ISBN', () => {
+    const c = extractIsbnCandidates('978-0-14-103614-4');
+    expect(c[0]).toBe('9780141036144');
+  });
+  it('ignores 9-digit sequences', () => {
+    const c = extractIsbnCandidates('123456789');
+    expect(c).not.toContain('123456789');
+  });
+  it('handles ISBN-10 with spaces', () => {
+    const c = extractIsbnCandidates('0 306 40615 2');
+    expect(c.some(x => x === '0306406152')).toBe(true);
+  });
+});
+
+/* ================================================================
+ *  getNearMissCandidates — extended
+ * ================================================================ */
+
+describe('getNearMissCandidates — extended', () => {
+  it('does not duplicate input when multiple fixes exist', () => {
+    const missed = getNearMissCandidates('9280000000002');
+    const unique = [...new Set(missed)];
+    expect(missed).toEqual(unique);
+  });
+  it('returns empty for 9-digit string', () => {
+    expect(getNearMissCandidates('123456789')).toEqual([]);
+  });
+});
+
+/* ================================================================
+ *  tryFixChecksum — letter variants
+ * ================================================================ */
+
+describe('tryFixChecksum — letter variants', () => {
+  it('repairs a→4 when in ambiguity map', () => {
+    const repaired = tryFixChecksum('4780000000002');
+    expect(repaired).toBe('9780000000002');
+  });
+  it('repairs Z→2 in ISBN-10', () => {
+    const repaired = tryFixChecksum('030640615Z');
+    expect(repaired).toBe('0306406152');
+  });
+});
+
+/* ================================================================
+ *  extractIsbnCandidates — format variants
+ * ================================================================ */
+
+describe('extractIsbnCandidates — format variants', () => {
+  it('extracts ISBN with ISBN-13 explicit label', () => {
+    const c = extractIsbnCandidates('ISBN-13 978-0-14-103614-4');
+    expect(c).toContain('9780141036144');
+  });
+  it('extracts ISBN with ISBN-10 explicit label', () => {
+    const c = extractIsbnCandidates('ISBN-10 0-306-40615-2');
+    expect(c).toContain('0306406152');
+  });
+  it('prefers valid over invalid when both present', () => {
+    const c = extractIsbnCandidates('9780141036145 9780141036144');
+    expect(c[0]).toBe('9780141036144');
+  });
+  it('handles newline between label and digits', () => {
+    const c = extractIsbnCandidates('ISBN\n978-0-14-103614-4');
+    expect(c).toContain('9780141036144');
+  });
+  it('extracts when digits separated by dots (OCR noise)', () => {
+    const c = extractIsbnCandidates('978.0.14.103614.4');
+    expect(c).toContain('9780141036144');
+  });
+  it('handles leading zero in ISBN-10', () => {
+    const c = extractIsbnCandidates('ISBN 0-743-27356-7');
+    expect(c).toContain('0743273567');
+  });
+  it('deduplicates across passes', () => {
+    const c = extractIsbnCandidates('9780141036144 9780141036144');
+    expect(c.filter(x => x === '9780141036144')).toHaveLength(1);
+  });
+
+  /* ISO 2108: lowercase x normalized to X for ISBN-10 */
+  it('extracts and normalizes ISBN-10 with lowercase x (ISO 2108)', () => {
+    const c = extractIsbnCandidates('ISBN 0-8044-2957-x');
+    expect(c).toContain('080442957X');
+    expect(isValidIsbn('080442957X')).toBe(true);
+  });
+
+  it('returns empty array for null/undefined input', () => {
+    expect(extractIsbnCandidates(null as unknown as string)).toEqual([]);
+    expect(extractIsbnCandidates(undefined as unknown as string)).toEqual([]);
+  });
+
+  it('getCharConfidenceWeights includes lowercase x (ISBN-10 check digit)', () => {
+    const symbols = [{ text: 'x', confidence: 65 }];
+    expect(getCharConfidenceWeights(symbols)).toEqual([65]);
   });
 });

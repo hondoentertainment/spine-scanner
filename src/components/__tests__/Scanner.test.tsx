@@ -237,7 +237,7 @@ describe('Scanner', () => {
       });
 
       expect(screen.queryByRole('button', { name: /scan book/i })).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /upload a photo/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /take photo of isbn/i })).toBeInTheDocument();
     });
 
     it('enables capture after camera is ready', async () => {
@@ -449,6 +449,29 @@ describe('Scanner', () => {
       expect(onScan).not.toHaveBeenCalled();
     });
 
+    it('disables manual submit while submission is in flight', async () => {
+      let resolveScan: (() => void) | undefined;
+      const onScan = vi.fn(() => new Promise<void>((resolve) => {
+        resolveScan = resolve;
+      }));
+
+      renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
+      fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '9780141036144' } });
+
+      const submitButton = screen.getByRole('button', { name: /submit isbn/i });
+      expect(submitButton).not.toBeDisabled();
+
+      fireEvent.click(submitButton);
+
+      await waitFor(() => expect(submitButton).toBeDisabled());
+      expect(onScan).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveScan?.();
+      });
+    });
     it('submits invalid manual ISBN for review when checksum repair fails', () => {
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
@@ -530,17 +553,18 @@ describe('Scanner', () => {
 
     it('shows upload button alongside capture when camera works', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
-      expect(screen.getByRole('button', { name: /upload photo/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /take photo of isbn/i })).toBeInTheDocument();
     });
 
     it('renders hidden file input with correct attributes', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
-      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-      expect(fileInput).toBeTruthy();
-      expect(fileInput.getAttribute('accept')).toBe('image/*');
-      expect(fileInput.getAttribute('capture')).toBe('environment');
-      expect(fileInput.getAttribute('aria-hidden')).toBe('true');
-      expect(fileInput.style.display).toBe('none');
+      const fileInputs = document.querySelectorAll('input[type="file"]');
+      expect(fileInputs.length).toBeGreaterThanOrEqual(2);
+      const takePhotoInput = Array.from(fileInputs).find((el) => (el as HTMLInputElement).getAttribute('capture') === 'environment');
+      expect(takePhotoInput).toBeTruthy();
+      expect((takePhotoInput as HTMLInputElement).getAttribute('accept')).toBe('image/*');
+      expect((takePhotoInput as HTMLInputElement).getAttribute('aria-hidden')).toBe('true');
+      expect((takePhotoInput as HTMLElement).style.display).toBe('none');
     });
 
     it('calls onScan when photo contains valid barcode', async () => {
@@ -550,7 +574,7 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /upload photo/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /take photo of isbn/i })).toBeInTheDocument();
       });
 
       const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
@@ -571,7 +595,7 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /upload photo/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /take photo of isbn/i })).toBeInTheDocument();
       });
 
       const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
@@ -598,7 +622,7 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /upload a photo/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /take photo of isbn/i })).toBeInTheDocument();
       });
       const manualEntryElements = screen.getAllByText(/Type ISBN manually/i);
       expect(manualEntryElements.length).toBeGreaterThanOrEqual(1);
@@ -615,7 +639,7 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /upload a photo/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /take photo of isbn/i })).toBeInTheDocument();
       });
 
       expect(screen.queryByRole('button', { name: /scan book/i })).not.toBeInTheDocument();

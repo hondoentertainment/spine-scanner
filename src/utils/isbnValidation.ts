@@ -1,17 +1,18 @@
 /**
  * Validates an ISBN-10 checksum.
  * The weighted sum (weights 10,9,8,...,1) mod 11 must equal 0.
- * The last digit can be 'X' representing 10.
+ * The last digit can be 'X' or 'x' representing 10 (ISO 2108: lowercase x normalized to X).
  */
 export const isValidIsbn10 = (isbn: string): boolean => {
   if (isbn.length !== 10) return false;
-  if (!/^[0-9]{9}[0-9X]$/.test(isbn)) return false;
+  if (!/^[0-9]{9}[0-9Xx]$/.test(isbn)) return false;
 
   let sum = 0;
   for (let i = 0; i < 9; i++) {
     sum += (10 - i) * parseInt(isbn[i], 10);
   }
-  sum += isbn[9] === 'X' ? 10 : parseInt(isbn[9], 10);
+  const last = isbn[9].toUpperCase();
+  sum += last === 'X' ? 10 : parseInt(last, 10);
 
   return sum % 11 === 0;
 };
@@ -60,9 +61,11 @@ export const isbn13To10 = (isbn: string): string | null => {
 
 /**
  * Convert ISBN-10 to ISBN-13 (prepend 978).
+ * Normalizes lowercase x → X per ISO 2108.
  */
 export const isbn10To13 = (isbn: string): string | null => {
-  const digits = isbn.replace(/[^0-9X]/g, '');
+  let digits = isbn.replace(/[^0-9Xx]/g, '');
+  if (digits.length === 10 && digits.endsWith('x')) digits = digits.slice(0, -1) + 'X';
   if (digits.length !== 10) return null;
   const prefix = '978';
   const twelve = prefix + digits.substring(0, 9);
@@ -81,7 +84,7 @@ export const isbn10To13 = (isbn: string): string | null => {
  * Use only for validated ISBN strings; do not call on photo IDs.
  */
 export const normalizeToIsbn13 = (isbn: string): string => {
-  const digits = isbn.replace(/[^0-9X]/g, '');
+  const digits = isbn.replace(/[^0-9Xx]/g, '').replace(/x$/i, 'X');
   if (digits.length === 13) return digits;
   if (digits.length === 10) {
     const converted = isbn10To13(digits);
@@ -96,7 +99,7 @@ export const normalizeToIsbn13 = (isbn: string): string => {
  * Falls back to raw digits for ISBN-10 or non-standard formats.
  */
 export const formatIsbnForDisplay = (isbn: string): string => {
-  const digits = isbn.replace(/[^0-9X]/g, '');
+  const digits = isbn.replace(/[^0-9Xx]/g, '').replace(/x$/i, 'X');
   if (digits.length === 13) {
     return `${digits.slice(0, 3)}-${digits[3]}-${digits.slice(4, 6)}-${digits.slice(6, 12)}-${digits[12]}`;
   }

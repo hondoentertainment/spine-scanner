@@ -85,6 +85,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const videoTrackRef = useRef<MediaStreamTrack | null>(null);
     const cameraPanelRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const takePhotoInputRef = useRef<HTMLInputElement>(null);
     const photoOnlyInputRef = useRef<HTMLInputElement>(null);
     const firstSuggestionRef = useRef<HTMLButtonElement | null>(null);
 
@@ -601,19 +602,28 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 )}
 
                 {/* Hidden file inputs */}
-                <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
+                <input ref={fileInputRef} type="file" accept="image/*"
+                    onChange={handleFileUpload} style={{ display: 'none' }} aria-hidden="true" />
+                <input ref={takePhotoInputRef} type="file" accept="image/*" capture="environment"
                     onChange={handleFileUpload} style={{ display: 'none' }} aria-hidden="true" />
                 <input ref={photoOnlyInputRef} type="file" accept="image/*" capture="environment"
                     onChange={handlePhotoOnlyFileUpload} style={{ display: 'none' }} aria-hidden="true" />
 
                 {cameraError ? (
                     <div className={s.fallbackActions}>
-                        <button onClick={() => fileInputRef.current?.click()} disabled={processing || isScanning}
-                            className={s.primaryBtn}>
+                        <button onClick={() => takePhotoInputRef.current?.click()} disabled={processing || isScanning}
+                            className={s.primaryBtn}
+                            title="Open camera to take a photo of the ISBN or barcode">
                             {processing ? <Loader2 className="animate-spin" size={24} /> : (
-                                <span className={s.ctaIcon}><ImagePlus size={22} /></span>
+                                <span className={s.ctaIcon}><Camera size={22} /></span>
                             )}
-                            {processing ? 'Scanning...' : 'Upload a Photo'}
+                            {processing ? 'Scanning...' : 'Take photo of ISBN'}
+                        </button>
+                        <button onClick={() => fileInputRef.current?.click()} disabled={processing || isScanning}
+                            className={s.secondaryBtn}
+                            title="Choose an existing photo from your device">
+                            <span className={s.secondaryBtnIcon}><ImagePlus size={16} /></span>
+                            Choose from gallery
                         </button>
                         {onPhotoCapture && (
                             <button onClick={() => photoOnlyInputRef.current?.click()} disabled={processing || isScanning}
@@ -631,9 +641,9 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                                 <input type="text" inputMode="text" pattern="[0-9Xx\-]{10,17}" placeholder="Enter ISBN..." value={manualIsbn}
                                     onChange={(e) => setManualIsbn(e.target.value)} aria-label="Enter ISBN manually"
                                     className={s.manualInput} autoFocus />
-                                <button type="submit" disabled={manualIsbn.length < 5 || isScanning}
+                                <button type="submit" disabled={manualIsbn.length < 5 || isScanning || submitting}
                                     aria-label="Submit ISBN" className={s.submitBtn}>
-                                    {isScanning ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
+                                    {isScanning || submitting ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
                                 </button>
                             </form>
                         )}
@@ -644,9 +654,9 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                             <input type="text" inputMode="text" pattern="[0-9Xx\-]{10,17}" placeholder="Type ISBN number..." value={manualIsbn}
                                 onChange={(e) => setManualIsbn(e.target.value)} aria-label="Enter ISBN manually"
                                 className={s.manualInput} autoFocus />
-                            <button type="submit" disabled={manualIsbn.length < 5 || isScanning}
+                            <button type="submit" disabled={manualIsbn.length < 5 || isScanning || submitting}
                                 aria-label="Submit ISBN" className={s.submitBtn}>
-                                {isScanning ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
+                                {isScanning || submitting ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
                             </button>
                         </form>
                         <button type="button" onClick={() => setShowManual(false)} className={s.backToScanBtn}>
@@ -667,10 +677,17 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                         </button>
 
                         <div className={s.secondaryRow}>
+                            <button onClick={() => { hapticHoldSteady(); takePhotoInputRef.current?.click(); }} disabled={processing || isScanning}
+                                className={s.secondaryBtn}
+                                title="Open camera to take a photo of the ISBN or barcode">
+                                <span className={s.secondaryBtnIcon}><Camera size={16} /></span>
+                                Take photo of ISBN
+                            </button>
                             <button onClick={() => { hapticHoldSteady(); fileInputRef.current?.click(); }} disabled={processing || isScanning}
-                                className={s.secondaryBtn}>
+                                className={s.secondaryBtn}
+                                title="Choose an existing photo from your device">
                                 <span className={s.secondaryBtnIcon}><ImagePlus size={16} /></span>
-                                Upload Photo
+                                Choose from gallery
                             </button>
                             <button onClick={() => { hapticHoldSteady(); setShowManual(true); }}
                                 className={s.secondaryBtn}>

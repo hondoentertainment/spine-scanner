@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { isValidIsbn } from '../utils/isbnValidation.ts';
-import { extractIsbnCandidates, tryFixChecksum, tryFixChecksumDouble, getNearMissCandidates, getCharConfidenceWeights } from '../utils/ocr.ts';
+import { extractIsbnCandidates, tryFixChecksum, tryFixChecksumDouble, tryFixChecksumTriple, getNearMissCandidates, getCharConfidenceWeights } from '../utils/ocr.ts';
 import type { OcrResult } from './useOcrEngine.ts';
 import { PSM } from './useOcrEngine.ts';
 import { applyOtsuBinarization, applyAdaptiveThreshold, applyMedianFilter, applyMorphClose, applyCLAHE, detectSkewAngle, measureContrast } from '../utils/imageProcessing.ts';
@@ -630,11 +630,11 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
             return { isbn: null, suggestions: [], diagnostics: { quality: { brightness: 128, blurVariance: BLUR_VARIANCE_THRESHOLD, isDark: false, isBlurry: false }, phase: 'ocr', barcodeAttempted: true, ocrPassesAttempted: 0, lastError: 'Image has zero width or height' } };
         }
 
-        let isbn: string | null = null;
         const allowBarcode = scanMode !== 'ocr';
         const allowOcr = scanMode !== 'barcode';
 
         /* ── Phase 1: Barcode scan (fast, multiple crops) ──── */
+        let isbn: string | null = null;
         if (allowBarcode) {
             addLog(`Phase 1: Barcode scan (${prefix})...`);
             safeSetStatus('Scanning barcode...');
@@ -874,6 +874,14 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                         repairedMap[doubleFix] = c;
                         addLog(`Checksum double-repair: ${c} → ${doubleFix}${charConf ? ' (confidence-guided)' : ''} (suggested)`);
                     }
+                    if (!doubleFix) {
+                        const tripleFix = tryFixChecksumTriple(c, charConf);
+                        if (tripleFix && !candidateList.includes(tripleFix) && !repaired.includes(tripleFix)) {
+                            repaired.push(tripleFix);
+                            repairedMap[tripleFix] = c;
+                            addLog(`Checksum triple-repair: ${c} → ${tripleFix}${charConf ? ' (confidence-guided)' : ''} (suggested)`);
+                        }
+                    }
                 }
                 const misses = getNearMissCandidates(c);
                 for (const m of misses) {
@@ -900,7 +908,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
         } finally {
             pipelineBusyRef.current = false;
         }
-    }, [addLog, setStatus, runOcr, runOcrWithLang, tryBarcodeDecode, onProgress, ocrLanguage]);
+    }, [addLog, setStatus, runOcr, runOcrWithLang, tryBarcodeDecode, onProgress, ocrLanguage, scanMode]);
 
     return { runPipeline };
 }

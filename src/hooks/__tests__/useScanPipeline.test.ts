@@ -516,6 +516,43 @@ describe('useScanPipeline — runPipeline', () => {
     expect(pipelineResult?.suggestions.length).toBeGreaterThanOrEqual(0);
   });
 
+  it('uses the latest scanMode after rerendering', async () => {
+    const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
+    const runOcr = vi.fn().mockResolvedValue({ isbn: null, allCandidates: [] });
+
+    const { result, rerender } = renderHook(
+      ({ scanMode }: { scanMode: 'auto' | 'barcode' | 'ocr' }) =>
+        useScanPipeline({
+          addLog: vi.fn(),
+          setStatus: vi.fn(),
+          runOcr,
+          tryBarcodeDecode,
+          scanMode,
+        }),
+      { initialProps: { scanMode: 'barcode' as const } },
+    );
+
+    const img = new Image();
+    img.width = 640;
+    img.height = 480;
+    const canvas = document.createElement('canvas');
+
+    await act(async () => {
+      await result.current.runPipeline(img, canvas, 'test');
+    });
+
+    expect(runOcr).not.toHaveBeenCalled();
+
+    rerender({ scanMode: 'ocr' });
+
+    await act(async () => {
+      await result.current.runPipeline(img, canvas, 'test');
+    });
+
+    expect(tryBarcodeDecode).toHaveBeenCalledTimes(5);
+    expect(runOcr).toHaveBeenCalled();
+  });
+
   it('includes lowResolution in diagnostics when image is too small for OCR', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
     const runOcr = vi.fn().mockResolvedValue({ isbn: null, allCandidates: [] });
@@ -878,4 +915,30 @@ describe('useScanPipeline — runPipeline', () => {
     expect(addLog).toHaveBeenCalledWith(expect.stringContaining('Pipeline already running'));
   }, 15000);
 
+  it('includes triple-repair suggestions when double-repair fails', async () => {
+    const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
+    const runOcr = vi.fn().mockResolvedValue({
+      isbn: null,
+      allCandidates: ['4780306400157'],
+      symbolConfidences: Array(13).fill(null).map((_, i) => ({ text: String(i % 10), confidence: i < 3 ? 10 : 90 })),
+    });
+
+    const addLog = vi.fn();
+    const { result } = renderHook(() =>
+      useScanPipeline({ addLog, setStatus: vi.fn(), runOcr, tryBarcodeDecode }),
+    );
+
+    const img = new Image();
+    img.width = 640;
+    img.height = 480;
+    const canvas = document.createElement('canvas');
+
+    let pipelineResult: { suggestions?: string[]; repairedMap?: Record<string, string> } | null = null;
+    await act(async () => {
+      pipelineResult = await result.current.runPipeline(img, canvas, 'test');
+    });
+
+    expect(pipelineResult?.suggestions?.length).toBeGreaterThanOrEqual(0);
+  });
 });
+

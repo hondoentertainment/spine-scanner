@@ -120,8 +120,8 @@ describe('ISBN edge cases', () => {
       expect(isValidIsbn('080442957X')).toBe(true);
     });
 
-    it('rejects lowercase x as check digit', () => {
-      expect(isValidIsbn10('080442957x')).toBe(false);
+    it('accepts lowercase x as check digit (ISO 2108: normalize to X)', () => {
+      expect(isValidIsbn10('080442957x')).toBe(true);
     });
   });
 
@@ -160,6 +160,28 @@ describe('ISBN edge cases', () => {
 
     it('rejects ISBN with spaces', () => {
       expect(isValidIsbn('978 0141036144')).toBe(false);
+    });
+  });
+
+  describe('ISO 2108 / RFC 3187 alignment', () => {
+    it('hyphenated ISBN-13 is valid after stripping (display-only hyphens)', () => {
+      expect(isValidIsbn('978-0-14-103614-4')).toBe(false);
+      const stripped = '978-0-14-103614-4'.replace(/[^0-9]/g, '');
+      expect(isValidIsbn(stripped)).toBe(true);
+    });
+
+    it('ISBN-13 rejects X in any position (check digit always numeric)', () => {
+      expect(isValidIsbn13('978014103614X')).toBe(false);
+      expect(isValidIsbn13('97801410361X4')).toBe(false);
+      expect(isValidIsbn13('X780141036144')).toBe(false);
+    });
+
+    it('isValidIsbn rejects empty string', () => {
+      expect(isValidIsbn('')).toBe(false);
+    });
+
+    it('isValidIsbn routes lowercase x ISBN-10 correctly', () => {
+      expect(isValidIsbn('080442957x')).toBe(true);
     });
   });
 });
@@ -202,6 +224,14 @@ describe('normalizeToIsbn13', () => {
   it('handles 979 prefix (no ISBN-10 equivalent)', () => {
     expect(normalizeToIsbn13('9791032305690')).toBe('9791032305690');
   });
+
+  it('strips hyphens from hyphenated ISBN-13 (ISO 2108: hyphens display-only)', () => {
+    expect(normalizeToIsbn13('978-0-14-103614-4')).toBe('9780141036144');
+  });
+
+  it('handles ISBN-10 with lowercase x', () => {
+    expect(normalizeToIsbn13('080442957x')).toBe('9780804429573');
+  });
 });
 
 describe('formatIsbnForDisplay', () => {
@@ -223,5 +253,43 @@ describe('formatIsbnForDisplay', () => {
 
   it('returns raw string for non-ISBN length', () => {
     expect(formatIsbnForDisplay('12345')).toBe('12345');
+  });
+});
+
+/* ================================================================
+ *  isValidIsbn — OCR-focused edge cases
+ * ================================================================ */
+
+describe('isValidIsbn — OCR edge cases', () => {
+  it('rejects strings with letters (except X at end for ISBN-10)', () => {
+    expect(isValidIsbn('978014103614O')).toBe(false);
+    expect(isValidIsbn('978O141036144')).toBe(false);
+  });
+  it('validates 978 prefix ISBN-13', () => {
+    expect(isValidIsbn('9780141036144')).toBe(true);
+  });
+  it('validates 979 prefix ISBN-13', () => {
+    expect(isValidIsbn('9791090636071')).toBe(true);
+  });
+  it('rejects 977 prefix (not ISBN-13)', () => {
+    expect(isValidIsbn13('9771234567890')).toBe(false);
+  });
+  it('rejects ISBN-13 with X in any position (ISO 2108: ISBN-13 check digit is numeric only)', () => {
+    expect(isValidIsbn13('978014103614X')).toBe(false);
+    expect(isValidIsbn13('X780141036144')).toBe(false);
+  });
+  it('hyphenated input is valid after stripping (ISO 2108: hyphens are display-only)', () => {
+    const stripped = '978-0-14-103614-4'.replace(/[^0-9]/g, '');
+    expect(isValidIsbn(stripped)).toBe(true);
+    expect(normalizeToIsbn13('978-0-14-103614-4')).toBe('9780141036144');
+  });
+  it('returns false for empty string', () => {
+    expect(isValidIsbn('')).toBe(false);
+  });
+  it('rejects strings with spaces', () => {
+    expect(isValidIsbn('978 0 14 103614 4')).toBe(false);
+  });
+  it('rejects strings with hyphens', () => {
+    expect(isValidIsbn('978-0-14-103614-4')).toBe(false);
   });
 });

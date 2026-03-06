@@ -22,6 +22,7 @@ export const fixOcrDigits = (str: string): string =>
  * Aggressive OCR digit fixing — applies ALL letter→digit mappings.
  * Use only for sequences that are very likely ISBN digits (e.g.,
  * near an ISBN label or starting with 978/979).
+ * Extended mappings per OCR best practices: Y→4, U→0, F→7, P→9 for spine misreads.
  */
 const fixOcrDigitsAggressive = (str: string): string =>
   fixOcrDigits(str)
@@ -29,7 +30,11 @@ const fixOcrDigitsAggressive = (str: string): string =>
     .replace(/[Tt]/g, '7')
     .replace(/[Ee]/g, '8')
     .replace(/[Rr]/g, '2')
-    .replace(/[Cc]/g, '0');
+    .replace(/[Cc]/g, '0')
+    .replace(/[Yy]/g, '4')
+    .replace(/[Uu]/g, '0')
+    .replace(/[Ff]/g, '7')
+    .replace(/[Pp]/g, '9');
 
 /**
  * Common OCR ambiguity map: digit/letter → alternatives to try when checksum fails.
@@ -55,6 +60,9 @@ export const OCR_AMBIGUITY_MAP: Record<string, string[]> = {
   'O': ['0'], 'o': ['0'], 'I': ['1'], 'l': ['1'], 'S': ['5'], 's': ['5'],
   'B': ['8'], 'b': ['8'], 'G': ['9'], 'g': ['9'], 'Z': ['2'], 'z': ['2'],
   'D': ['0'], 'd': ['0'], 'Q': ['9'], 'q': ['9'],
+  'A': ['4'], 'a': ['4'], 'T': ['7'], 't': ['7'], 'E': ['8'], 'e': ['8'],
+  'R': ['2'], 'r': ['2'], 'C': ['0'], 'c': ['0'], 'Y': ['4'], 'y': ['4'],
+  'U': ['0'], 'u': ['0'], 'F': ['7'], 'f': ['7'], 'P': ['9'], 'p': ['9'],
 };
 
 /**
@@ -157,6 +165,66 @@ export const tryFixChecksumDouble = (
 };
 
 /**
+ * Try THREE-position substitutions to fix an invalid ISBN checksum.
+ * Catches ISBNs with 3 OCR errors that single/double-sub miss.
+ * Uses confidence-guided position selection when available; otherwise
+ * limited to first 8 ambiguous positions. Capped iterations to avoid explosion.
+ */
+export const tryFixChecksumTriple = (
+  candidate: string,
+  charConfidences?: number[],
+): string | null => {
+  if (isValidIsbn(candidate)) return candidate;
+  if (candidate.length !== 10 && candidate.length !== 13) return null;
+
+  const MAX_ITERATIONS = 2000;
+  let iterations = 0;
+
+  let positions: number[];
+  if (charConfidences && charConfidences.length === candidate.length) {
+    const indexed = charConfidences.map((conf, idx) => ({ idx, conf }));
+    indexed.sort((a, b) => a.conf - b.conf);
+    positions = indexed.slice(0, 8).map(e => e.idx).sort((a, b) => a - b);
+  } else {
+    positions = [];
+    for (let i = 0; i < candidate.length; i++) {
+      if (OCR_AMBIGUITY_MAP[candidate[i]]) positions.push(i);
+    }
+    positions = positions.slice(0, 8);
+  }
+
+  for (let pi = 0; pi < positions.length; pi++) {
+    const i = positions[pi];
+    const altsI = OCR_AMBIGUITY_MAP[candidate[i]];
+    if (!altsI) continue;
+    for (let pj = pi + 1; pj < positions.length; pj++) {
+      const j = positions[pj];
+      const altsJ = OCR_AMBIGUITY_MAP[candidate[j]];
+      if (!altsJ) continue;
+      for (let pk = pj + 1; pk < positions.length; pk++) {
+        const k = positions[pk];
+        const altsK = OCR_AMBIGUITY_MAP[candidate[k]];
+        if (!altsK) continue;
+        for (const altI of altsI) {
+          for (const altJ of altsJ) {
+            for (const altK of altsK) {
+              if (++iterations > MAX_ITERATIONS) return null;
+              const variant =
+                candidate.substring(0, i) + altI +
+                candidate.substring(i + 1, j) + altJ +
+                candidate.substring(j + 1, k) + altK +
+                candidate.substring(k + 1);
+              if (isValidIsbn(variant)) return variant;
+            }
+          }
+        }
+      }
+    }
+  }
+  return null;
+};
+
+/**
  * Extract per-character confidence values from Tesseract symbol data.
  * Filters to ISBN-relevant characters (digits and 'X') and returns
  * confidence values (0–100) for each.
@@ -188,6 +256,10 @@ export const getCharConfidenceWeights = (
 /** Max OCR text length to process (avoids slowdown/DoS from huge input). ~100KB is plenty for book text. */
 const MAX_OCR_TEXT_LENGTH = 100_000;
 
+/** Normalize ISBN-10 check digit: lowercase x → X per ISO 2108. */
+const normIsbn10 = (s: string): string =>
+  s.length === 10 ? s.replace(/x$/i, 'X') : s;
+
 export const extractIsbnCandidates = (text: string): string[] => {
   if (!text || text.trim().length === 0) return [];
   let toProcess = text.trim();
@@ -206,7 +278,8 @@ export const extractIsbnCandidates = (text: string): string[] => {
   const normalized = toProcess
     .replace(/\r/g, '\n')
     .replace(/[''`""\u201c\u201d]/g, '')  // curly quotes
-    .replace(/[^\w\s\-:.X]/g, ' ');       // keep alphanumeric, hyphens, colons, X
+    .replace(/[^\w\s\-:.X]/g, ' ')        // keep alphanumeric, hyphens, colons, X
+    .replace(/[ \t]+/g, ' ');             // collapse horizontal whitespace (OCR noise)
 
   // Also create an OCR-digit-fixed version for noisy scans
   const ocrFixed = fixOcrDigits(normalized);
@@ -226,24 +299,30 @@ export const extractIsbnCandidates = (text: string): string[] => {
     /ISBN\s*([0-9]{9,13}[0-9X])/gi,
     // "I.S.B.N." with dots
     /I\.?\s*S\.?\s*B\.?\s*N\.?\s*[-:=]?\s*([0-9][- 0-9X]{8,17})/gi,
+    // Permissive: allow common OCR letter confusions (Y,U,F,P,A,T,E,R,C etc) in digit part
+    /ISBN[- ]?(?:1[03])?[: ]\s*([0-9A-Za-z][- 0-9A-Za-z]{8,17})/gi,
   ];
+
+  /** Extract digits/X from string and normalize ISBN-10 x→X per ISO 2108. */
+  const toDigits = (s: string): string =>
+    normIsbn10(s.replace(/[^0-9Xx]/g, ''));
 
   for (const pattern of isbnLabelPatterns) {
     for (const source of [toProcess, normalized, ocrFixed, ocrAggressive]) {
       const matches = source.matchAll(pattern);
       for (const match of matches) {
         const raw = match[1];
-        const digits = raw.replace(/[^0-9X]/g, '');
+        const digits = normIsbn10(raw.replace(/[^0-9Xx]/g, ''));
         if (digits.length === 13 || digits.length === 10) {
           candidates.push(digits);
         }
         // Try OCR-digit-fixed version of the captured group
-        const fixed = fixOcrDigits(raw).replace(/[^0-9X]/g, '');
+        const fixed = normIsbn10(fixOcrDigits(raw).replace(/[^0-9Xx]/g, ''));
         if ((fixed.length === 13 || fixed.length === 10) && fixed !== digits) {
           candidates.push(fixed);
         }
         // Try aggressive fix for labeled ISBNs (high confidence context)
-        const aggFixed = fixOcrDigitsAggressive(raw).replace(/[^0-9X]/g, '');
+        const aggFixed = normIsbn10(fixOcrDigitsAggressive(raw).replace(/[^0-9Xx]/g, ''));
         if ((aggFixed.length === 13 || aggFixed.length === 10) && aggFixed !== digits && aggFixed !== fixed) {
           candidates.push(aggFixed);
         }
@@ -270,12 +349,12 @@ export const extractIsbnCandidates = (text: string): string[] => {
 
   // ── Pass 3: Standalone 10/13-digit numeric sequences ────────
   // Look for digit sequences with optional hyphens/spaces
-  const numericSeqPattern = /\d[- 0-9]{8,17}\d/g;
+  const numericSeqPattern = /\d[- 0-9Xx]{8,17}[\dXx]/g;
   for (const source of [toProcess, normalized, ocrFixed]) {
     const matches = source.match(numericSeqPattern);
     if (matches) {
       for (const m of matches) {
-        const clean = m.replace(/[^0-9X]/g, '');
+        const clean = toDigits(m);
         if (clean.length === 13 || clean.length === 10) {
           candidates.push(clean);
         }
@@ -315,10 +394,10 @@ export const extractIsbnCandidates = (text: string): string[] => {
         }
       }
       // Check for labeled ISBNs spanning lines
-      const matchesLabeled = source.matchAll(/ISBN[- ]?(?:1[03])?\s*[:=]?\s*([0-9][- 0-9X]{8,17})/gi);
+      const matchesLabeled = source.matchAll(/ISBN[- ]?(?:1[03])?\s*[:=]?\s*([0-9][- 0-9Xx]{8,17})/gi);
       for (const match of matchesLabeled) {
         const raw = match[1];
-        const digits = raw.replace(/[^0-9X]/g, '');
+        const digits = toDigits(raw);
         if (digits.length === 13 || digits.length === 10) {
           candidates.push(digits);
         }
@@ -331,6 +410,18 @@ export const extractIsbnCandidates = (text: string): string[] => {
       const digits3 = fixOcrDigits(joined3).replace(/[^0-9]/g, '');
       for (let j = 0; j <= digits3.length - 13; j++) {
         const chunk = digits3.substring(j, j + 13);
+        if ((chunk.startsWith('978') || chunk.startsWith('979')) && /^\d{13}$/.test(chunk)) {
+          candidates.push(chunk);
+        }
+      }
+    }
+
+    // Pass 6: Four-line span for extremely fragmented ISBNs on worn spines
+    if (i < lines.length - 3) {
+      const joined4 = lines[i].trimEnd() + lines[i + 1].trim() + lines[i + 2].trim() + lines[i + 3].trimStart();
+      const digits4 = fixOcrDigits(joined4).replace(/[^0-9]/g, '');
+      for (let j = 0; j <= digits4.length - 13; j++) {
+        const chunk = digits4.substring(j, j + 13);
         if ((chunk.startsWith('978') || chunk.startsWith('979')) && /^\d{13}$/.test(chunk)) {
           candidates.push(chunk);
         }
