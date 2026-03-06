@@ -21,7 +21,7 @@ import s from './Scanner.module.css';
 export type ScanMode = 'auto' | 'barcode' | 'ocr';
 
 interface ScannerProps {
-    onScan: (isbn: string) => void;
+    onScan: (isbn: string, options?: { allowReview?: boolean; source?: 'scan' | 'manual' | 'ocr' | 'barcode' | 'suggestion' }) => Promise<void> | void;
     onPhotoCapture?: (imageDataUrl: string) => void;
     isScanning: boolean;
     batchMode?: boolean;
@@ -58,7 +58,6 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const [repairedMap, setRepairedMap] = useState<Record<string, string>>({});
     const [debugLogs, setDebugLogs] = useState<string[]>([]);
     const [showDebug, setShowDebug] = useState(false);
-    const [autoScan, setAutoScan] = useState(false);
     const [liveTelemetry, setLiveTelemetry] = useState<LiveScanTelemetry>({ ...EMPTY_TELEMETRY });
     const [liveQualityHint, setLiveQualityHint] = useState<'ready' | 'blurry' | 'dark' | 'blurry-dark' | null>(null);
     const [, setOcrReady] = useState(false);
@@ -73,6 +72,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const [zoomLevel, setZoomLevel] = useState(1);
     const [zoomRange, setZoomRange] = useState<{ min: number; max: number; step: number } | null>(null);
     const [scanMode, setScanMode] = useState<ScanMode>('auto');
+    const [submitting, setSubmitting] = useState(false);
 
     const abortControllerRef = useRef<AbortController | null>(null);
     useEffect(() => {
@@ -80,7 +80,8 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
         return () => { abortControllerRef.current?.abort(); };
     }, []);
     const processingRef = useRef(false);
-    const autoScanRef = useRef(false);
+    const submittingRef = useRef(false);
+    const showManualRef = useRef(false);
     const videoTrackRef = useRef<MediaStreamTrack | null>(null);
     const cameraPanelRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -88,9 +89,26 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const firstSuggestionRef = useRef<HTMLButtonElement | null>(null);
 
     useEffect(() => { processingRef.current = processing; }, [processing]);
-    useEffect(() => { autoScanRef.current = autoScan; }, [autoScan]);
+    useEffect(() => { showManualRef.current = showManual; }, [showManual]);
     const liveQualityHintRef = useRef(liveQualityHint);
     useEffect(() => { liveQualityHintRef.current = liveQualityHint; }, [liveQualityHint]);
+
+    const autoScan = scanMode === 'auto';
+    const liveBarcodeEnabled = scanMode !== 'ocr';
+
+    const submitScan = useCallback(async (
+        isbn: string,
+        options?: { allowReview?: boolean; source?: 'scan' | 'manual' | 'ocr' | 'barcode' | 'suggestion' }
+    ) => {
+        submittingRef.current = true;
+        setSubmitting(true);
+        try {
+            await onScan(isbn, options);
+        } finally {
+            submittingRef.current = false;
+            setSubmitting(false);
+        }
+    }, [onScan]);
 
     const suggestionsCount = isbnSuggestions.length + Object.keys(repairedMap).length;
     useEffect(() => {
@@ -112,11 +130,15 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
         onOcrReady: useCallback(() => setOcrReady(true), []),
     });
 
-    const isBusy = useCallback(() => processingRef.current || isScanning, [isScanning]);
+    const isBusy = useCallback(
+        () => processingRef.current || submittingRef.current || isScanning || showManualRef.current,
+        [isScanning]
+    );
     const { tryBarcodeDecode, continuousActiveRef, setTelemetryCallback } = useBarcodeScanner({
-        addLog, onScan, isScanning, cameraReady, cameraError,
+        addLog, onScan: submitScan, isScanning, cameraReady, cameraError,
         webcamRef: webcamRef as React.RefObject<Webcam | null>,
         isBusy,
+        enabled: liveBarcodeEnabled,
     });
 
     useEffect(() => {
@@ -129,6 +151,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
         addLog, setStatus, runOcr, runOcrWithLang, tryBarcodeDecode,
         onProgress: useCallback((p: ScanProgress) => setScanProgress(p), []),
         ocrLanguage,
+        scanMode,
     });
 
     useEffect(() => {
@@ -217,13 +240,14 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
             }
 
             if (result.isbn) {
-                setAutoScan(false);
                 hapticSuccess();
                 setScanSuccessFlash(true);
                 setTimeout(() => setScanSuccessFlash(false), 800);
                 setSuccessAnnouncement(`Scan successful. ISBN ${result.isbn} added.`);
                 setTimeout(() => setSuccessAnnouncement(''), 1500);
-                onScan(result.isbn);
+                await submitScan(result.isbn, {
+                    source: scanMode === 'ocr' ? 'ocr' : scanMode === 'barcode' ? 'barcode' : 'scan',
+                });
                 if (batchModeProp) {
                     setStatus('Book added! Point at next book');
                     setIsbnSuggestions([]);
@@ -233,12 +257,12 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 setIsbnSuggestions(result.suggestions);
                 setRepairedMap(result.repairedMap ?? {});
                 setShowManual(true);
-                setStatus(autoScanRef.current
+                setStatus(autoScan
                     ? 'Searching... adjust position'
                     : 'We found something — tap a match below');
             } else {
                 hapticFailure();
-                if (!autoScanRef.current) {
+                if (!autoScan) {
                     setStatus('Not found — try moving closer or type the ISBN');
                     setShowManual(true);
                     const diag = result.diagnostics;
@@ -274,7 +298,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
             processingRef.current = false;
             setProcessing(false);
         }
-    }, [onScan, isScanning, runPipeline, addLog, toastDetail, debugLogs, batchModeProp, captureAveragedFrame]);
+    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, debugLogs, batchModeProp, captureAveragedFrame, autoScan, scanMode]);
 
     const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -323,7 +347,9 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 setTimeout(() => setScanSuccessFlash(false), 800);
                 setSuccessAnnouncement(`Scan successful. ISBN ${result.isbn} added.`);
                 setTimeout(() => setSuccessAnnouncement(''), 1500);
-                onScan(result.isbn);
+                await submitScan(result.isbn, {
+                    source: scanMode === 'ocr' ? 'ocr' : scanMode === 'barcode' ? 'barcode' : 'scan',
+                });
             } else if (result.suggestions.length > 0 || (result.repairedMap && Object.keys(result.repairedMap).length > 0)) {
                 setIsbnSuggestions(result.suggestions);
                 setRepairedMap(result.repairedMap ?? {});
@@ -363,7 +389,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
             processingRef.current = false;
             setProcessing(false);
         }
-    }, [onScan, isScanning, runPipeline, addLog, toastDetail, debugLogs]);
+    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, debugLogs, scanMode]);
 
     const handlePhotoOnlyFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -384,10 +410,10 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
         addLog('Auto-scan (OCR) started');
         setStatus('Auto-scanning... hold book steady');
         const interval = setInterval(() => {
-            if (!processingRef.current && autoScanRef.current && liveQualityHintRef.current !== 'blurry' && liveQualityHintRef.current !== 'blurry-dark') capture();
+            if (!isBusy() && autoScan && liveQualityHintRef.current !== 'blurry' && liveQualityHintRef.current !== 'blurry-dark') capture();
         }, 2000);
         return () => { clearInterval(interval); addLog('Auto-scan (OCR) stopped'); };
-    }, [autoScan, capture, addLog]);
+    }, [autoScan, capture, addLog, isBusy]);
 
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -405,12 +431,17 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 toast(`Did you mean ${nearMisses[0]}? Tap to use it.`, 'info');
                 return;
             }
-            toast('Invalid ISBN. Please double-check and try again.', 'error');
+            toast('Checksum could not be verified. We will add it for review so you can edit it in your library.', 'warning');
+            void submitScan(cleanIsbn, { allowReview: true, source: 'manual' }).finally(() => {
+                setManualIsbn('');
+                setShowManual(false);
+            });
             return;
         }
-        onScan(cleanIsbn);
-        setManualIsbn('');
-        setShowManual(false);
+        void submitScan(cleanIsbn, { source: 'manual' }).finally(() => {
+            setManualIsbn('');
+            setShowManual(false);
+        });
     };
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -509,7 +540,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 <div className={s.systemStatus} role="status" aria-live="polite">
                     <span className={`${s.systemDot} ${systemDotClass}`} />
                     {systemStatusLabel}
-                    {(isScanning || processing) && <Loader2 size={12} className="animate-spin" />}
+                    {(isScanning || processing || submitting) && <Loader2 size={12} className="animate-spin" />}
                 </div>
 
                 <h2 className={s.panelTitle}>Scan Barcode</h2>
@@ -525,7 +556,6 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                             className={`${s.scanModeBtn} ${scanMode === mode ? s.scanModeBtnActive : ''}`}
                             onClick={() => {
                                 setScanMode(mode);
-                                setAutoScan(mode === 'auto');
                                 addLog(`Scan mode: ${label}`);
                             }}>
                             {label}
@@ -625,7 +655,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                     </div>
                 ) : (
                     <>
-                        <button onClick={capture} disabled={processing || isScanning || !cameraReady || liveQualityHint === 'blurry' || liveQualityHint === 'blurry-dark'}
+                        <button onClick={capture} disabled={processing || submitting || isScanning || !cameraReady || liveQualityHint === 'blurry' || liveQualityHint === 'blurry-dark'}
                             aria-label={processing ? 'Scanning in progress' : (liveQualityHint === 'blurry' || liveQualityHint === 'blurry-dark') ? 'Hold steady to scan' : 'Scan book'}
                             aria-describedby="status-text"
                             className={s.primaryBtn}>
@@ -661,7 +691,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                         <div className={s.suggestionRow}>
                         {Object.entries(repairedMap).map(([repaired, original], idx) => (
                             <button key={`rep-${repaired}`} ref={idx === 0 ? firstSuggestionRef : undefined} type="button"
-                                onClick={() => onScan(repaired)}
+                                onClick={() => { void submitScan(repaired, { source: 'suggestion' }); }}
                                 className={`${s.suggestionBtn} ${s.repairBtn}`}
                                 title={`Corrected from ${original}`}
                                 aria-label={`Use ISBN ${repaired}`}>
@@ -671,7 +701,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                         {isbnSuggestions.filter(c => !Object.keys(repairedMap).includes(c)).map((candidate, idx) => (
                             <button key={candidate} ref={Object.keys(repairedMap).length === 0 && idx === 0 ? firstSuggestionRef : undefined} type="button"
                                 onClick={() => {
-                                    if (isValidIsbn(candidate)) onScan(candidate);
+                                    if (isValidIsbn(candidate)) void submitScan(candidate, { source: 'suggestion' });
                                     else { setManualIsbn(candidate); setShowManual(true); }
                                 }}
                                 className={s.suggestionBtn}

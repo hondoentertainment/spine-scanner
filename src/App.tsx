@@ -28,6 +28,11 @@ const preloadScanner = () => import('./components/Scanner.tsx');
 const preloadLibrary = () => import('./components/LibraryList.tsx');
 const preloadData = () => import('./components/DataManagement.tsx');
 
+type ScanRequestOptions = {
+  allowReview?: boolean;
+  source?: 'scan' | 'manual' | 'ocr' | 'barcode' | 'suggestion';
+};
+
 function App() {
   const [view, setView] = useState<'scan' | 'library' | 'data'>('scan');
   const { lookupByIsbn, loading, error } = useBookLookup();
@@ -202,17 +207,31 @@ function App() {
     setView('library');
   }, [addBook, books, user, online, toast, track]);
 
-  const handleScan = async (isbn: string) => {
-    console.log(`[App] Received scan for ISBN: ${isbn}`);
-    if (!isValidIsbn(isbn)) {
-      console.log(`[App] Invalid ISBN checksum: ${isbn}`);
-      toast('Invalid ISBN checksum. Please try again.', 'error');
-      return;
+  const addBookAndOpen = useCallback((newBook: BookEntry, successMessage: string, trackMethod: string, forceOpen = false) => {
+    addBook(newBook);
+    track('book_added', { method: trackMethod, isbn: newBook.isbn });
+    toast(batchMode && !forceOpen ? 'Added - scan next' : successMessage, 'success');
+
+    if (!batchMode || forceOpen) {
+      setOpenBookIsbn(newBook.isbn);
+      setView('library');
     }
 
-    if (isbnExistsInLibrary(isbn, books)) {
-      console.log(`[App] ISBN ${isbn} already exists in library.`);
-      if (batchMode) {
+    if (user && online) {
+      pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
+    }
+  }, [addBook, batchMode, books, online, toast, track, user]);
+
+  const handleScan = async (isbn: string, options: ScanRequestOptions = {}) => {
+    const normalizedInput = isbn.replace(/[^0-9Xx]/g, '').replace(/x$/i, 'X') || isbn;
+    const isChecksumValid = isValidIsbn(normalizedInput);
+    const canReviewInvalid = options.allowReview === true && !isChecksumValid;
+
+    console.log(`[App] Received scan for ISBN: ${isbn}`);
+
+    if (isbnExistsInLibrary(normalizedInput, books)) {
+      console.log(`[App] ISBN ${normalizedInput} already exists in library.`);
+      if (batchMode && options.source !== 'manual') {
         toast('Already in library. Scan next.', 'info');
         return;
       }
@@ -223,15 +242,40 @@ function App() {
         cancelLabel: 'Dismiss',
       });
       if (openInLibrary) {
-        setOpenBookIsbn(isbn);
+        setOpenBookIsbn(normalizedInput);
         setView('library');
       }
       return;
     }
 
-    console.log(`[App] Looking up metadata for ${isbn}...`);
+    if (!isChecksumValid) {
+      if (!canReviewInvalid) {
+        console.log(`[App] Invalid ISBN checksum: ${normalizedInput}`);
+        toast('Invalid ISBN checksum. Please try again.', 'error');
+        return;
+      }
+
+      const reviewBook: BookEntry = {
+        id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2),
+        isbn: normalizedInput,
+        title: 'Review ISBN Entry',
+        author: 'Manual Entry',
+        pageCount: 0,
+        amazonLink: generateAmazonLink(normalizedInput),
+        coverImg: '',
+        status: 'to-read',
+        notes: 'Added from manual ISBN entry. Verify or correct the ISBN and fill in the missing details.',
+        dateAdded: new Date().toISOString(),
+        shelfIds: [],
+      };
+
+      addBookAndOpen(reviewBook, 'Added for review. Open the book to verify the ISBN and details.', 'manual_review', true);
+      return;
+    }
+
+    console.log(`[App] Looking up metadata for ${normalizedInput}...`);
     try {
-      const metadata = await lookupByIsbn(isbn);
+      const metadata = await lookupByIsbn(normalizedInput);
       if (metadata) {
         console.log(`[App] Metadata found: ${metadata.title}`);
         const storedIsbn = normalizeToIsbn13(metadata.isbn);
@@ -248,27 +292,17 @@ function App() {
           dateAdded: new Date().toISOString(),
           shelfIds: [],
         };
-        addBook(newBook);
-        track('book_added', { method: 'scan', isbn: storedIsbn });
-        toast(batchMode ? `Added "${metadata.title}" — scan next` : `Added "${metadata.title}" to library!`, 'success');
-
-        if (!batchMode) {
-          setOpenBookIsbn(storedIsbn);
-          setView('library');
-        }
-        if (user && online) {
-          pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
-        }
+        addBookAndOpen(newBook, `Added "${metadata.title}" to library!`, options.source === 'manual' ? 'manual' : 'scan', options.source === 'manual');
       } else {
-        console.log(`[App] No metadata found or lookup failed for ${isbn}.`);
+        console.log(`[App] No metadata found or lookup failed for ${normalizedInput}.`);
         const addAnyway = await confirm({
           title: 'No metadata found',
-          message: `Google Books and Open Library couldn't find details for ISBN ${isbn}. Add it anyway? You can edit the title and author manually in your library.`,
+          message: `Google Books and Open Library couldn't find details for ISBN ${normalizedInput}. Add it anyway? You can edit the title and author manually in your library.`,
           confirmLabel: 'Add anyway',
           cancelLabel: 'Cancel',
         });
         if (addAnyway) {
-          const storedIsbn = normalizeToIsbn13(isbn);
+          const storedIsbn = normalizeToIsbn13(normalizedInput);
           const newBook: BookEntry = {
             id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2),
             isbn: storedIsbn,
@@ -282,16 +316,7 @@ function App() {
             dateAdded: new Date().toISOString(),
             shelfIds: [],
           };
-          addBook(newBook);
-          track('book_added', { method: 'scan_no_metadata', isbn: storedIsbn });
-          toast(batchMode ? 'Added — scan next' : 'Added with ISBN only. Edit details in your library.', 'success');
-          if (!batchMode) {
-            setOpenBookIsbn(storedIsbn);
-            setView('library');
-          }
-          if (user && online) {
-            pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
-          }
+          addBookAndOpen(newBook, 'Added with ISBN only. Edit details in your library.', options.source === 'manual' ? 'manual_no_metadata' : 'scan_no_metadata', options.source === 'manual');
         } else {
           toast('No metadata found for this ISBN.', 'error');
         }

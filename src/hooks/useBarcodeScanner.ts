@@ -33,12 +33,13 @@ const EMPTY_TELEMETRY: LiveScanTelemetry = {
 
 interface UseBarcodeOptions {
     addLog: (msg: string) => void;
-    onScan: (isbn: string) => void;
+    onScan: (isbn: string, options?: { source?: 'barcode' | 'scan' | 'ocr' | 'manual' | 'suggestion'; allowReview?: boolean }) => Promise<void> | void;
     isScanning: boolean;
     cameraReady: boolean;
     cameraError: string | null;
     webcamRef: React.RefObject<HTMLVideoElement | { video: HTMLVideoElement | null } | null>;
     isBusy: () => boolean;
+    enabled?: boolean;
 }
 
 /* ================================================================
@@ -103,7 +104,7 @@ function getVideoFromRef(
  * Lower: ~10fps for native detector, logs actual resolution on first frame.
  */
 export function useBarcodeScanner({
-    addLog, onScan, isScanning, cameraReady, cameraError, webcamRef, isBusy,
+    addLog, onScan, isScanning, cameraReady, cameraError, webcamRef, isBusy, enabled = true,
 }: UseBarcodeOptions) {
     const barcodeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -202,7 +203,7 @@ export function useBarcodeScanner({
     }, [getBarcodeReader, getBarcodeDetector, addLog]);
 
     /* ── Accept a detected ISBN (shared logic) ────────────────── */
-    const acceptIsbn = useCallback((isbn: string, source: string) => {
+    const acceptIsbn = useCallback(async (isbn: string, source: string) => {
         const accepted = lastLiveAcceptedRef.current;
         const isDup = !!accepted && accepted.isbn === isbn
             && Date.now() - accepted.at < LIVE_SCAN_DUPLICATE_COOLDOWN_MS;
@@ -220,7 +221,11 @@ export function useBarcodeScanner({
         hapticSuccess();
         addLog(`Barcode (live ${source}): ${isbn} ✓`);
         lastLiveAcceptedRef.current = { isbn, at: Date.now() };
-        onScan(isbn);
+        try {
+            await onScan(isbn, { source: 'barcode' });
+        } catch (err) {
+            addLog(`Barcode handoff failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }, [addLog, onScan, bumpTelemetry, isBusy]);
 
     /* ================================================================
@@ -231,7 +236,7 @@ export function useBarcodeScanner({
      * ================================================================ */
     useEffect(() => {
         // P4: Only gate on cameraReady + no error. Do NOT gate on isScanning.
-        if (!cameraReady || cameraError) return;
+        if (!enabled || !cameraReady || cameraError) return;
 
         let cancelled = false;
 
@@ -312,7 +317,7 @@ export function useBarcodeScanner({
             // Release ZXing internal resources (streams, timers) per ZXING_BARCODE_DETECTION_REPORT
             try { (barcodeReaderRef.current as unknown as { reset?: () => void })?.reset?.(); } catch { /* no-op */ }
         };
-    }, [cameraReady, cameraError, webcamRef, addLog, bumpTelemetry, acceptIsbn]);
+    }, [enabled, cameraReady, cameraError, webcamRef, addLog, bumpTelemetry, acceptIsbn]);
 
     /* ================================================================
      *  Native BarcodeDetector polling loop (faster, GPU-accelerated)
@@ -321,7 +326,7 @@ export function useBarcodeScanner({
      *  Lower: 100ms interval (~10fps).
      * ================================================================ */
     useEffect(() => {
-        if (!cameraReady || cameraError) return;
+        if (!enabled || !cameraReady || cameraError) return;
 
         let active = true;
         let scanCount = 0;
@@ -384,7 +389,7 @@ export function useBarcodeScanner({
             continuousActiveRef.current = false;
             addLog('Continuous scanning stopped');
         };
-    }, [cameraReady, cameraError, webcamRef, getBarcodeDetector, addLog, bumpTelemetry, acceptIsbn]);
+    }, [enabled, cameraReady, cameraError, webcamRef, getBarcodeDetector, addLog, bumpTelemetry, acceptIsbn]);
 
     /* ── Refocus helper ───────────────────────────────────────── */
     const refocus = useCallback(() => {

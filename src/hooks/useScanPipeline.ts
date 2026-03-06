@@ -585,13 +585,15 @@ interface UseScanPipelineOptions {
     onProgress?: (progress: ScanProgress) => void;
     /** Language for multi-language OCR fallback. 'en' skips; 'de' uses deu; 'both' uses eng+deu. */
     ocrLanguage?: OcrLanguage;
+    /** Selected scanner mode controls which engines run. */
+    scanMode?: 'auto' | 'barcode' | 'ocr';
 }
 
 /**
  * Hook that provides a unified scan pipeline for both camera capture and photo upload.
  * Eliminates the duplicated barcode + OCR logic.
  */
-export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, tryBarcodeDecode, onProgress, ocrLanguage = 'both' }: UseScanPipelineOptions) {
+export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, tryBarcodeDecode, onProgress, ocrLanguage = 'both', scanMode = 'auto' }: UseScanPipelineOptions) {
 
     /**
      * Run the full barcode + OCR scan pipeline on an image.
@@ -628,20 +630,27 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
             return { isbn: null, suggestions: [], diagnostics: { quality: { brightness: 128, blurVariance: BLUR_VARIANCE_THRESHOLD, isDark: false, isBlurry: false }, phase: 'ocr', barcodeAttempted: true, ocrPassesAttempted: 0, lastError: 'Image has zero width or height' } };
         }
 
-        /* ── Phase 1: Barcode scan (fast, multiple crops) ──── */
-        addLog(`Phase 1: Barcode scan (${prefix})...`);
-        safeSetStatus('Scanning barcode...');
-        reportProgress({ phase: 'barcode' });
-
         let isbn: string | null = null;
-        try {
-            isbn = await tryBarcodeDecode(img, `${prefix}full`);
-            if (!isbn) isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_CENTER), `${prefix}center`);
-            if (!isbn) isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_NARROW), `${prefix}narrow`);
-            if (!isbn) isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_MEDIUM), `${prefix}medium`);
-            if (!isbn) isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_WIDE), `${prefix}wide`);
-        } catch (err) {
-            addLog(`Barcode phase error: ${err instanceof Error ? err.message : String(err)}`);
+        const allowBarcode = scanMode !== 'ocr';
+        const allowOcr = scanMode !== 'barcode';
+
+        /* ── Phase 1: Barcode scan (fast, multiple crops) ──── */
+        if (allowBarcode) {
+            addLog(`Phase 1: Barcode scan (${prefix})...`);
+            safeSetStatus('Scanning barcode...');
+            reportProgress({ phase: 'barcode' });
+
+            try {
+                isbn = await tryBarcodeDecode(img, `${prefix}full`);
+                if (!isbn) isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_CENTER), `${prefix}center`);
+                if (!isbn) isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_NARROW), `${prefix}narrow`);
+                if (!isbn) isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_MEDIUM), `${prefix}medium`);
+                if (!isbn) isbn = await tryBarcodeDecode(cropForBarcode(img, canvas, CROP_WIDE), `${prefix}wide`);
+            } catch (err) {
+                addLog(`Barcode phase error: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        } else {
+            addLog(`Phase 1 skipped: barcode disabled for ${scanMode} mode`);
         }
 
         if (isbn && isValidIsbn(isbn)) {
@@ -659,6 +668,44 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                 reportProgress({ phase: 'done' });
                 return { isbn: repaired, suggestions: [] };
             }
+        }
+
+        if (!allowOcr) {
+            addLog(`Phase 2 skipped: OCR disabled for ${scanMode} mode`);
+            safeSetStatus('No barcode found. Try another angle or switch to OCR.');
+            reportProgress({ phase: 'suggestions' });
+
+            const quality: FrameQuality = { brightness: 128, blurVariance: BLUR_VARIANCE_THRESHOLD, isDark: false, isBlurry: false };
+            const candidateList = Array.from(allCandidates);
+            const repaired: string[] = [];
+            const repairedMap: Record<string, string> = {};
+            const nearMisses: string[] = [];
+            for (const c of candidateList) {
+                if (!isValidIsbn(c)) {
+                    const fix = tryFixChecksum(c);
+                    if (fix && !candidateList.includes(fix) && !repaired.includes(fix)) {
+                        repaired.push(fix);
+                        repairedMap[fix] = c;
+                    }
+                    const misses = getNearMissCandidates(c);
+                    for (const m of misses) {
+                        if (!candidateList.includes(m) && !repaired.includes(m) && !nearMisses.includes(m)) nearMisses.push(m);
+                    }
+                }
+            }
+            const suggestions = [...candidateList, ...repaired, ...nearMisses].slice(0, 8);
+            return {
+                isbn: null,
+                suggestions,
+                repairedMap: Object.keys(repairedMap).length > 0 ? repairedMap : undefined,
+                diagnostics: {
+                    quality,
+                    phase: 'barcode',
+                    barcodeAttempted: allowBarcode,
+                    ocrPassesAttempted: 0,
+                    lowResolution: false,
+                },
+            };
         }
 
         /* ── Phase 2: OCR scan ──── */

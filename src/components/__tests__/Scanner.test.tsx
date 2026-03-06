@@ -435,7 +435,7 @@ describe('Scanner', () => {
       fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '9780141036144' } });
       fireEvent.click(screen.getByRole('button', { name: /submit isbn/i }));
 
-      expect(onScan).toHaveBeenCalledWith('9780141036144');
+      expect(onScan).toHaveBeenCalledWith('9780141036144', { source: 'manual' });
     });
 
     it('rejects ISBN with wrong length', () => {
@@ -449,15 +449,15 @@ describe('Scanner', () => {
       expect(onScan).not.toHaveBeenCalled();
     });
 
-    it('rejects ISBN with invalid checksum', () => {
+    it('submits invalid manual ISBN for review when checksum repair fails', () => {
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
       fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
-      fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '9780141036145' } });
+      fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '1111111111111' } });
       fireEvent.click(screen.getByRole('button', { name: /submit isbn/i }));
 
-      expect(onScan).not.toHaveBeenCalled();
+      expect(onScan).toHaveBeenCalledWith('1111111111111', { allowReview: true, source: 'manual' });
     });
 
     it('accepts valid ISBN-10', () => {
@@ -468,7 +468,7 @@ describe('Scanner', () => {
       fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '0743273567' } });
       fireEvent.click(screen.getByRole('button', { name: /submit isbn/i }));
 
-      expect(onScan).toHaveBeenCalledWith('0743273567');
+      expect(onScan).toHaveBeenCalledWith('0743273567', { source: 'manual' });
     });
 
     it('closes manual form', () => {
