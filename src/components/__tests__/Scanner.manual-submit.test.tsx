@@ -1,6 +1,32 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+
+/* jsdom doesn't fire Image.onload for data URLs. Mock Image so capture() doesn't hang. */
+const OriginalImage = globalThis.Image;
+class MockImage {
+  width = 640;
+  height = 480;
+  src = '';
+  onload: (() => void) | null = null;
+  onerror: ((err: Error) => void) | null = null;
+  constructor() {
+    const self = this;
+    return new Proxy(this, {
+      set(target, prop, value) {
+        (target as Record<string, unknown>)[prop] = value;
+        if (prop === 'src' && value && self.onload) {
+          Promise.resolve().then(() => self.onload?.());
+        }
+        return true;
+      },
+    }) as HTMLImageElement;
+  }
+}
+
+const mockCtx = { save() {}, restore() {}, translate() {}, rotate() {}, drawImage() {}, filter: '' };
+const origGetContext = HTMLCanvasElement.prototype.getContext;
+const origToDataURL = HTMLCanvasElement.prototype.toDataURL;
 
 const tryBarcodeDecode = vi.fn();
 const setTelemetryCallback = vi.fn();
@@ -64,6 +90,21 @@ vi.mock('../../utils/haptics.ts', () => ({
   hapticFailure: () => {},
   hapticHoldSteady: () => {},
 }));
+
+beforeEach(() => {
+  // @ts-expect-error mock
+  globalThis.Image = MockImage;
+  // @ts-expect-error mock
+  HTMLCanvasElement.prototype.getContext = () => mockCtx;
+  // @ts-expect-error mock
+  HTMLCanvasElement.prototype.toDataURL = () => 'data:image/png;base64,mockcanvas';
+  runPipeline.mockResolvedValue({ isbn: null, suggestions: [], repairedMap: {} });
+});
+afterEach(() => {
+  globalThis.Image = OriginalImage;
+  HTMLCanvasElement.prototype.getContext = origGetContext;
+  HTMLCanvasElement.prototype.toDataURL = origToDataURL;
+});
 
 import Scanner from '../Scanner';
 import { ToastProvider } from '../Toast';
