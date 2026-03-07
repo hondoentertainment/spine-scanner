@@ -1,12 +1,13 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useAuthStore } from '../store/useAuthStore.ts';
+import { useBookStore } from '../store/useBookStore.ts';
 import { useProfileStore } from '../store/useProfileStore.ts';
 import { useTheme } from '../hooks/useTheme.ts';
 import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
 import {
   X, User, Sun, Moon, Monitor, LayoutGrid, List, ArrowUpDown,
-  CheckCircle, Layers, BarChart3, Tag,
+  CheckCircle, Layers, BarChart3, Tag, BookOpen, Clock3, Bookmark, Flame,
 } from 'lucide-react';
 import type { ProfilePreferences } from '../types.ts';
 import s from './ProfileSettings.module.css';
@@ -42,11 +43,54 @@ const statusOptions: { value: ProfilePreferences['libraryStatusFilter']; label: 
   { value: 'dnf', label: 'DNF' },
 ];
 
+const statusSummary = [
+  { key: 'read', label: 'Read', accent: '#22c55e' },
+  { key: 'reading', label: 'Reading', accent: '#a855f7' },
+  { key: 'to-read', label: 'Watchlist', accent: '#38bdf8' },
+  { key: 'dnf', label: 'DNF', accent: '#ef4444' },
+] as const;
+
 const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = false }) => {
   const { user, profile } = useAuthStore();
+  const { books, shelves } = useBookStore();
   const { preferences, updatePreferences } = useProfileStore();
   const { setTheme } = useTheme();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
+  const displayName = profile?.username ?? profile?.displayName ?? user?.user_metadata?.full_name ?? user?.email ?? 'Local reader';
+  const avatarUrl = profile?.avatarUrl ?? user?.user_metadata?.avatar_url ?? null;
+  const joinedLabel = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    : 'This device';
+
+  const summary = useMemo(() => {
+    const total = books.length;
+    const reading = books.filter((book) => book.status === 'reading').length;
+    const read = books.filter((book) => book.status === 'read').length;
+    const toRead = books.filter((book) => book.status === 'to-read').length;
+    const dnf = books.filter((book) => book.status === 'dnf').length;
+    const totalPages = books.reduce((sum, book) => sum + (book.pageCount || 0), 0);
+    const readPages = books
+      .filter((book) => book.status === 'read')
+      .reduce((sum, book) => sum + (book.pageCount || 0), 0);
+    const shelfCount = shelves.length;
+    const completionRate = total > 0 ? Math.round((read / total) * 100) : 0;
+    const recentBooks = [...books]
+      .sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime())
+      .slice(0, 4);
+
+    return {
+      total,
+      reading,
+      read,
+      toRead,
+      dnf,
+      totalPages,
+      readPages,
+      shelfCount,
+      completionRate,
+      recentBooks,
+    };
+  }, [books, shelves]);
 
   const content = (
     <div
@@ -63,29 +107,158 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       <h2 id="profile-settings-title" className={s.title}>Profile & Settings</h2>
       <p className={s.subtitle}>Your preferences are saved locally and synced when you sign in.</p>
 
-      {isSupabaseConfigured() && user && (
-        <div className={s.profileCard}>
-          <div className={s.profileAvatar}>
-            {(profile?.avatarUrl ?? user.user_metadata?.avatar_url) ? (
-              <img src={profile?.avatarUrl ?? user.user_metadata?.avatar_url} alt="" width={48} height={48} />
-            ) : (
-              <User size={28} />
-            )}
+      <div className={s.profileHero}>
+        <div className={s.profileIdentity}>
+          <div className={s.profileAvatarLarge}>
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" width={72} height={72} />
+            ) : <User size={34} />}
           </div>
-          <div className={s.profileInfo}>
-            <div className={s.profileName}>
-              {profile?.username ?? profile?.displayName ?? user.user_metadata?.full_name ?? user.email}
+          <div className={s.profileMeta}>
+            <div className={s.profileEyebrow}>Reader profile</div>
+            <div className={s.profileDisplayName}>{displayName}</div>
+            <div className={s.profileSubline}>
+              {user?.email ?? 'Saved locally on this device'}
             </div>
-            <div className={s.profileEmail}>{user.email}</div>
+            <div className={s.profileBadges}>
+              <span className={s.profileBadge}>
+                <BookOpen size={14} />
+                {summary.total} books
+              </span>
+              <span className={s.profileBadge}>
+                <Clock3 size={14} />
+                {summary.reading} reading
+              </span>
+              <span className={s.profileBadge}>
+                <Bookmark size={14} />
+                Since {joinedLabel}
+              </span>
+            </div>
           </div>
         </div>
-      )}
+        <div className={s.profileSpotlight}>
+          <div className={s.spotlightLabel}>Library summary</div>
+          <div className={s.spotlightValue}>{summary.completionRate}% finished</div>
+          <div className={s.spotlightText}>
+            {summary.read.toLocaleString()} read, {summary.toRead.toLocaleString()} queued, {summary.readPages.toLocaleString()} pages completed.
+          </div>
+        </div>
+      </div>
 
       {!isSupabaseConfigured() && (
         <div className={s.localBadge}>
           <User size={16} /> Local profile - sign in to sync preferences across devices
         </div>
       )}
+
+      <div className={s.summaryGrid}>
+        <div className={s.summaryCard}>
+          <div className={s.summaryLabel}>Library</div>
+          <div className={s.summaryValue}>{summary.total}</div>
+          <div className={s.summaryMeta}>books tracked</div>
+        </div>
+        <div className={s.summaryCard}>
+          <div className={s.summaryLabel}>Completed</div>
+          <div className={s.summaryValue}>{summary.read}</div>
+          <div className={s.summaryMeta}>{summary.completionRate}% of library</div>
+        </div>
+        <div className={s.summaryCard}>
+          <div className={s.summaryLabel}>Pages read</div>
+          <div className={s.summaryValue}>{summary.readPages.toLocaleString()}</div>
+          <div className={s.summaryMeta}>{summary.totalPages.toLocaleString()} total pages</div>
+        </div>
+        <div className={s.summaryCard}>
+          <div className={s.summaryLabel}>Shelves</div>
+          <div className={s.summaryValue}>{summary.shelfCount}</div>
+          <div className={s.summaryMeta}>custom collections</div>
+        </div>
+      </div>
+
+      <div className={s.letterboxdPanel}>
+        <div className={s.panelHeader}>
+          <div>
+            <h3 className={s.panelTitle}>Reading activity</h3>
+            <p className={s.panelSubtitle}>A quick snapshot of how your library is moving.</p>
+          </div>
+          <div className={s.panelIcon}>
+            <Flame size={16} />
+          </div>
+        </div>
+        <div className={s.statusBar} aria-hidden="true">
+          {statusSummary.map((item) => {
+            const count = item.key === 'read'
+              ? summary.read
+              : item.key === 'reading'
+                ? summary.reading
+                : item.key === 'to-read'
+                  ? summary.toRead
+                  : summary.dnf;
+            const width = summary.total > 0 ? `${Math.max((count / summary.total) * 100, count > 0 ? 8 : 0)}%` : '0%';
+            return (
+              <span
+                key={item.key}
+                className={s.statusBarSegment}
+                style={{ width, background: item.accent }}
+              />
+            );
+          })}
+        </div>
+        <div className={s.statusSummaryGrid}>
+          {statusSummary.map((item) => {
+            const count = item.key === 'read'
+              ? summary.read
+              : item.key === 'reading'
+                ? summary.reading
+                : item.key === 'to-read'
+                  ? summary.toRead
+                  : summary.dnf;
+            return (
+              <div key={item.key} className={s.statusSummaryCard}>
+                <span className={s.statusDot} style={{ background: item.accent }} />
+                <div className={s.statusSummaryValue}>{count}</div>
+                <div className={s.statusSummaryLabel}>{item.label}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className={s.letterboxdPanel}>
+        <div className={s.panelHeader}>
+          <div>
+            <h3 className={s.panelTitle}>Recent additions</h3>
+            <p className={s.panelSubtitle}>Newest books in your library, Letterboxd-card style.</p>
+          </div>
+        </div>
+        {summary.recentBooks.length > 0 ? (
+          <div className={s.recentGrid}>
+            {summary.recentBooks.map((book) => (
+              <article key={book.id} className={s.recentCard}>
+                <div className={s.recentCover}>
+                  {book.coverImg ? (
+                    <img src={book.coverImg} alt="" />
+                  ) : (
+                    <div className={s.recentFallback}>
+                      {book.title.slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div className={s.recentInfo}>
+                  <div className={s.recentTitle}>{book.title}</div>
+                  <div className={s.recentAuthor}>{book.author}</div>
+                  <div className={s.recentMeta}>
+                    {statusOptions.find((option) => option.value === book.status)?.label ?? book.status}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className={s.emptyState}>
+            Scan a few books to build your profile stats and recent activity.
+          </div>
+        )}
+      </div>
 
       <div className={s.section}>
         <h3 className={s.sectionTitle}>Theme</h3>

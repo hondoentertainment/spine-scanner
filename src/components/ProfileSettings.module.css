@@ -80,6 +80,305 @@
   border: 1px solid var(--glass-border);
 }
 
+.profileHero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.9fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.profileIdentity,
+.profileSpotlight,
+.summaryCard,
+.letterboxdPanel,
+.recentCard {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+}
+
+.profileIdentity {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  padding: 1.25rem;
+  border-radius: 1rem;
+}
+
+.profileAvatarLarge {
+  width: 72px;
+  height: 72px;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profileAvatarLarge img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profileMeta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.profileEyebrow {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.profileDisplayName {
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.profileSubline {
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+.profileBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.profileBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.profileSpotlight {
+  border-radius: 1rem;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
+.spotlightLabel {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.spotlightValue {
+  font-size: 2rem;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.spotlightText {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.summaryCard {
+  border-radius: 0.85rem;
+  padding: 1rem;
+}
+
+.summaryLabel {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+
+.summaryValue {
+  font-size: 1.55rem;
+  font-weight: 800;
+  margin-top: 0.35rem;
+}
+
+.summaryMeta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+.letterboxdPanel {
+  border-radius: 1rem;
+  padding: 1.1rem;
+}
+
+.panelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.panelTitle {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.panelSubtitle {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-top: 0.2rem;
+}
+
+.panelIcon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  color: var(--accent-blue);
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.statusBar {
+  display: flex;
+  overflow: hidden;
+  border-radius: 9999px;
+  height: 0.65rem;
+  background: rgba(255, 255, 255, 0.06);
+  margin-bottom: 0.95rem;
+}
+
+.statusBarSegment {
+  display: block;
+  min-width: 0;
+}
+
+.statusSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.statusSummaryCard {
+  border-radius: 0.8rem;
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.statusDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  display: inline-block;
+}
+
+.statusSummaryValue {
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin-top: 0.45rem;
+}
+
+.statusSummaryLabel {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.recentGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.recentCard {
+  border-radius: 0.95rem;
+  overflow: hidden;
+}
+
+.recentCover {
+  aspect-ratio: 0.75;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.recentCover img,
+.recentFallback {
+  width: 100%;
+  height: 100%;
+}
+
+.recentCover img {
+  display: block;
+  object-fit: cover;
+}
+
+.recentFallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 800;
+  color: white;
+  background: linear-gradient(135deg, var(--primary), var(--accent-purple));
+}
+
+.recentInfo {
+  padding: 0.8rem;
+}
+
+.recentTitle {
+  font-weight: 700;
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.recentAuthor,
+.recentMeta,
+.emptyState {
+  color: var(--text-muted);
+}
+
+.recentAuthor {
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+.recentMeta {
+  font-size: 0.75rem;
+  margin-top: 0.35rem;
+}
+
+.emptyState {
+  border-radius: 0.85rem;
+  padding: 1rem;
+  font-size: 0.9rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
 .profileAvatar {
   width: 48px;
   height: 48px;
@@ -270,5 +569,31 @@
 
   .optionRow {
     flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 900px) {
+  .profileHero,
+  .summaryGrid,
+  .statusSummaryGrid,
+  .recentGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .profileSpotlight {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .profileHero,
+  .summaryGrid,
+  .statusSummaryGrid,
+  .recentGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .profileIdentity {
+    align-items: flex-start;
   }
 }

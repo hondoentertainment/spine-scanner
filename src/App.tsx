@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense, useDeferredValue } from 'react';
 import AuthPanel from './components/AuthPanel.tsx';
 import ThemeToggle from './components/ThemeToggle.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
@@ -36,6 +36,7 @@ type ScanRequestOptions = {
 
 function App() {
   const [view, setView] = useState<'scan' | 'library' | 'data' | 'profile'>('scan');
+  const deferredView = useDeferredValue(view);
   const { lookupByIsbn, loading, error } = useBookLookup();
   const { addBook, books, setBooks, shelves, setShelves } = useBookStore();
   const { user, recoveryMode, initialize: initAuth } = useAuthStore();
@@ -99,6 +100,24 @@ function App() {
         setOpenBookIsbn(isbn);
       }
     }
+  }, []);
+
+  // Eager preload all nav views after mount to reduce INP when switching tabs
+  useEffect(() => {
+    const preloadAll = () => {
+      void preloadScanner();
+      void preloadLibrary();
+      void preloadData();
+      void preloadProfile();
+    };
+    const id = typeof requestIdleCallback !== 'undefined'
+      ? requestIdleCallback(preloadAll, { timeout: 150 })
+      : 0;
+    const t = setTimeout(preloadAll, 150);
+    return () => {
+      if (typeof cancelIdleCallback !== 'undefined' && id) cancelIdleCallback(id);
+      clearTimeout(t);
+    };
   }, []);
 
   // Auto-sync: pull from cloud on sign-in
@@ -409,7 +428,7 @@ function App() {
       </header>
 
       <main id="main-content">
-        {view === 'scan' && (
+        {deferredView === 'scan' && (
           <ErrorBoundary>
             <Suspense
               fallback={
@@ -446,7 +465,7 @@ function App() {
             </Suspense>
           </ErrorBoundary>
         )}
-        {view === 'library' && (
+        {deferredView === 'library' && (
           <ErrorBoundary>
             <Suspense
               fallback={
@@ -463,7 +482,7 @@ function App() {
             </Suspense>
           </ErrorBoundary>
         )}
-        {view === 'data' && (
+        {deferredView === 'data' && (
           <ErrorBoundary>
             <Suspense
               fallback={
@@ -476,7 +495,7 @@ function App() {
             </Suspense>
           </ErrorBoundary>
         )}
-        {view === 'profile' && (
+        {deferredView === 'profile' && (
           <ErrorBoundary>
             <Suspense
               fallback={
