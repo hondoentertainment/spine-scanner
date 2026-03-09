@@ -44,3 +44,6 @@ public/tesseract/*.wasm.js
 
 # Environment
 .env
+
+# Claude Code
+.claude/
