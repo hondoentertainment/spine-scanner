@@ -104,7 +104,7 @@ function getVideoFromRef(
  * Lower: ~10fps for native detector, logs actual resolution on first frame.
  */
 export function useBarcodeScanner({
-    addLog, onScan, isScanning, cameraReady, cameraError, webcamRef, isBusy, enabled = true,
+    addLog, onScan, isScanning: _isScanning, cameraReady, cameraError, webcamRef, isBusy, enabled = true,
 }: UseBarcodeOptions) {
     const barcodeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

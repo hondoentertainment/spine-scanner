@@ -407,26 +407,6 @@ const computeBlurVariance = (imgData: ImageData): number => {
     return sumSq / count - mean * mean;
 };
 
-const detectBrightness = (src: FrameSource, canvas: HTMLCanvasElement, crop: CropRegion): number => {
-    try {
-        const imgData = getCroppedGrayscaleData(src, canvas, crop, 200, 150);
-        return imgData ? computeBrightness(imgData) : 128;
-    } catch { return 128; }
-};
-
-const detectBlurVariance = (src: FrameSource, canvas: HTMLCanvasElement, crop: CropRegion): number => {
-    try {
-        const imgData = getCroppedGrayscaleData(src, canvas, crop, 320, 220);
-        return imgData ? computeBlurVariance(imgData) : BLUR_VARIANCE_THRESHOLD;
-    } catch { return BLUR_VARIANCE_THRESHOLD; }
-};
-
-const detectContrast = (src: FrameSource, canvas: HTMLCanvasElement, crop: CropRegion): number => {
-    try {
-        const imgData = getCroppedGrayscaleData(src, canvas, crop, 200, 150);
-        return imgData ? measureContrast(imgData) : 50;
-    } catch { return 50; }
-};
 
 /** Digit whitelist for ISBN-only crops — reduces O→0, I→1 confusion. */
 const ISBN_CHAR_WHITELIST = '0123456789X -';
