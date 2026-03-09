@@ -35,7 +35,7 @@ interface AuthStore {
 }
 
 function getRedirectUrl(): string {
-  return getRedirectUrl();
+  return `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '') || window.location.origin;
 }
 
 export const useAuthStore = create<AuthStore>((set, get) => ({
