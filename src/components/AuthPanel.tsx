@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/useAuthStore.ts';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
-import { upsertProfile } from '../lib/profiles.ts';
 import { LogIn, LogOut, UserPlus, Cloud, CloudOff, AlertCircle, Loader, X, WifiOff, Settings, Mail, ArrowLeft, CheckCircle2, KeyRound } from 'lucide-react';
 import s from './AuthPanel.module.css';
 
@@ -19,7 +18,7 @@ type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset-sent' | 'confirm-pending
 const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, online, pendingChanges, onOpenProfile }) => {
   const {
     user, profile, loading, error, confirmationPending,
-    signIn, signUp, signInWithGoogle, signOut, loadProfile,
+    signIn, signUp, signInWithGoogle, signOut,
     resetPassword, resendConfirmation, clearError, clearConfirmation,
   } = useAuthStore();
   const [mode, setMode] = useState<AuthMode>('signin');
@@ -30,21 +29,18 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, o
   const [resetEmail, setResetEmail] = useState('');
   const [resendCooldown, setResendCooldown] = useState(false);
 
-  if (!isSupabaseConfigured()) return null;
+  useEffect(() => {
+    if (confirmationPending && mode !== 'confirm-pending') {
+      setMode('confirm-pending');
+    }
+  }, [confirmationPending, mode]);
 
-  // Sync confirmation state from store
-  if (confirmationPending && mode !== 'confirm-pending') {
-    setMode('confirm-pending');
-  }
+  if (!isSupabaseConfigured()) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (mode === 'signup') {
-      const userId = await signUp(email, password, username.trim() || undefined);
-      if (userId && username.trim()) {
-        await upsertProfile(userId, { username: username.trim() });
-        await loadProfile();
-      }
+      await signUp(email, password, username.trim() || undefined);
       setPassword('');
     } else if (mode === 'signin') {
       await signIn(email, password);

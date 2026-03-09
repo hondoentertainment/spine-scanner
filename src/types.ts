@@ -45,6 +45,26 @@ export interface ProfilePreferences {
   showShelvesDefault: boolean;
 }
 
+/** Generate a unique ID, with fallback for environments without crypto.randomUUID. */
+export function generateId(): string {
+  return typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+}
+
+/** Create a BookEntry with sensible defaults. Only provide the fields that differ. */
+export function createBookEntry(overrides: Partial<BookEntry> & Pick<BookEntry, 'isbn' | 'title' | 'author'>): BookEntry {
+  return {
+    id: generateId(),
+    pageCount: 0,
+    amazonLink: '',
+    coverImg: '',
+    status: 'to-read',
+    notes: '',
+    dateAdded: new Date().toISOString(),
+    shelfIds: [],
+    ...overrides,
+  };
+}
+
 export const DEFAULT_PREFERENCES: ProfilePreferences = {
   theme: 'dark',
   librarySortBy: 'dateAdded',

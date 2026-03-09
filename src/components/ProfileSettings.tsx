@@ -63,33 +63,35 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
     : 'This device';
 
   const summary = useMemo(() => {
+    let reading = 0, read = 0, toRead = 0, dnf = 0, totalPages = 0, readPages = 0;
+    // Track 4 most recent books by dateAdded without sorting the full array
+    const recentBooks: typeof books = [];
+
+    for (const book of books) {
+      const pages = book.pageCount || 0;
+      totalPages += pages;
+      switch (book.status) {
+        case 'reading': reading++; break;
+        case 'read': read++; readPages += pages; break;
+        case 'to-read': toRead++; break;
+        case 'dnf': dnf++; break;
+      }
+      // Maintain top-4 most recent
+      const ts = new Date(book.dateAdded).getTime();
+      if (recentBooks.length < 4) {
+        recentBooks.push(book);
+        recentBooks.sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime());
+      } else if (ts > new Date(recentBooks[3].dateAdded).getTime()) {
+        recentBooks[3] = book;
+        recentBooks.sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime());
+      }
+    }
+
     const total = books.length;
-    const reading = books.filter((book) => book.status === 'reading').length;
-    const read = books.filter((book) => book.status === 'read').length;
-    const toRead = books.filter((book) => book.status === 'to-read').length;
-    const dnf = books.filter((book) => book.status === 'dnf').length;
-    const totalPages = books.reduce((sum, book) => sum + (book.pageCount || 0), 0);
-    const readPages = books
-      .filter((book) => book.status === 'read')
-      .reduce((sum, book) => sum + (book.pageCount || 0), 0);
     const shelfCount = shelves.length;
     const completionRate = total > 0 ? Math.round((read / total) * 100) : 0;
-    const recentBooks = [...books]
-      .sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime())
-      .slice(0, 4);
 
-    return {
-      total,
-      reading,
-      read,
-      toRead,
-      dnf,
-      totalPages,
-      readPages,
-      shelfCount,
-      completionRate,
-      recentBooks,
-    };
+    return { total, reading, read, toRead, dnf, totalPages, readPages, shelfCount, completionRate, recentBooks };
   }, [books, shelves]);
 
   const content = (
@@ -184,43 +186,31 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
             <Flame size={16} />
           </div>
         </div>
-        <div className={s.statusBar} aria-hidden="true">
-          {statusSummary.map((item) => {
-            const count = item.key === 'read'
-              ? summary.read
-              : item.key === 'reading'
-                ? summary.reading
-                : item.key === 'to-read'
-                  ? summary.toRead
-                  : summary.dnf;
-            const width = summary.total > 0 ? `${Math.max((count / summary.total) * 100, count > 0 ? 8 : 0)}%` : '0%';
-            return (
-              <span
-                key={item.key}
-                className={s.statusBarSegment}
-                style={{ width, background: item.accent }}
-              />
-            );
-          })}
-        </div>
-        <div className={s.statusSummaryGrid}>
-          {statusSummary.map((item) => {
-            const count = item.key === 'read'
-              ? summary.read
-              : item.key === 'reading'
-                ? summary.reading
-                : item.key === 'to-read'
-                  ? summary.toRead
-                  : summary.dnf;
-            return (
-              <div key={item.key} className={s.statusSummaryCard}>
-                <span className={s.statusDot} style={{ background: item.accent }} />
-                <div className={s.statusSummaryValue}>{count}</div>
-                <div className={s.statusSummaryLabel}>{item.label}</div>
+        {(() => {
+          const statusCounts: Record<string, number> = { read: summary.read, reading: summary.reading, 'to-read': summary.toRead, dnf: summary.dnf };
+          return (
+            <>
+              <div className={s.statusBar} aria-hidden="true">
+                {statusSummary.map((item) => {
+                  const count = statusCounts[item.key];
+                  const width = summary.total > 0 ? `${Math.max((count / summary.total) * 100, count > 0 ? 8 : 0)}%` : '0%';
+                  return (
+                    <span key={item.key} className={s.statusBarSegment} style={{ width, background: item.accent }} />
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
+              <div className={s.statusSummaryGrid}>
+                {statusSummary.map((item) => (
+                  <div key={item.key} className={s.statusSummaryCard}>
+                    <span className={s.statusDot} style={{ background: item.accent }} />
+                    <div className={s.statusSummaryValue}>{statusCounts[item.key]}</div>
+                    <div className={s.statusSummaryLabel}>{item.label}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          );
+        })()}
       </div>
 
       <div className={s.letterboxdPanel}>

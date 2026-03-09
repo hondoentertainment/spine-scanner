@@ -11,6 +11,7 @@ import { useOnlineStatus } from './hooks/useOnlineStatus.ts';
 import { useTheme } from './hooks/useTheme.ts';
 import { useToast } from './components/Toast.tsx';
 import { mergeSync, pushBooks } from './lib/syncBooks.ts';
+import { createBookEntry, generateId } from './types.ts';
 import type { BookEntry } from './types.ts';
 import { BookOpen, Library, Scan, AlertCircle, Database, Layers, User } from 'lucide-react';
 import { generateAmazonLink } from './utils/amazonLink.ts';
@@ -18,6 +19,18 @@ import { isValidIsbn, normalizeToIsbn13 } from './utils/isbnValidation.ts';
 import { isbnExistsInLibrary } from './utils/libraryUtils.ts';
 import { useAnalyticsStore } from './store/useAnalyticsStore.ts';
 import styles from './components/App.module.css';
+
+const APP_KEYFRAMES = `
+  .app-container { opacity: 0; animation: fadeIn 0.8s ease-out forwards; }
+  .animate-spin { animation: spin 1s linear infinite; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  @media (prefers-reduced-motion: reduce) {
+    .app-container { opacity: 1; animation: none !important; }
+    .animate-spin { animation: none !important; }
+  }
+`;
 
 const Scanner = lazy(() => import('./components/Scanner.tsx'));
 const LibraryList = lazy(() => import('./components/LibraryList.tsx'));
@@ -41,7 +54,7 @@ function App() {
   const { addBook, books, setBooks, shelves, setShelves } = useBookStore();
   const { user, recoveryMode, initialize: initAuth } = useAuthStore();
   const { preferences, loadFromCloud, saveToCloud, updatePreferences } = useProfileStore();
-  const { pendingChanges, markDirty, markSynced, flushing, setFlushing } = useSyncQueue();
+  const { pendingChanges, markDirty, markSynced, flushing, setFlushing, lastSyncedAt } = useSyncQueue();
   const { online, justReconnected, clearReconnected } = useOnlineStatus();
   const { theme, toggleTheme } = useTheme();
   const { toast, confirm } = useToast();
@@ -200,22 +213,16 @@ function App() {
   }, [user, flushQueue]);
 
   const handlePhotoCapture = useCallback((imageDataUrl: string) => {
-    const id = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+    const id = generateId();
     const photoIsbn = `photo-${id}`;
-    const newBook: BookEntry = {
+    const newBook = createBookEntry({
       id,
       isbn: photoIsbn,
       isPhotoOnly: true,
       title: 'Unknown Title',
       author: 'Unknown Author',
-      pageCount: 0,
-      amazonLink: '',
       coverImg: imageDataUrl,
-      status: 'to-read',
-      notes: '',
-      dateAdded: new Date().toISOString(),
-      shelfIds: [],
-    };
+    });
     addBook(newBook);
     track('book_added', { method: 'photo' });
     toast('Book added with photo. Edit details in your library.', 'success');
@@ -274,19 +281,13 @@ function App() {
         return;
       }
 
-      const reviewBook: BookEntry = {
-        id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2),
+      const reviewBook = createBookEntry({
         isbn: normalizedInput,
         title: 'Review ISBN Entry',
         author: 'Manual Entry',
-        pageCount: 0,
         amazonLink: generateAmazonLink(normalizedInput),
-        coverImg: '',
-        status: 'to-read',
         notes: 'Added from manual ISBN entry. Verify or correct the ISBN and fill in the missing details.',
-        dateAdded: new Date().toISOString(),
-        shelfIds: [],
-      };
+      });
 
       addBookAndOpen(reviewBook, 'Added for review. Open the book to verify the ISBN and details.', 'manual_review', true);
       return;
@@ -298,19 +299,14 @@ function App() {
       if (metadata) {
         console.log(`[App] Metadata found: ${metadata.title}`);
         const storedIsbn = normalizeToIsbn13(metadata.isbn);
-        const newBook: BookEntry = {
-          id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2),
+        const newBook = createBookEntry({
           isbn: storedIsbn,
           title: metadata.title,
           author: metadata.authors.join(', '),
           pageCount: metadata.pageCount,
           amazonLink: generateAmazonLink(storedIsbn),
           coverImg: metadata.thumbnail,
-          status: 'to-read',
-          notes: '',
-          dateAdded: new Date().toISOString(),
-          shelfIds: [],
-        };
+        });
         addBookAndOpen(newBook, `Added "${metadata.title}" to library!`, options.source === 'manual' ? 'manual' : 'scan', options.source === 'manual');
       } else {
         console.log(`[App] No metadata found or lookup failed for ${normalizedInput}.`);
@@ -322,19 +318,12 @@ function App() {
         });
         if (addAnyway) {
           const storedIsbn = normalizeToIsbn13(normalizedInput);
-          const newBook: BookEntry = {
-            id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2),
+          const newBook = createBookEntry({
             isbn: storedIsbn,
             title: 'Unknown Title',
             author: 'Unknown Author',
-            pageCount: 0,
             amazonLink: generateAmazonLink(storedIsbn),
-            coverImg: '',
-            status: 'to-read',
-            notes: '',
-            dateAdded: new Date().toISOString(),
-            shelfIds: [],
-          };
+          });
           addBookAndOpen(newBook, 'Added with ISBN only. Edit details in your library.', options.source === 'manual' ? 'manual_no_metadata' : 'scan_no_metadata', options.source === 'manual');
         } else {
           toast('No metadata found for this ISBN.', 'error');
@@ -386,7 +375,7 @@ function App() {
           <AuthPanel
             onSyncNow={handleSyncNow}
             syncing={flushing}
-            lastSynced={useSyncQueue.getState().lastSyncedAt}
+            lastSynced={lastSyncedAt}
             online={online}
             pendingChanges={pendingChanges}
             onOpenProfile={() => handleViewChange('profile')}
@@ -516,17 +505,7 @@ function App() {
         </Suspense>
       )}
 
-      <style>{`
-        .app-container { opacity: 0; animation: fadeIn 0.8s ease-out forwards; }
-        .animate-spin { animation: spin 1s linear infinite; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @media (prefers-reduced-motion: reduce) {
-          .app-container { opacity: 1; animation: none !important; }
-          .animate-spin { animation: none !important; }
-        }
-      `}</style>
+      <style>{APP_KEYFRAMES}</style>
     </div>
   );
 }

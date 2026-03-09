@@ -26,7 +26,7 @@ export interface LiveScanTelemetry {
     busySuppressed: number;
 }
 
-const EMPTY_TELEMETRY: LiveScanTelemetry = {
+export const EMPTY_TELEMETRY: LiveScanTelemetry = {
     attempts: 0, nativeHits: 0, zxingHits: 0,
     confirmed: 0, cooldownSuppressed: 0, busySuppressed: 0,
 };
@@ -430,7 +430,5 @@ export function useBarcodeScanner({
         setTelemetryCallback: (cb: (t: LiveScanTelemetry) => void) => { telemetryStateRef.current = cb; },
         continuousActiveRef,
         refocus,
-        // Expose for isScanning check removal — no longer gates on isScanning
-        isScanning,
     };
 }

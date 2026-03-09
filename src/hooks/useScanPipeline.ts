@@ -316,10 +316,14 @@ function getResolutionInfo(imgWidth: number, imgHeight: number, crop: CropRegion
 export const assessFrameQuality = (
     img: HTMLImageElement, canvas: HTMLCanvasElement, crop: CropRegion = CROP_MEDIUM,
 ): FrameQuality => {
-    const brightness = detectBrightness(img, canvas, crop);
-    const blurVariance = detectBlurVariance(img, canvas, crop);
+    // Single draw for brightness + contrast (both use 200x150)
+    const smallData = getCroppedGrayscaleData(img, canvas, crop, 200, 150);
+    const brightness = smallData ? computeBrightness(smallData) : 128;
+    const contrast = smallData ? measureContrast(smallData) : 50;
+    // Blur needs higher resolution (320x220)
+    const blurData = getCroppedGrayscaleData(img, canvas, crop, 320, 220);
+    const blurVariance = blurData ? computeBlurVariance(blurData) : BLUR_VARIANCE_THRESHOLD;
     const { effectiveShortDimPixels, dpiLabel } = getResolutionInfo(img.width, img.height, crop);
-    const contrast = detectContrast(img, canvas, crop);
     return {
         brightness,
         blurVariance,
@@ -341,8 +345,11 @@ export const assessVideoFrameQuality = (
     if (readyState < 2) return { brightness: 128, blurVariance: BLUR_VARIANCE_THRESHOLD, isDark: false, isBlurry: false };
     const { w, h } = getFrameDimensions(video as FrameSource);
     if (!w || !h) return { brightness: 128, blurVariance: BLUR_VARIANCE_THRESHOLD, isDark: false, isBlurry: false };
-    const brightness = detectBrightness(video as FrameSource, canvas, crop);
-    const blurVariance = detectBlurVariance(video as FrameSource, canvas, crop);
+    // Single draw for brightness (200x150), then blur (320x220)
+    const smallData = getCroppedGrayscaleData(video as FrameSource, canvas, crop, 200, 150);
+    const brightness = smallData ? computeBrightness(smallData) : 128;
+    const blurData = getCroppedGrayscaleData(video as FrameSource, canvas, crop, 320, 220);
+    const blurVariance = blurData ? computeBlurVariance(blurData) : BLUR_VARIANCE_THRESHOLD;
     const { effectiveShortDimPixels, dpiLabel } = getResolutionInfo(w, h, crop);
     return {
         brightness,
@@ -354,77 +361,70 @@ export const assessVideoFrameQuality = (
     };
 };
 
+/** Draw a cropped grayscale region to canvas and return the ImageData. Shared by all quality detectors. */
+const getCroppedGrayscaleData = (
+    src: FrameSource, canvas: HTMLCanvasElement, crop: CropRegion, maxW: number, maxH: number,
+): ImageData | null => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx || typeof ctx.getImageData !== 'function') return null;
+    const { w, h } = getFrameDimensions(src);
+    const cropX = w * (1 - crop.widthFrac) / 2;
+    const cropY = h * (1 - crop.heightFrac) / 2;
+    const cropW = w * crop.widthFrac;
+    const cropH = h * crop.heightFrac;
+    const sW = Math.min(Math.floor(cropW), maxW);
+    const sH = Math.min(Math.floor(cropH), maxH);
+    if (sW < 3 || sH < 3) return null;
+    canvas.width = sW; canvas.height = sH;
+    ctx.filter = 'grayscale(100%)';
+    ctx.drawImage(src as CanvasImageSource, cropX, cropY, cropW, cropH, 0, 0, sW, sH);
+    return ctx.getImageData(0, 0, sW, sH);
+};
+
+const computeBrightness = (imgData: ImageData): number => {
+    let total = 0;
+    for (let i = 0; i < imgData.data.length; i += 4) total += imgData.data[i];
+    return total / (imgData.data.length / 4);
+};
+
+const computeBlurVariance = (imgData: ImageData): number => {
+    const sW = imgData.width;
+    const sH = imgData.height;
+    const data = imgData.data;
+    const gray = new Float32Array(sW * sH);
+    for (let i = 0, p = 0; i < data.length; i += 4, p++) gray[p] = data[i];
+    let sum = 0, sumSq = 0, count = 0;
+    for (let y = 1; y < sH - 1; y++) {
+        const row = y * sW;
+        for (let x = 1; x < sW - 1; x++) {
+            const idx = row + x;
+            const lap = 4 * gray[idx] - gray[idx - 1] - gray[idx + 1] - gray[idx - sW] - gray[idx + sW];
+            sum += lap; sumSq += lap * lap; count++;
+        }
+    }
+    if (count === 0) return BLUR_VARIANCE_THRESHOLD;
+    const mean = sum / count;
+    return sumSq / count - mean * mean;
+};
+
 const detectBrightness = (src: FrameSource, canvas: HTMLCanvasElement, crop: CropRegion): number => {
     try {
-        const ctx = canvas.getContext('2d');
-        if (!ctx || typeof ctx.getImageData !== 'function') return 128;
-        const { w, h } = getFrameDimensions(src);
-        const cropX = w * (1 - crop.widthFrac) / 2;
-        const cropY = h * (1 - crop.heightFrac) / 2;
-        const cropW = w * crop.widthFrac;
-        const cropH = h * crop.heightFrac;
-        const sampleW = Math.min(cropW, 200);
-        const sampleH = Math.min(cropH, 150);
-        canvas.width = sampleW; canvas.height = sampleH;
-        ctx.filter = 'grayscale(100%)';
-        ctx.drawImage(src as CanvasImageSource, cropX, cropY, cropW, cropH, 0, 0, sampleW, sampleH);
-        const imgData = ctx.getImageData(0, 0, sampleW, sampleH);
-        let total = 0;
-        for (let i = 0; i < imgData.data.length; i += 4) total += imgData.data[i];
-        return total / (imgData.data.length / 4);
+        const imgData = getCroppedGrayscaleData(src, canvas, crop, 200, 150);
+        return imgData ? computeBrightness(imgData) : 128;
     } catch { return 128; }
 };
 
 const detectBlurVariance = (src: FrameSource, canvas: HTMLCanvasElement, crop: CropRegion): number => {
     try {
-        const ctx = canvas.getContext('2d');
-        if (!ctx || typeof ctx.getImageData !== 'function') return BLUR_VARIANCE_THRESHOLD;
-        const { w, h } = getFrameDimensions(src);
-        const cropX = w * (1 - crop.widthFrac) / 2;
-        const cropY = h * (1 - crop.heightFrac) / 2;
-        const cropW = w * crop.widthFrac;
-        const cropH = h * crop.heightFrac;
-        const sW = Math.min(Math.floor(cropW), 320);
-        const sH = Math.min(Math.floor(cropH), 220);
-        if (sW < 3 || sH < 3) return BLUR_VARIANCE_THRESHOLD;
-        canvas.width = sW; canvas.height = sH;
-        ctx.filter = 'grayscale(100%)';
-        ctx.drawImage(src as CanvasImageSource, cropX, cropY, cropW, cropH, 0, 0, sW, sH);
-        const data = ctx.getImageData(0, 0, sW, sH).data;
-        const gray = new Float32Array(sW * sH);
-        for (let i = 0, p = 0; i < data.length; i += 4, p++) gray[p] = data[i];
-        let sum = 0, sumSq = 0, count = 0;
-        for (let y = 1; y < sH - 1; y++) {
-            const row = y * sW;
-            for (let x = 1; x < sW - 1; x++) {
-                const idx = row + x;
-                const lap = 4 * gray[idx] - gray[idx - 1] - gray[idx + 1] - gray[idx - sW] - gray[idx + sW];
-                sum += lap; sumSq += lap * lap; count++;
-            }
-        }
-        if (count === 0) return BLUR_VARIANCE_THRESHOLD;
-        const mean = sum / count;
-        return sumSq / count - mean * mean;
+        const imgData = getCroppedGrayscaleData(src, canvas, crop, 320, 220);
+        return imgData ? computeBlurVariance(imgData) : BLUR_VARIANCE_THRESHOLD;
     } catch { return BLUR_VARIANCE_THRESHOLD; }
 };
 
 const detectContrast = (src: FrameSource, canvas: HTMLCanvasElement, crop: CropRegion): number => {
     try {
-        const ctx = canvas.getContext('2d');
-        if (!ctx || typeof ctx.getImageData !== 'function') return 50;
-        const { w, h } = getFrameDimensions(src);
-        const cropX = w * (1 - crop.widthFrac) / 2;
-        const cropY = h * (1 - crop.heightFrac) / 2;
-        const cropW = w * crop.widthFrac;
-        const cropH = h * crop.heightFrac;
-        const sW = Math.min(Math.floor(cropW), 200);
-        const sH = Math.min(Math.floor(cropH), 150);
-        if (sW < 3 || sH < 3) return 50;
-        canvas.width = sW; canvas.height = sH;
-        ctx.filter = 'grayscale(100%)';
-        ctx.drawImage(src as CanvasImageSource, cropX, cropY, cropW, cropH, 0, 0, sW, sH);
-        const imgData = ctx.getImageData(0, 0, sW, sH);
-        return measureContrast(imgData);
+        const imgData = getCroppedGrayscaleData(src, canvas, crop, 200, 150);
+        return imgData ? measureContrast(imgData) : 50;
     } catch { return 50; }
 };
 

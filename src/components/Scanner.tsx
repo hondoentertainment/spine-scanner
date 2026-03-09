@@ -5,7 +5,7 @@ import { isValidIsbn, formatIsbnForDisplay } from '../utils/isbnValidation.ts';
 import { getNearMissCandidates } from '../utils/ocr.ts';
 import { useToast } from './Toast.tsx';
 import { useOcrEngine } from '../hooks/useOcrEngine.ts';
-import { useBarcodeScanner } from '../hooks/useBarcodeScanner.ts';
+import { useBarcodeScanner, EMPTY_TELEMETRY } from '../hooks/useBarcodeScanner.ts';
 import { useFrameAveraging } from '../hooks/useFrameAveraging.ts';
 import { useScanPipeline, assessVideoFrameQuality, CROP_MEDIUM, type OcrLanguage, type ScanProgress, type RunPipelineOptions } from '../hooks/useScanPipeline.ts';
 import { buildErrorDiagnostics, formatDiagnostics } from '../utils/ocrDiagnostics.ts';
@@ -26,11 +26,6 @@ interface ScannerProps {
     isScanning: boolean;
     batchMode?: boolean;
 }
-
-const EMPTY_TELEMETRY: LiveScanTelemetry = {
-    attempts: 0, nativeHits: 0, zxingHits: 0,
-    confirmed: 0, cooldownSuppressed: 0, busySuppressed: 0,
-};
 
 const getVideoConstraints = (facing: 'environment' | 'user' = 'environment'): MediaTrackConstraints => ({
     facingMode: facing,

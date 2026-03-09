@@ -34,6 +34,10 @@ interface AuthStore {
   clearConfirmation: () => void;
 }
 
+function getRedirectUrl(): string {
+  return getRedirectUrl();
+}
+
 export const useAuthStore = create<AuthStore>((set, get) => ({
   user: null,
   session: null,
@@ -146,7 +150,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (!supabase) return;
     set({ loading: true, error: null, magicLinkSent: false });
 
-    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '') || window.location.origin;
+    const redirectTo = getRedirectUrl();
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: redirectTo },
@@ -163,7 +167,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (!supabase) return;
     set({ loading: true, error: null });
 
-    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '') || window.location.origin;
+    const redirectTo = getRedirectUrl();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo },
@@ -211,7 +215,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (!supabase) return false;
     set({ loading: true, error: null });
 
-    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '') || window.location.origin;
+    const redirectTo = getRedirectUrl();
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
 
     if (error) {
