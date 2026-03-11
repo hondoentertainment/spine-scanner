@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense, useDeferredValue } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense, useDeferredValue, useMemo } from 'react';
+import type { ReactNode } from 'react';
 import AuthPanel from './components/AuthPanel.tsx';
 import ThemeToggle from './components/ThemeToggle.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
@@ -12,12 +13,14 @@ import { useTheme } from './hooks/useTheme.ts';
 import { useToast } from './components/Toast.tsx';
 import { mergeSync, pushBooks } from './lib/syncBooks.ts';
 import type { BookEntry } from './types.ts';
-import { BookOpen, Library, Scan, AlertCircle, Database, Layers, User } from 'lucide-react';
+import { BookOpen, Library, Scan, AlertCircle, Database, Layers, User, Sparkles, Cloud, BookMarked, ChevronRight } from 'lucide-react';
 import { generateAmazonLink } from './utils/amazonLink.ts';
 import { isValidIsbn, normalizeToIsbn13 } from './utils/isbnValidation.ts';
 import { isbnExistsInLibrary } from './utils/libraryUtils.ts';
 import { useAnalyticsStore } from './store/useAnalyticsStore.ts';
+import { getLibraryInsights } from './utils/bookPresentation.ts';
 import styles from './components/App.module.css';
+import { uiContracts } from './testing/uiContracts.ts';
 
 const Scanner = lazy(() => import('./components/Scanner.tsx'));
 const LibraryList = lazy(() => import('./components/LibraryList.tsx'));
@@ -47,19 +50,18 @@ function App() {
   const { toast, confirm } = useToast();
   const { track } = useAnalyticsStore();
   const [openBookIsbn, setOpenBookIsbn] = useState<string | null>(null);
+  const [srAnnouncement, setSrAnnouncement] = useState('');
   const batchMode = preferences.batchModeDefault;
+  const insights = useMemo(() => getLibraryInsights(books), [books]);
 
-  // Track whether initial sync has completed to avoid marking dirty during hydration
   const initialSyncDone = useRef(false);
   const prevBooksRef = useRef(books);
   const prevShelvesRef = useRef(shelves);
 
-  // Initialize auth on mount
   useEffect(() => {
     initAuth();
   }, [initAuth]);
 
-  // One-time migration: move theme from legacy localStorage key into profile preferences
   useEffect(() => {
     try {
       const legacy = localStorage.getItem('spine-scanner-theme');
@@ -70,17 +72,14 @@ function App() {
     } catch {
       // ignore
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [updatePreferences]);
 
-  // Load profile preferences from cloud when user signs in
   useEffect(() => {
     if (user?.id) {
       loadFromCloud(user.id);
     }
   }, [user?.id, loadFromCloud]);
 
-  // Sync preferences to cloud when they change (debounced)
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     if (!user?.id) return;
@@ -89,7 +88,6 @@ function App() {
     return () => { clearTimeout(saveTimeoutRef.current); };
   }, [user?.id, preferences, saveToCloud]);
 
-  // Handle deep links (#book-ISBN or #book-photo-id)
   useEffect(() => {
     const hash = window.location.hash.slice(1);
     const m = hash.match(/^book-(.+)$/);
@@ -102,7 +100,6 @@ function App() {
     }
   }, []);
 
-  // Eager preload all nav views after mount to reduce INP when switching tabs
   useEffect(() => {
     const preloadAll = () => {
       void preloadScanner();
@@ -110,17 +107,16 @@ function App() {
       void preloadData();
       void preloadProfile();
     };
-    const id = typeof requestIdleCallback !== 'undefined'
+    const idleId = typeof requestIdleCallback !== 'undefined'
       ? requestIdleCallback(preloadAll, { timeout: 150 })
       : 0;
-    const t = setTimeout(preloadAll, 150);
+    const timeoutId = setTimeout(preloadAll, 150);
     return () => {
-      if (typeof cancelIdleCallback !== 'undefined' && id) cancelIdleCallback(id);
-      clearTimeout(t);
+      if (typeof cancelIdleCallback !== 'undefined' && idleId) cancelIdleCallback(idleId);
+      clearTimeout(timeoutId);
     };
   }, []);
 
-  // Auto-sync: pull from cloud on sign-in
   useEffect(() => {
     if (!user) {
       initialSyncDone.current = false;
@@ -144,35 +140,19 @@ function App() {
       }
     };
 
-    doInitialSync();
+    void doInitialSync();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  // Detect local mutations and mark queue dirty
   useEffect(() => {
     if (!user || !initialSyncDone.current) return;
     if (books !== prevBooksRef.current || shelves !== prevShelvesRef.current) {
-      const booksChanged = books !== prevBooksRef.current;
-      const shelvesChanged = shelves !== prevShelvesRef.current;
-      if (booksChanged || shelvesChanged) {
-        markDirty();
-      }
+      markDirty();
     }
     prevBooksRef.current = books;
     prevShelvesRef.current = shelves;
   }, [books, shelves, user, markDirty]);
-
-  // Auto-flush when coming back online
-  useEffect(() => {
-    if (justReconnected && user && pendingChanges > 0 && !flushing) {
-      clearReconnected();
-      flushQueue();
-    } else if (justReconnected) {
-      clearReconnected();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [justReconnected]);
 
   const flushQueue = useCallback(async () => {
     if (!user || flushing) return;
@@ -192,7 +172,16 @@ function App() {
     } finally {
       setFlushing(false);
     }
-  }, [user, books, shelves, flushing, setBooks, setShelves, markSynced, setFlushing, toast]);
+  }, [user, flushing, books, shelves, setBooks, setShelves, markSynced, setFlushing, toast]);
+
+  useEffect(() => {
+    if (justReconnected && user && pendingChanges > 0 && !flushing) {
+      clearReconnected();
+      void flushQueue();
+    } else if (justReconnected) {
+      clearReconnected();
+    }
+  }, [justReconnected, user, pendingChanges, flushing, clearReconnected, flushQueue]);
 
   const handleSyncNow = useCallback(async () => {
     if (!user) return;
@@ -220,7 +209,7 @@ function App() {
     track('book_added', { method: 'photo' });
     toast('Book added with photo. Edit details in your library.', 'success');
     if (user && online) {
-      pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
+      void pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
     }
     setOpenBookIsbn(photoIsbn);
     setView('library');
@@ -229,7 +218,7 @@ function App() {
   const addBookAndOpen = useCallback((newBook: BookEntry, successMessage: string, trackMethod: string, forceOpen = false) => {
     addBook(newBook);
     track('book_added', { method: trackMethod, isbn: newBook.isbn });
-    toast(batchMode && !forceOpen ? 'Added - scan next' : successMessage, 'success');
+    toast(batchMode && !forceOpen ? 'Added. Ready for the next book.' : successMessage, 'success');
 
     if (!batchMode || forceOpen) {
       setOpenBookIsbn(newBook.isbn);
@@ -237,7 +226,7 @@ function App() {
     }
 
     if (user && online) {
-      pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
+      void pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
     }
   }, [addBook, batchMode, books, online, toast, track, user]);
 
@@ -246,17 +235,14 @@ function App() {
     const isChecksumValid = isValidIsbn(normalizedInput);
     const canReviewInvalid = options.allowReview === true && !isChecksumValid;
 
-    console.log(`[App] Received scan for ISBN: ${isbn}`);
-
     if (isbnExistsInLibrary(normalizedInput, books)) {
-      console.log(`[App] ISBN ${normalizedInput} already exists in library.`);
       if (batchMode && options.source !== 'manual') {
-        toast('Already in library. Scan next.', 'info');
+        toast('Already in your library. Keep scanning.', 'info');
         return;
       }
       const openInLibrary = await confirm({
         title: 'Book already in library',
-        message: 'You already have this in your library. Update notes instead?',
+        message: 'You already added this book. Open it in your library instead?',
         confirmLabel: 'Open in library',
         cancelLabel: 'Dismiss',
       });
@@ -269,8 +255,7 @@ function App() {
 
     if (!isChecksumValid) {
       if (!canReviewInvalid) {
-        console.log(`[App] Invalid ISBN checksum: ${normalizedInput}`);
-        toast('Invalid ISBN checksum. Please try again.', 'error');
+        toast('That ISBN looks incomplete. Try again or add it for review.', 'error');
         return;
       }
 
@@ -283,7 +268,7 @@ function App() {
         amazonLink: generateAmazonLink(normalizedInput),
         coverImg: '',
         status: 'to-read',
-        notes: 'Added from manual ISBN entry. Verify or correct the ISBN and fill in the missing details.',
+        notes: 'Added from manual ISBN entry. Verify the ISBN and complete the details.',
         dateAdded: new Date().toISOString(),
         shelfIds: [],
       };
@@ -292,11 +277,9 @@ function App() {
       return;
     }
 
-    console.log(`[App] Looking up metadata for ${normalizedInput}...`);
     try {
       const metadata = await lookupByIsbn(normalizedInput);
       if (metadata) {
-        console.log(`[App] Metadata found: ${metadata.title}`);
         const storedIsbn = normalizeToIsbn13(metadata.isbn);
         const newBook: BookEntry = {
           id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2),
@@ -311,12 +294,11 @@ function App() {
           dateAdded: new Date().toISOString(),
           shelfIds: [],
         };
-        addBookAndOpen(newBook, `Added "${metadata.title}" to library!`, options.source === 'manual' ? 'manual' : 'scan', options.source === 'manual');
+        addBookAndOpen(newBook, `Added "${metadata.title}" to your library.`, options.source === 'manual' ? 'manual' : 'scan', options.source === 'manual');
       } else {
-        console.log(`[App] No metadata found or lookup failed for ${normalizedInput}.`);
         const addAnyway = await confirm({
           title: 'No metadata found',
-          message: `Google Books and Open Library couldn't find details for ISBN ${normalizedInput}. Add it anyway? You can edit the title and author manually in your library.`,
+          message: `We couldn't find details for ISBN ${normalizedInput}. Add it anyway so you can fill them in manually?`,
           confirmLabel: 'Add anyway',
           cancelLabel: 'Cancel',
         });
@@ -335,19 +317,17 @@ function App() {
             dateAdded: new Date().toISOString(),
             shelfIds: [],
           };
-          addBookAndOpen(newBook, 'Added with ISBN only. Edit details in your library.', options.source === 'manual' ? 'manual_no_metadata' : 'scan_no_metadata', options.source === 'manual');
+          addBookAndOpen(newBook, 'Added with ISBN only. You can fill in the details in your library.', options.source === 'manual' ? 'manual_no_metadata' : 'scan_no_metadata', options.source === 'manual');
         } else {
-          toast('No metadata found for this ISBN.', 'error');
+          toast('No metadata found for that ISBN.', 'error');
         }
       }
     } catch (err) {
       console.error('[App] Error during scan handler:', err);
-      toast('Something went wrong during book lookup. Please try again.', 'error');
+      toast('Book lookup failed. Try again or add the ISBN manually.', 'error');
     }
   };
 
-  // Screen reader announcement for view changes
-  const [srAnnouncement, setSrAnnouncement] = useState('');
   const handleViewChange = useCallback((newView: 'scan' | 'library' | 'data' | 'profile') => {
     const labels: Record<string, string> = {
       scan: 'Scanner view',
@@ -359,51 +339,114 @@ function App() {
     setSrAnnouncement(labels[newView]);
   }, []);
 
+  const navItems: Array<{ key: 'scan' | 'library' | 'data' | 'profile'; label: string; icon: ReactNode }> = [
+    { key: 'scan', label: 'Add Books', icon: <Scan size={18} /> },
+    { key: 'library', label: 'Library', icon: <Library size={18} /> },
+    { key: 'data', label: 'Data', icon: <Database size={18} /> },
+    { key: 'profile', label: 'Profile', icon: <User size={18} /> },
+  ];
+
   return (
     <div className="app-container">
       <a href="#main-content" className={styles.skipLink}>Skip to main content</a>
 
-      {/* Screen reader live region for view changes */}
       <div className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">
         {srAnnouncement}
       </div>
 
       <header className={styles.header}>
-        <div className={styles.branding}>
-          <div className={styles.logoBox}>
-            <BookOpen size={28} color="white" />
+        <div className={styles.headerTop}>
+          <div className={styles.branding}>
+            <div className={styles.logoBox}>
+              <BookOpen size={28} color="white" />
+            </div>
+            <div>
+              <h1 className={styles.appTitle}>
+                Spine<span className={styles.titleAccent}>Scanner</span>
+              </h1>
+              <p className={styles.subtitle}>A friendlier home for scanning, organizing, and finding books fast.</p>
+            </div>
           </div>
-          <div>
-            <h1 className={styles.appTitle}>
-              Spine<span className={styles.titleAccent}>Scanner</span>
-            </h1>
-            <p className={styles.subtitle}>Digital Library & OCR Explorer</p>
+
+          <div className={styles.headerRight}>
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
+            <AuthPanel
+              onSyncNow={handleSyncNow}
+              syncing={flushing}
+              lastSynced={useSyncQueue.getState().lastSyncedAt}
+              online={online}
+              pendingChanges={pendingChanges}
+              onOpenProfile={() => handleViewChange('profile')}
+            />
           </div>
         </div>
 
-        <div className={styles.headerRight}>
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          <AuthPanel
-            onSyncNow={handleSyncNow}
-            syncing={flushing}
-            lastSynced={useSyncQueue.getState().lastSyncedAt}
-            online={online}
-            pendingChanges={pendingChanges}
-            onOpenProfile={() => handleViewChange('profile')}
-          />
-        </div>
+        <section className={`glass ${styles.hero}`} aria-label="Book site overview">
+          <div className={styles.heroIntro}>
+            <span className={styles.eyebrow}><Sparkles size={14} /> Reader-first workflow</span>
+            <h2 className={styles.heroTitle}>Add books in seconds and browse them like a real library.</h2>
+            <p className={styles.heroText}>
+              Scan a spine, upload a photo, or type an ISBN. The app keeps your collection searchable, synced, and easy to return to.
+            </p>
+            <div className={styles.heroActions}>
+              <button type="button" className={`glass ${styles.primaryAction}`} onClick={() => handleViewChange('scan')}>
+                <Scan size={18} /> Start scanning
+              </button>
+              <button type="button" className={`glass ${styles.secondaryAction}`} onClick={() => handleViewChange('library')}>
+                <Library size={18} /> Browse library
+              </button>
+            </div>
+          </div>
+
+          <div className={styles.heroStats}>
+            <div className={`glass ${styles.statCard}`}>
+              <span className={styles.statLabel}>Books saved</span>
+              <strong>{insights.totalBooks}</strong>
+              <span>{insights.toReadCount} still on deck</span>
+            </div>
+            <div className={`glass ${styles.statCard}`}>
+              <span className={styles.statLabel}>Reading now</span>
+              <strong>{insights.currentlyReading?.title ?? 'Nothing pinned yet'}</strong>
+              <span>{insights.currentlyReading?.author ?? 'Mark a title as reading to keep it visible.'}</span>
+            </div>
+            <div className={`glass ${styles.statCard}`}>
+              <span className={styles.statLabel}>Sync status</span>
+              <strong>{online ? 'Online' : 'Offline'}</strong>
+              <span>{pendingChanges > 0 ? `${pendingChanges} change${pendingChanges === 1 ? '' : 's'} waiting to sync` : 'Everything is up to date.'}</span>
+            </div>
+          </div>
+        </section>
+
+        <section className={styles.quickGuide} aria-label="How it works">
+          <div className={`glass ${styles.guideCard}`}>
+            <Scan size={18} />
+            <div>
+              <strong>1. Add a book</strong>
+              <p>Scan live, snap a photo, or type the ISBN if the camera misses.</p>
+            </div>
+          </div>
+          <div className={`glass ${styles.guideCard}`}>
+            <BookMarked size={18} />
+            <div>
+              <strong>2. Organize it</strong>
+              <p>Track reading status, notes, and shelves without leaving the library view.</p>
+            </div>
+          </div>
+          <div className={`glass ${styles.guideCard}`}>
+            <Cloud size={18} />
+            <div>
+              <strong>3. Pick up anywhere</strong>
+              <p>Your collection stays searchable and syncs when you reconnect.</p>
+            </div>
+          </div>
+        </section>
 
         <nav className={`glass ${styles.nav}`} role="tablist" aria-label="Main navigation">
-          {([
-            ['scan', 'Scanner', <Scan key="s" size={18} />],
-            ['library', 'Library', <Library key="l" size={18} />],
-            ['data', 'Data', <Database key="d" size={18} />],
-            ['profile', 'Profile', <User key="p" size={18} />],
-          ] as [string, string, React.ReactNode][]).map(([key, label, icon]) => (
+          {navItems.map(({ key, label, icon }) => (
             <button
               key={key}
               role="tab"
-              onClick={() => handleViewChange(key as 'scan' | 'library' | 'data' | 'profile')}
+              onClick={() => handleViewChange(key)}
               aria-label={`${label} tab`}
               aria-selected={view === key}
               aria-current={view === key ? 'page' : undefined}
@@ -420,6 +463,7 @@ function App() {
                 if (key === 'profile') void preloadProfile();
               }}
               className={`${styles.navBtn} ${view === key ? styles.navBtnActive : ''}`}
+              data-testid={uiContracts.navTabTestId(key)}
             >
               {icon} {label}
             </button>
@@ -430,26 +474,38 @@ function App() {
       <main id="main-content">
         {deferredView === 'scan' && (
           <ErrorBoundary>
-            <Suspense
-              fallback={
-                <div className={styles.lazyFallback}>
-                  <span className={styles.lazyText}>Loading scanner...</span>
-                </div>
-              }
-            >
+            <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
               <div className={styles.scanView}>
                 <div className={styles.scanHeader}>
-                  <h2 className={styles.scanTitle}>Scan Book Spine</h2>
-                  <p className={styles.scanSubtitle}>Scan ISBN, capture a book photo, or enter manually.</p>
+                  <div>
+                    <span className={styles.sectionBadge}>Add books</span>
+                    <h2 className={styles.scanTitle}>Three easy ways to capture a book</h2>
+                    <p className={styles.scanSubtitle}>Use the camera for speed, upload a photo for tricky spines, or type the ISBN when you want full control.</p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => updatePreferences({ batchModeDefault: !batchMode })}
                     className={`glass ${styles.batchToggle} ${batchMode ? styles.batchToggleActive : ''}`}
                     aria-pressed={batchMode}
-                    title={batchMode ? 'Exit batch mode' : 'Batch add: stay on scanner after each add'}
+                    title={batchMode ? 'Exit batch mode' : 'Batch add keeps you on the scanner after each add'}
                   >
                     <Layers size={18} />
                     {batchMode ? 'Batch mode on' : 'Batch add'}
+                  </button>
+                </div>
+
+                <div className={styles.scanTips}>
+                  <div className={`glass ${styles.tipCard}`}>
+                    <strong>Best for speed</strong>
+                    <span>Center the barcode and hold still for a second.</span>
+                  </div>
+                  <div className={`glass ${styles.tipCard}`}>
+                    <strong>Best for hard covers</strong>
+                    <span>Use photo upload when the spine text is small or reflective.</span>
+                  </div>
+                  <button type="button" className={`glass ${styles.tipCard} ${styles.tipCardButton}`} onClick={() => handleViewChange('library')}>
+                    <strong>Already scanned enough?</strong>
+                    <span>Jump to your library <ChevronRight size={14} /></span>
                   </button>
                 </div>
 
@@ -465,45 +521,31 @@ function App() {
             </Suspense>
           </ErrorBoundary>
         )}
+
         {deferredView === 'library' && (
           <ErrorBoundary>
-            <Suspense
-              fallback={
-                <div className={styles.lazyFallback}>
-                  <span className={styles.lazyText}>Loading library...</span>
-                </div>
-              }
-            >
+            <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
               <LibraryList
-                onManageData={() => setView('data')}
+                onManageData={() => handleViewChange('data')}
+                onStartScanning={() => handleViewChange('scan')}
                 initialOpenIsbn={openBookIsbn}
                 onOpenComplete={() => setOpenBookIsbn(null)}
               />
             </Suspense>
           </ErrorBoundary>
         )}
+
         {deferredView === 'data' && (
           <ErrorBoundary>
-            <Suspense
-              fallback={
-                <div className={styles.lazyFallback}>
-                  <span className={styles.lazyText}>Loading data tools...</span>
-                </div>
-              }
-            >
-              <DataManagement onClose={() => setView('library')} />
+            <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
+              <DataManagement onClose={() => handleViewChange('library')} />
             </Suspense>
           </ErrorBoundary>
         )}
+
         {deferredView === 'profile' && (
           <ErrorBoundary>
-            <Suspense
-              fallback={
-                <div className={styles.lazyFallback}>
-                  <span className={styles.lazyText}>Loading profile...</span>
-                </div>
-              }
-            >
+            <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
               <ProfileSettings inline />
             </Suspense>
           </ErrorBoundary>
@@ -521,7 +563,6 @@ function App() {
         .animate-spin { animation: spin 1s linear infinite; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @media (prefers-reduced-motion: reduce) {
           .app-container { opacity: 1; animation: none !important; }
           .animate-spin { animation: none !important; }

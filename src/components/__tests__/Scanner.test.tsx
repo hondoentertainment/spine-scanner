@@ -162,6 +162,7 @@ vi.mock('@zxing/library', () => ({
 
 // ── tesseract.js ──────────────────────────────────────────────
 let ocrText = '';
+let ocrConfidence: number | undefined = undefined;
 let createWorkerShouldFail = false;
 let workerShouldFail = false;
 
@@ -172,13 +173,13 @@ vi.mock('tesseract.js', () => ({
       setParameters: async () => ({ data: null, jobId: '' }),
       recognize: async () => {
         if (workerShouldFail) throw new Error('recognize failed');
-        return { data: { text: ocrText } };
+        return { data: { text: ocrText, confidence: ocrConfidence } };
       },
       terminate: async () => {},
     };
   },
   recognize: async () => {
-    return { data: { text: ocrText } };
+    return { data: { text: ocrText, confidence: ocrConfidence } };
   },
   PSM: {
     OSD_ONLY: '0', AUTO_OSD: '1', AUTO_ONLY: '2', AUTO: '3',
@@ -203,6 +204,7 @@ describe('Scanner', () => {
   beforeEach(async () => {
     ocrText = '';
     barcodeResult = null;
+    ocrConfidence = undefined;
     createWorkerShouldFail = false;
     workerShouldFail = false;
 
@@ -324,6 +326,22 @@ describe('Scanner', () => {
       await act(async () => { fireEvent.click(capture); });
 
       await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 10000 });
+    }, 15000);
+
+    it('shows OCR confidence summary after a successful OCR scan', async () => {
+      ocrText = 'THE GREAT GATSBY ISBN 978-0-14-103614-4 PENGUIN BOOKS';
+      ocrConfidence = 92;
+
+      const onScan = vi.fn();
+      renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
+
+      const capture = screen.getByRole('button', { name: /scan book/i });
+      await waitFor(() => expect(capture).not.toBeDisabled());
+      await act(async () => { fireEvent.click(capture); });
+
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 10000 });
+      await waitFor(() => expect(screen.getByText('OCR confidence: High')).toBeInTheDocument());
+      expect(screen.getByText('92% confidence from OCR analysis.')).toBeInTheDocument();
     }, 15000);
 
     it('shows suggestions when OCR finds invalid-checksum candidate', async () => {

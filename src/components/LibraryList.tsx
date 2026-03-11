@@ -7,9 +7,10 @@ import ShelfManager from './ShelfManager.tsx';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   Search, Settings, ArrowUpDown, Filter, BookOpen, Clock, CheckCircle, XCircle,
-  BarChart3, Tag, LayoutGrid, List
+  BarChart3, Tag, LayoutGrid, List, Sparkles, RotateCcw, ScanLine, LibraryBig
 } from 'lucide-react';
 import type { BookEntry } from '../types.ts';
+import { getActiveLibraryFilterLabels, getBookCoverSrc, getLibraryInsights } from '../utils/bookPresentation.ts';
 import s from './LibraryList.module.css';
 
 type SortField = 'title' | 'author' | 'dateAdded' | 'pageCount';
@@ -18,13 +19,12 @@ type ViewMode = 'grid' | 'list';
 
 interface LibraryListProps {
     onManageData?: () => void;
-    /** When set, opens the book with this ISBN in the detail panel. Cleared via onOpenComplete. */
+    onStartScanning?: () => void;
     initialOpenIsbn?: string | null;
-    /** Called after opening a book via initialOpenIsbn so the parent can clear the prop. */
     onOpenComplete?: () => void;
 }
 
-const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn, onOpenComplete }) => {
+const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning, initialOpenIsbn, onOpenComplete }) => {
     const { books, shelves } = useBookStore();
     const { preferences, updatePreferences } = useProfileStore();
     const [searchTerm, setSearchTerm] = useState('');
@@ -46,12 +46,9 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
 
     const listParentRef = useRef<HTMLDivElement>(null);
     const gridParentRef = useRef<HTMLDivElement>(null);
-
-    /** Number of columns in grid view. Uses a fixed estimate based on typical card width (~160px). */
     const GRID_COL_WIDTH = 160;
     const [gridColumns, setGridColumns] = useState(4);
 
-    // Measure grid container width to determine column count
     useEffect(() => {
         const container = gridParentRef.current;
         if (!container || viewMode !== 'grid') return;
@@ -63,15 +60,7 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
         return () => observer.disconnect();
     }, [viewMode]);
 
-    const stats = useMemo(() => {
-        const toRead = books.filter(b => b.status === 'to-read').length;
-        const reading = books.filter(b => b.status === 'reading').length;
-        const read = books.filter(b => b.status === 'read').length;
-        const dnf = books.filter(b => b.status === 'dnf').length;
-        const totalPages = books.reduce((sum, b) => sum + (b.pageCount || 0), 0);
-        const readPages = books.filter(b => b.status === 'read').reduce((sum, b) => sum + (b.pageCount || 0), 0);
-        return { total: books.length, toRead, reading, read, dnf, totalPages, readPages };
-    }, [books]);
+    const insights = useMemo(() => getLibraryInsights(books), [books]);
 
     const filteredAndSorted = useMemo(() => {
         let result = books.filter(book =>
@@ -97,22 +86,33 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
         return result;
     }, [books, searchTerm, statusFilter, shelfFilter, sortBy, sortAsc]);
 
-    // Virtualizer for list view
-    // eslint-disable-next-line react-hooks/incompatible-library
+    const selectedShelf = shelves.find((shelf) => shelf.id === shelfFilter) ?? null;
+    const activeFilters = useMemo(() => getActiveLibraryFilterLabels({
+        searchTerm,
+        statusFilter,
+        shelfName: selectedShelf?.name ?? null,
+    }), [searchTerm, statusFilter, selectedShelf?.name]);
+
+    const showRecentSection = activeFilters.length === 0;
+    const clearFilters = useCallback(() => {
+        setSearchTerm('');
+        setStatusFilter('all');
+        setShelfFilter(null);
+    }, [setStatusFilter]);
+
     const virtualizer = useVirtualizer({
         count: filteredAndSorted.length,
         getScrollElement: () => listParentRef.current,
-        estimateSize: () => 76, // approx row height
+        estimateSize: () => 76,
         overscan: 8,
     });
 
-    // Virtualizer for grid view (virtualizes rows; each row has gridColumns items)
     const gridRowCount = Math.ceil(filteredAndSorted.length / gridColumns);
 
     const gridVirtualizer = useVirtualizer({
         count: gridRowCount,
         getScrollElement: () => gridParentRef.current,
-        estimateSize: () => 260, // approx card height
+        estimateSize: () => 260,
         overscan: 4,
     });
 
@@ -130,7 +130,6 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
     const openDetail = useCallback((book: BookEntry) => setSelectedBook(book), []);
     const closeDetail = useCallback(() => setSelectedBook(null), []);
 
-    // Open book when initialOpenIsbn is set (e.g. from duplicate-scan flow)
     useEffect(() => {
         if (initialOpenIsbn) {
             const book = books.find(b => b.isbn === initialOpenIsbn);
@@ -139,7 +138,6 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
         }
     }, [initialOpenIsbn, books, onOpenComplete]);
 
-    // Keep selectedBook fresh
     const freshSelectedBook = selectedBook
         ? books.find(b => b.id === selectedBook.id) ?? null
         : null;
@@ -159,10 +157,55 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
         dnf: '#ef4444',
     };
 
+    const emptyLibrary = books.length === 0;
+    const emptyFilteredResults = !emptyLibrary && filteredAndSorted.length === 0;
+
     return (
         <div className={s.container}>
+            <section className={`glass ${s.hero}`} aria-label="Library overview">
+                <div className={s.heroCopy}>
+                    <span className={s.eyebrow}><Sparkles size={14} /> Reading dashboard</span>
+                    <h2 className={s.title}>Your library, built for browsing not digging.</h2>
+                    <p className={s.heroText}>
+                        Search fast, recover from filters quickly, and keep your next read visible.
+                    </p>
+                    <div className={s.heroActions}>
+                        <button type="button" onClick={onStartScanning} className={`glass ${s.primaryAction}`}>
+                            <ScanLine size={18} /> Add a book
+                        </button>
+                        <button type="button" onClick={() => setShowStats(!showStats)} className={`glass ${s.secondaryAction}`}>
+                            <BarChart3 size={18} /> {showStats ? 'Hide stats' : 'Show stats'}
+                        </button>
+                    </div>
+                </div>
+
+                <div className={s.highlightGrid}>
+                    <div className={`glass ${s.highlightCard}`}>
+                        <span className={s.highlightLabel}>Collection</span>
+                        <strong>{insights.totalBooks}</strong>
+                        <span>{insights.toReadCount} still waiting on the shelf</span>
+                    </div>
+                    <div className={`glass ${s.highlightCard}`}>
+                        <span className={s.highlightLabel}>Reading now</span>
+                        <strong>{insights.currentlyReading?.title ?? 'Choose your next book'}</strong>
+                        <span>{insights.currentlyReading?.author ?? 'Mark a book as reading to pin it here.'}</span>
+                    </div>
+                    <div className={`glass ${s.highlightCard}`}>
+                        <span className={s.highlightLabel}>Finished</span>
+                        <strong>{insights.completionRate}% complete</strong>
+                        <span>{insights.readCount} finished, {insights.pagesRead.toLocaleString()} pages read</span>
+                    </div>
+                </div>
+            </section>
+
             <div className={s.header}>
-                <h2 className={s.title}>Your Library ({books.length})</h2>
+                <div>
+                    <div className={s.sectionLabel}>Library</div>
+                    <h3 className={s.heading}>Books you can find in seconds</h3>
+                    <p className={s.resultsSummary}>
+                        {filteredAndSorted.length} result{filteredAndSorted.length === 1 ? '' : 's'} shown, sorted by {sortBy === 'dateAdded' ? 'date added' : sortBy}.
+                    </p>
+                </div>
                 <div className={s.headerActions}>
                     <button onClick={() => setShowShelves(!showShelves)} className={`glass ${s.iconBtn}`}
                         aria-label="Toggle shelf manager"
@@ -182,6 +225,7 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
                     </button>
                     <button onClick={onManageData} className={`glass ${s.manageBtn}`} aria-label="Manage library data">
                         <Settings size={20} />
+                        <span>Manage</span>
                     </button>
                 </div>
             </div>
@@ -191,12 +235,12 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
             {showStats && (
                 <div className={`glass ${s.stats}`}>
                     {[
-                        { value: stats.total, label: 'Total Books' },
-                        { value: stats.read, label: 'Read', color: '#22c55e' },
-                        { value: stats.reading, label: 'Reading', color: '#a855f7' },
-                        { value: stats.toRead, label: 'To Read', color: '#38bdf8' },
-                        { value: stats.readPages.toLocaleString(), label: 'Pages Read' },
-                        { value: stats.totalPages.toLocaleString(), label: 'Total Pages' },
+                        { value: insights.totalBooks, label: 'Total Books' },
+                        { value: insights.readCount, label: 'Read', color: '#22c55e' },
+                        { value: insights.readingCount, label: 'Reading', color: '#a855f7' },
+                        { value: insights.toReadCount, label: 'To Read', color: '#38bdf8' },
+                        { value: insights.pagesRead.toLocaleString(), label: 'Pages Read' },
+                        { value: insights.totalPages.toLocaleString(), label: 'Total Pages' },
                     ].map((item) => (
                         <div key={item.label} className={s.statItem}>
                             <div className={s.statValue} style={item.color ? { color: item.color } : undefined}>{item.value}</div>
@@ -206,17 +250,48 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
                 </div>
             )}
 
-            {/* Search */}
+            {showRecentSection && insights.recentlyAdded.length > 0 && (
+                <section className={s.recentSection} aria-label="Recently added books">
+                    <div className={s.recentHeader}>
+                        <span className={s.sectionLabel}>Recently added</span>
+                        <span className={s.recentHint}>Tap any title to open details</span>
+                    </div>
+                    <div className={s.recentGrid}>
+                        {insights.recentlyAdded.map((book) => (
+                            <button key={book.id} type="button" className={`glass ${s.recentCard}`} onClick={() => openDetail(book)}>
+                                <img src={getBookCoverSrc(book.coverImg)} alt={book.title} className={s.recentCover} />
+                                <div className={s.recentMeta}>
+                                    <strong>{book.title}</strong>
+                                    <span>{book.author}</span>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </section>
+            )}
+
             <div className={s.searchRow}>
                 <div className={s.searchWrap}>
                     <Search size={18} className={s.searchIcon} />
-                    <input type="text" placeholder="Search library..." value={searchTerm}
+                    <input type="text" placeholder="Search title, author, or ISBN" value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className={`glass ${s.searchInput}`} aria-label="Search library" />
                 </div>
+                {activeFilters.length > 0 && (
+                    <button type="button" onClick={clearFilters} className={`glass ${s.clearBtn}`}>
+                        <RotateCcw size={16} /> Clear filters
+                    </button>
+                )}
             </div>
 
-            {/* Status filters */}
+            {activeFilters.length > 0 && (
+                <div className={s.activeFilters} aria-label="Active filters">
+                    {activeFilters.map((filter) => (
+                        <span key={filter} className={`glass ${s.activeFilterChip}`}>{filter}</span>
+                    ))}
+                </div>
+            )}
+
             <div className={s.filterRow}>
                 <Filter size={16} style={{ color: 'var(--text-muted)' }} />
                 {statusFilters.map(f => (
@@ -229,14 +304,13 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
                         {f.icon} {f.label}
                         {f.value !== 'all' && (
                             <span className={s.filterCount}>
-                                ({f.value === 'to-read' ? stats.toRead : f.value === 'reading' ? stats.reading : f.value === 'read' ? stats.read : stats.dnf})
+                                ({f.value === 'to-read' ? insights.toReadCount : f.value === 'reading' ? insights.readingCount : f.value === 'read' ? insights.readCount : insights.dnfCount})
                             </span>
                         )}
                     </button>
                 ))}
             </div>
 
-            {/* Shelf filters */}
             {shelves.length > 0 && (
                 <div className={s.filterRow}>
                     <Tag size={16} style={{ color: 'var(--text-muted)' }} />
@@ -259,7 +333,6 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
                 </div>
             )}
 
-            {/* Sort + view toggle */}
             <div className={s.sortRow}>
                 <ArrowUpDown size={16} style={{ color: 'var(--text-muted)' }} />
                 {([
@@ -292,15 +365,30 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
                 </div>
             </div>
 
-            {/* Book display */}
-            {filteredAndSorted.length === 0 ? (
-                <div className={s.empty}>
-                    {searchTerm || statusFilter !== 'all' || shelfFilter
-                        ? 'No books match your filters.'
-                        : 'Your library is empty. Scan a book to get started!'}
+            {emptyLibrary ? (
+                <div className={`glass ${s.emptyState}`}>
+                    <div className={s.emptyIcon}><LibraryBig size={28} /></div>
+                    <h4>Build a library that feels easy to use</h4>
+                    <p>Add your first book by scanning a spine, uploading a photo, or typing the ISBN.</p>
+                    <div className={s.emptyActions}>
+                        <button type="button" onClick={onStartScanning} className={`glass ${s.primaryAction}`}>
+                            <ScanLine size={18} /> Add your first book
+                        </button>
+                        <button type="button" onClick={onManageData} className={`glass ${s.secondaryAction}`}>
+                            <Settings size={18} /> Import or manage data
+                        </button>
+                    </div>
+                </div>
+            ) : emptyFilteredResults ? (
+                <div className={`glass ${s.emptyState}`}>
+                    <div className={s.emptyIcon}><Filter size={28} /></div>
+                    <h4>No books match those filters</h4>
+                    <p>Clear the search and filters to get back to your full shelf in one tap.</p>
+                    <button type="button" onClick={clearFilters} className={`glass ${s.primaryAction}`}>
+                        <RotateCcw size={18} /> Reset filters
+                    </button>
                 </div>
             ) : viewMode === 'grid' ? (
-                /* Virtualized grid view */
                 <div ref={gridParentRef} className={s.virtualContainer}
                      style={{ height: Math.min(gridRowCount * 260, 700) }}>
                     <div className={s.virtualInner} style={{ height: gridVirtualizer.getTotalSize() }}>
@@ -327,7 +415,6 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
                     </div>
                 </div>
             ) : (
-                /* Virtualized list view */
                 <div ref={listParentRef} className={s.virtualContainer}
                      style={{ height: Math.min(filteredAndSorted.length * 76, 600) }}>
                     <div className={s.virtualInner} style={{ height: virtualizer.getTotalSize() }}>
@@ -345,7 +432,7 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
                                     <div className={s.listRow} onClick={() => openDetail(book)}
                                          role="button" tabIndex={0}
                                          onKeyDown={(e) => { if (e.key === 'Enter') openDetail(book); }}>
-                                        <img src={book.coverImg || 'https://via.placeholder.com/40x60?text=No'}
+                                        <img src={getBookCoverSrc(book.coverImg)}
                                              alt={book.title} className={s.listCover} />
                                         <div className={s.listInfo}>
                                             <div className={s.listTitle}>{book.title}</div>
@@ -366,7 +453,6 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, initialOpenIsbn
                 </div>
             )}
 
-            {/* Book detail modal */}
             {freshSelectedBook && (
                 <BookDetail book={freshSelectedBook} onClose={closeDetail} />
             )}

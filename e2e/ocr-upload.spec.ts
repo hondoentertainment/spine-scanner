@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { uiContracts } from '../src/testing/uiContracts';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -17,7 +18,7 @@ test.describe('OCR photo upload', () => {
   });
 
   test('extracts ISBN from uploaded OCR fixture image', async ({ page, context }) => {
-    test.skip(!!process.env.CI, 'Tesseract.js OCR too slow on CI runners; covered by unit tests');
+    test.skip(!!process.env.CI && !process.env.RUN_OCR_E2E, 'Tesseract.js OCR too slow on default CI runners; set RUN_OCR_E2E=1 to run.');
     test.setTimeout(60000);
     const mockTitle = 'Test Book via OCR';
 
@@ -44,17 +45,17 @@ test.describe('OCR photo upload', () => {
     await context.route(/openlibrary\.org\/api\/books/, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) }));
 
     // Use the file input directly (hidden; setInputFiles works). First input is for ISBN scan.
-    const fileInput = page.locator('input[type="file"][accept="image/*"]').first();
+    const fileInput = page.getByTestId(uiContracts.scannerFileInputTestId).first();
     await expect(fileInput).toHaveCount(1);
     await fileInput.setInputFiles(FIXTURE_PATH);
 
-    // OCR runs (15–45s first load, up to 2 min in CI); when ISBN found, onScan fires → Google Books lookup → "Added X to library"
+    // OCR runs (15–45s first load, up to 2 min in CI); when ISBN found, onScan fires -> Google Books lookup -> "Added X to library"
     await expect(page.getByText(new RegExp(`Added.*${mockTitle}.*library`, 'i'))).toBeVisible({
       timeout: process.env.CI ? 120000 : 60000,
     });
 
     // Verify book appears in library
-    await page.getByRole('tab', { name: /library/i }).click();
+    await page.getByTestId(uiContracts.navTabTestId('library')).click();
     await expect(page.getByRole('heading', { name: /Your Library/ })).toBeVisible();
     await expect(page.getByText(mockTitle)).toBeVisible({ timeout: 5000 });
   });

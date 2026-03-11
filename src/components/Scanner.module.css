@@ -135,6 +135,30 @@
   line-height: 1.3;
 }
 
+.scanHealthCard {
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  margin-bottom: 0.9rem;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(129, 140, 248, 0.2);
+  border-radius: 0.8rem;
+}
+
+.scanHealthTitle {
+  margin: 0 0 0.2rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #c7d2fe;
+  letter-spacing: 0.02em;
+}
+
+.scanHealthText {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.72);
+}
+
 /* ── Primary CTA button ────────────────────── */
 
 .primaryBtn {

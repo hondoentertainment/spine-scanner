@@ -558,14 +558,30 @@ export interface ScanDiagnostics {
     lastError?: string;
 }
 
+export type ScanDetectionMethod = 'barcode' | 'ocr' | 'ocr-multilang';
+export type ScanConfidenceBand = 'low' | 'medium' | 'high';
+
 export interface ScanPipelineResult {
     isbn: string | null;
     suggestions: string[];
-    /** Map of repaired ISBN → original invalid candidate, for "Try repaired" action. */
+    /** Scan engine that produced the winning result. */
+    detectionMethod?: ScanDetectionMethod;
+    /** OCR confidence 0-100 when available. */
+    confidence?: number;
+    /** UI-friendly confidence grouping for scan feedback. */
+    confidenceBand?: ScanConfidenceBand;
+    /** Map of repaired ISBN to original invalid candidate, for "Try repaired" action. */
     repairedMap?: Record<string, string>;
     /** Populated when no ISBN found, for diagnostic toasts. */
     diagnostics?: ScanDiagnostics;
 }
+
+const getConfidenceBand = (confidence?: number): ScanConfidenceBand | undefined => {
+    if (confidence == null) return undefined;
+    if (confidence >= HIGH_CONFIDENCE_THRESHOLD) return 'high';
+    if (confidence >= 60) return 'medium';
+    return 'low';
+};
 
 /** OCR language preference: en=English only, de=German fallback, both=English+German. */
 export type OcrLanguage = 'en' | 'de' | 'both';
@@ -657,7 +673,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
             addLog(`ISBN via barcode: ${isbn}`);
             safeSetStatus(`Found ISBN: ${isbn}`);
             reportProgress({ phase: 'done' });
-            return { isbn, suggestions: [] };
+            return { isbn, suggestions: [], detectionMethod: 'barcode' };
         }
         if (isbn) {
             allCandidates.add(isbn);
@@ -666,7 +682,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                 addLog(`ISBN via barcode (repaired): ${isbn} → ${repaired}`);
                 safeSetStatus(`Found ISBN: ${repaired}`);
                 reportProgress({ phase: 'done' });
-                return { isbn: repaired, suggestions: [] };
+                return { isbn: repaired, suggestions: [], detectionMethod: 'barcode' };
             }
         }
 
@@ -809,7 +825,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                     if (result.confidence == null || result.confidence >= HIGH_CONFIDENCE_THRESHOLD) {
                         safeSetStatus(`Found ISBN: ${result.isbn}`);
                         addLog(`Early exit: valid ISBN found${result.confidence != null ? ` (conf=${result.confidence}, threshold=${HIGH_CONFIDENCE_THRESHOLD})` : ''}`);
-                        return { isbn: result.isbn, suggestions: [] };
+                        return { isbn: result.isbn, suggestions: [], detectionMethod: 'ocr', confidence: result.confidence, confidenceBand: getConfidenceBand(result.confidence) };
                     }
                     // Low confidence: save as best candidate and continue scanning
                     if (!bestResult || (result.confidence != null && (bestResult.confidence == null || result.confidence > bestResult.confidence))) {
@@ -837,7 +853,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
                     addLog(`ISBN via OCR [multi-lang ${multilangStr}]: ${result.isbn}`);
                     safeSetStatus(`Found ISBN: ${result.isbn}`);
                     reportProgress({ phase: 'done' });
-                    return { isbn: result.isbn, suggestions: [] };
+                    return { isbn: result.isbn, suggestions: [], detectionMethod: 'ocr-multilang', confidence: result.confidence, confidenceBand: getConfidenceBand(result.confidence) };
                 }
             } catch (err) {
                 addLog(`Multi-lang OCR fallback error: ${err instanceof Error ? err.message : String(err)}`);
@@ -849,7 +865,7 @@ export function useScanPipeline({ addLog, setStatus, runOcr, runOcrWithLang, try
             addLog(`Returning best low-confidence ISBN: ${bestResult.isbn} (conf=${bestResult.confidence})`);
             safeSetStatus(`Found ISBN: ${bestResult.isbn}`);
             reportProgress({ phase: 'done' });
-            return { isbn: bestResult.isbn, suggestions: [] };
+            return { isbn: bestResult.isbn, suggestions: [], detectionMethod: 'ocr', confidence: bestResult.confidence, confidenceBand: getConfidenceBand(bestResult.confidence) };
         }
 
         /* ── Phase 3: Build suggestions (include near-miss candidates) ──── */

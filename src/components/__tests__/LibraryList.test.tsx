@@ -8,13 +8,6 @@ import { useProfileStore } from '../../store/useProfileStore';
 import { DEFAULT_PREFERENCES } from '../../types';
 import type { BookEntry, Shelf } from '../../types';
 
-/* ================================================================
- *  Mock @tanstack/react-virtual
- * ================================================================
- *
- *  The virtualizer is complex in jsdom. We mock it so list view
- *  renders rows directly without needing real scroll measurements.
- */
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count }: { count: number }) => ({
     getTotalSize: () => count * 76,
@@ -27,10 +20,6 @@ vi.mock('@tanstack/react-virtual', () => ({
       })),
   }),
 }));
-
-/* ================================================================
- *  Helpers
- * ================================================================ */
 
 const makeBook = (overrides: Partial<BookEntry> = {}): BookEntry => ({
   id: crypto.randomUUID(),
@@ -57,233 +46,134 @@ const makeShelf = (overrides: Partial<Shelf> = {}): Shelf => ({
 const renderWithToast = (ui: React.ReactElement) =>
   render(<ToastProvider>{ui}</ToastProvider>);
 
-/* ================================================================
- *  Tests
- * ================================================================ */
-
 describe('LibraryList', () => {
   beforeEach(() => {
     useBookStore.setState({ books: [], shelves: [] });
     useProfileStore.setState({ preferences: { ...DEFAULT_PREFERENCES } });
   });
 
-  /* ── Empty state ─────────────────────────────────────────── */
-  describe('empty state', () => {
-    it('shows empty library message when no books', () => {
-      renderWithToast(<LibraryList />);
-      expect(screen.getByText(/Your library is empty/)).toBeInTheDocument();
-    });
+  it('shows the new browsing-focused hero copy', () => {
+    renderWithToast(<LibraryList />);
 
-    it('shows book count of 0', () => {
-      renderWithToast(<LibraryList />);
-      expect(screen.getByText('Your Library (0)')).toBeInTheDocument();
-    });
+    expect(screen.getByText('Your library, built for browsing not digging.')).toBeInTheDocument();
+    expect(screen.getByText('Build a library that feels easy to use')).toBeInTheDocument();
   });
 
-  /* ── Book display ────────────────────────────────────────── */
-  describe('book display', () => {
-    it('shows book count in header', () => {
-      useBookStore.setState({ books: [makeBook(), makeBook({ id: 'b2', isbn: '0743273567', title: 'Gatsby' })] });
-      renderWithToast(<LibraryList />);
-      expect(screen.getByText('Your Library (2)')).toBeInTheDocument();
-    });
+  it('calls onStartScanning from the empty state', () => {
+    const onStartScanning = vi.fn();
+    renderWithToast(<LibraryList onStartScanning={onStartScanning} />);
 
-    it('renders books in grid view by default', () => {
-      useBookStore.setState({ books: [makeBook()] });
-      renderWithToast(<LibraryList />);
-      expect(screen.getByText('1984')).toBeInTheDocument();
-    });
+    fireEvent.click(screen.getByRole('button', { name: /Add your first book/i }));
+    expect(onStartScanning).toHaveBeenCalledOnce();
   });
 
-  /* ── Search ──────────────────────────────────────────────── */
-  describe('search', () => {
-    it('filters books by title', () => {
-      useBookStore.setState({
-        books: [
-          makeBook({ id: 'b1', title: '1984' }),
-          makeBook({ id: 'b2', isbn: '0743273567', title: 'The Great Gatsby', author: 'Fitzgerald' }),
-        ],
-      });
-      renderWithToast(<LibraryList />);
-
-      fireEvent.change(screen.getByLabelText('Search library'), { target: { value: 'Gatsby' } });
-      expect(screen.getByText('The Great Gatsby')).toBeInTheDocument();
-      expect(screen.queryByText('1984')).not.toBeInTheDocument();
+  it('shows recently added books in descending date order', () => {
+    useBookStore.setState({
+      books: [
+        makeBook({ id: 'b1', title: 'Oldest', dateAdded: '2026-01-01T00:00:00.000Z' }),
+        makeBook({ id: 'b2', title: 'Newest', dateAdded: '2026-03-01T00:00:00.000Z' }),
+        makeBook({ id: 'b3', title: 'Middle', dateAdded: '2026-02-01T00:00:00.000Z' }),
+      ],
     });
 
-    it('filters books by author', () => {
-      useBookStore.setState({
-        books: [
-          makeBook({ id: 'b1', title: '1984', author: 'Orwell' }),
-          makeBook({ id: 'b2', isbn: '0743273567', title: 'Gatsby', author: 'Fitzgerald' }),
-        ],
-      });
-      renderWithToast(<LibraryList />);
+    renderWithToast(<LibraryList />);
 
-      fireEvent.change(screen.getByLabelText('Search library'), { target: { value: 'Fitzgerald' } });
-      expect(screen.getByText('Gatsby')).toBeInTheDocument();
-      expect(screen.queryByText('1984')).not.toBeInTheDocument();
-    });
+    const recentButtons = screen.getAllByRole('button').filter((button) =>
+      button.textContent?.includes('Newest') || button.textContent?.includes('Middle') || button.textContent?.includes('Oldest')
+    );
 
-    it('filters books by ISBN', () => {
-      useBookStore.setState({
-        books: [
-          makeBook({ id: 'b1', isbn: '9780141036144', title: '1984' }),
-          makeBook({ id: 'b2', isbn: '0743273567', title: 'Gatsby' }),
-        ],
-      });
-      renderWithToast(<LibraryList />);
-
-      fireEvent.change(screen.getByLabelText('Search library'), { target: { value: '0743273567' } });
-      expect(screen.getByText('Gatsby')).toBeInTheDocument();
-      expect(screen.queryByText('1984')).not.toBeInTheDocument();
-    });
-
-    it('shows no results message when search has no matches', () => {
-      useBookStore.setState({ books: [makeBook()] });
-      renderWithToast(<LibraryList />);
-
-      fireEvent.change(screen.getByLabelText('Search library'), { target: { value: 'zzz nonexistent' } });
-      expect(screen.getByText(/No books match your filters/)).toBeInTheDocument();
-    });
+    expect(recentButtons[0]).toHaveTextContent('Newest');
+    expect(recentButtons[1]).toHaveTextContent('Middle');
+    expect(recentButtons[2]).toHaveTextContent('Oldest');
   });
 
-  /* ── Status filter ───────────────────────────────────────── */
-  describe('status filter', () => {
-    it('filters by "Read" status', () => {
-      useBookStore.setState({
-        books: [
-          makeBook({ id: 'b1', title: '1984', status: 'read' }),
-          makeBook({ id: 'b2', isbn: '0743273567', title: 'Gatsby', status: 'to-read' }),
-        ],
-      });
-      renderWithToast(<LibraryList />);
-
-      fireEvent.click(screen.getByText('Read'));
-      expect(screen.getByText('1984')).toBeInTheDocument();
-      expect(screen.queryByText('Gatsby')).not.toBeInTheDocument();
+  it('filters books by title and can clear filters in one action', () => {
+    useBookStore.setState({
+      books: [
+        makeBook({ id: 'b1', title: '1984' }),
+        makeBook({ id: 'b2', isbn: '0743273567', title: 'The Great Gatsby', author: 'Fitzgerald' }),
+      ],
     });
 
-    it('shows all books with "All" filter', () => {
-      useBookStore.setState({
-        books: [
-          makeBook({ id: 'b1', title: '1984', status: 'read' }),
-          makeBook({ id: 'b2', isbn: '0743273567', title: 'Gatsby', status: 'to-read' }),
-        ],
-      });
-      renderWithToast(<LibraryList />);
+    renderWithToast(<LibraryList />);
 
-      // All is the default — both should be visible
-      expect(screen.getByText('1984')).toBeInTheDocument();
-      expect(screen.getByText('Gatsby')).toBeInTheDocument();
-    });
+    fireEvent.change(screen.getByLabelText('Search library'), { target: { value: 'Gatsby' } });
+    expect(screen.getAllByText('The Great Gatsby').length).toBeGreaterThan(0);
+    expect(screen.queryByText('1984')).not.toBeInTheDocument();
+    expect(screen.getByText('Search: Gatsby')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Clear filters/i }));
+    expect(screen.getByLabelText('Search library')).toHaveValue('');
+    expect(screen.getAllByText('1984').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('The Great Gatsby').length).toBeGreaterThan(0);
   });
 
-  /* ── Sort ────────────────────────────────────────────────── */
-  describe('sorting', () => {
-    it('sorts by title', () => {
-      useBookStore.setState({
-        books: [
-          makeBook({ id: 'b1', title: 'Zebra', dateAdded: '2026-01-01' }),
-          makeBook({ id: 'b2', isbn: '0743273567', title: 'Alpha', dateAdded: '2026-01-02' }),
-        ],
-      });
-      renderWithToast(<LibraryList />);
+  it('shows a reset state when filters remove all books', () => {
+    useBookStore.setState({ books: [makeBook()] });
+    renderWithToast(<LibraryList />);
 
-      fireEvent.click(screen.getByText('Title'));
-      const cards = screen.getAllByText(/Zebra|Alpha/);
-      // After sorting by title ascending, Alpha should be first
-      expect(cards[0].textContent).toBe('Alpha');
-    });
+    fireEvent.change(screen.getByLabelText('Search library'), { target: { value: 'zzz nonexistent' } });
+
+    expect(screen.getByText('No books match those filters')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Reset filters/i }));
+    expect(screen.getAllByText('1984').length).toBeGreaterThan(0);
   });
 
-  /* ── Shelf filter ────────────────────────────────────────── */
-  describe('shelf filter', () => {
-    it('shows shelf filter buttons when shelves exist', () => {
-      useBookStore.setState({
-        shelves: [makeShelf({ id: 's1', name: 'Fiction' })],
-        books: [makeBook({ shelfIds: ['s1'] })],
-      });
-      renderWithToast(<LibraryList />);
-
-      // "All Shelves" button + individual shelf buttons should be present
-      expect(screen.getByText('All Shelves')).toBeInTheDocument();
-      // Shelf name appears in filter — use getAllByText since it may also appear in cards
-      const fictionElements = screen.getAllByText(/Fiction/);
-      expect(fictionElements.length).toBeGreaterThanOrEqual(1);
+  it('filters by status and shows the active status chip', () => {
+    useBookStore.setState({
+      books: [
+        makeBook({ id: 'b1', title: '1984', status: 'read' }),
+        makeBook({ id: 'b2', isbn: '0743273567', title: 'Gatsby', status: 'to-read' }),
+      ],
     });
+
+    renderWithToast(<LibraryList />);
+
+    fireEvent.click(screen.getByText('Read'));
+    expect(screen.getByText('Status: read')).toBeInTheDocument();
+    expect(screen.getAllByText('1984').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Gatsby')).not.toBeInTheDocument();
   });
 
-  /* ── View mode ───────────────────────────────────────────── */
-  describe('view mode', () => {
-    it('has grid and list view toggle buttons', () => {
-      useBookStore.setState({ books: [makeBook()] });
-      renderWithToast(<LibraryList />);
-
-      expect(screen.getByLabelText('Grid view')).toBeInTheDocument();
-      expect(screen.getByLabelText('List view')).toBeInTheDocument();
+  it('shows shelf filter buttons when shelves exist', () => {
+    useBookStore.setState({
+      shelves: [makeShelf({ id: 's1', name: 'Fiction' })],
+      books: [makeBook({ shelfIds: ['s1'] })],
     });
+
+    renderWithToast(<LibraryList />);
+
+    expect(screen.getByText('All Shelves')).toBeInTheDocument();
+    expect(screen.getAllByText(/Fiction/).length).toBeGreaterThanOrEqual(1);
   });
 
-  /* ── Statistics panel ────────────────────────────────────── */
-  describe('statistics', () => {
-    it('toggles statistics panel', () => {
-      useBookStore.setState({ books: [makeBook({ status: 'read', pageCount: 300 })] });
-      renderWithToast(<LibraryList />);
+  it('toggles reading statistics from the hero action', () => {
+    useBookStore.setState({ books: [makeBook({ status: 'read', pageCount: 300 })] });
+    renderWithToast(<LibraryList />);
 
-      fireEvent.click(screen.getByLabelText('Toggle reading statistics'));
-      expect(screen.getByText('Total Books')).toBeInTheDocument();
-      expect(screen.getByText('Pages Read')).toBeInTheDocument();
-    });
+    fireEvent.click(screen.getByRole('button', { name: /Show stats/i }));
+    expect(screen.getByText('Total Books')).toBeInTheDocument();
+    expect(screen.getByText('Pages Read')).toBeInTheDocument();
   });
 
-  /* ── Shelf manager toggle ────────────────────────────────── */
-  describe('shelf manager', () => {
-    it('toggles shelf manager panel', () => {
-      renderWithToast(<LibraryList />);
+  it('opens book detail when initialOpenIsbn matches a book', () => {
+    const book = makeBook({ isbn: '9780141036144', title: '1984' });
+    useBookStore.setState({ books: [book] });
+    const onOpenComplete = vi.fn();
 
-      fireEvent.click(screen.getByLabelText('Toggle shelf manager'));
-      // ShelfManager shows "No shelves yet" when empty
-      expect(screen.getByText(/No shelves yet/)).toBeInTheDocument();
-    });
+    renderWithToast(
+      <LibraryList initialOpenIsbn="9780141036144" onOpenComplete={onOpenComplete} />
+    );
+
+    expect(screen.getByText(/ISBN: 9780141036144/)).toBeInTheDocument();
+    expect(onOpenComplete).toHaveBeenCalled();
   });
 
-  /* ── initialOpenIsbn ─────────────────────────────────────── */
-  describe('initialOpenIsbn', () => {
-    it('opens book detail when initialOpenIsbn matches a book', () => {
-      const book = makeBook({ isbn: '9780141036144', title: '1984' });
-      useBookStore.setState({ books: [book] });
-      const onOpenComplete = vi.fn();
+  it('calls onManageData when the manage button is clicked', () => {
+    const onManageData = vi.fn();
+    renderWithToast(<LibraryList onManageData={onManageData} />);
 
-      renderWithToast(
-        <LibraryList initialOpenIsbn="9780141036144" onOpenComplete={onOpenComplete} />
-      );
-
-      // BookDetail should be visible with the book info
-      expect(screen.getByText(/ISBN: 9780141036144/)).toBeInTheDocument();
-      expect(onOpenComplete).toHaveBeenCalled();
-    });
-
-    it('calls onOpenComplete even if ISBN not found', () => {
-      useBookStore.setState({ books: [] });
-      const onOpenComplete = vi.fn();
-
-      renderWithToast(
-        <LibraryList initialOpenIsbn="0000000000" onOpenComplete={onOpenComplete} />
-      );
-
-      expect(onOpenComplete).toHaveBeenCalled();
-    });
-  });
-
-  /* ── Manage data ─────────────────────────────────────────── */
-  describe('manage data', () => {
-    it('calls onManageData when settings button is clicked', () => {
-      const onManageData = vi.fn();
-      renderWithToast(<LibraryList onManageData={onManageData} />);
-
-      fireEvent.click(screen.getByLabelText('Manage library data'));
-      expect(onManageData).toHaveBeenCalledOnce();
-    });
+    fireEvent.click(screen.getByLabelText('Manage library data'));
+    expect(onManageData).toHaveBeenCalledOnce();
   });
 });

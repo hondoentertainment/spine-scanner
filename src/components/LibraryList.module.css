@@ -1,58 +1,162 @@
 .container {
-  margin-top: 3rem;
+  margin-top: 2rem;
 }
 
-/* ---- Header row ---- */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 1.25rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  background:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.14), transparent 38%),
+    radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.18), transparent 34%),
+    var(--glass-bg);
+}
+
+.heroCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.eyebrow,
+.sectionLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--accent-blue);
+}
+
+.title {
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.heading {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.heroText,
+.resultsSummary,
+.recentHint {
+  color: var(--text-muted);
+}
+
+.heroActions,
+.emptyActions,
+.headerActions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.primaryAction,
+.secondaryAction,
+.clearBtn,
+.manageBtn,
+.iconBtn,
+.filterBtn,
+.sortBtn,
+.viewBtn,
+.recentCard {
+  min-height: 44px;
+}
+
+.primaryAction,
+.secondaryAction,
+.clearBtn,
+.manageBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.8rem 1rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.primaryAction {
+  color: white;
+  background: linear-gradient(135deg, var(--accent-blue), var(--primary));
+  border: 1px solid transparent;
+}
+
+.secondaryAction,
+.clearBtn,
+.manageBtn {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.highlightGrid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.highlightCard {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.highlightCard strong {
+  font-size: 1.1rem;
+}
+
+.highlightCard span:last-child,
+.highlightLabel {
+  color: var(--text-muted);
+}
+
+.highlightLabel {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
 .header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: end;
   margin-bottom: 1rem;
   flex-wrap: wrap;
   gap: 1rem;
 }
 
-.title {
-  font-size: 1.5rem;
-  font-weight: 700;
-}
-
 .headerActions {
-  display: flex;
-  gap: 0.5rem;
+  align-items: center;
 }
 
 .iconBtn {
   padding: 0.75rem;
   display: flex;
   align-items: center;
-}
-
-.iconBtnActive {
-  composes: iconBtn;
+  justify-content: center;
 }
 
 .manageBtn {
-  padding: 0.75rem 1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
   color: var(--accent-blue);
-  background: rgba(56, 189, 248, 0.1);
 }
 
-/* ---- Stats ---- */
 .stats {
   padding: 1.25rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .statItem {
   text-align: center;
-  min-width: 80px;
+  min-width: 92px;
 }
 
 .statValue {
@@ -65,18 +169,73 @@
   color: var(--text-muted);
 }
 
-/* ---- Search ---- */
+.recentSection {
+  margin-bottom: 1.25rem;
+}
+
+.recentHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.recentGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+}
+
+.recentCard {
+  padding: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.recentCover {
+  width: 48px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 0.5rem;
+  flex-shrink: 0;
+}
+
+.recentMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.recentMeta strong,
+.listTitle {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recentMeta span,
+.listAuthor,
+.filterCount {
+  color: var(--text-muted);
+}
+
 .searchRow {
   display: flex;
   gap: 0.75rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   flex-wrap: wrap;
 }
 
 .searchWrap {
   position: relative;
   flex: 1;
-  min-width: 200px;
+  min-width: 220px;
 }
 
 .searchIcon {
@@ -89,17 +248,30 @@
 
 .searchInput {
   width: 100%;
-  padding: 0.75rem 0.75rem 0.75rem 2.5rem;
+  padding: 0.95rem 0.9rem 0.95rem 2.7rem;
   border: none;
   color: var(--text-main);
-  font-size: 0.875rem;
+  font-size: 0.95rem;
   background: var(--glass-bg);
   font-family: inherit;
   outline: none;
 }
 
-/* ---- Filters ---- */
-.filterRow {
+.activeFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+
+.activeFilterChip {
+  padding: 0.45rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-main);
+}
+
+.filterRow,
+.sortRow {
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1rem;
@@ -107,37 +279,17 @@
   align-items: center;
 }
 
-.filterBtn {
-  padding: 0.4rem 0.75rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  border-radius: 9999px;
-}
-
-.filterCount {
-  opacity: 0.7;
-}
-
-/* ---- Sort ---- */
-.sortRow {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
+.filterBtn,
 .sortBtn {
-  padding: 0.35rem 0.65rem;
-  font-size: 0.7rem;
-  font-weight: 600;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   border-radius: 9999px;
 }
 
-/* ---- View toggle ---- */
 .viewToggle {
   display: flex;
   gap: 0.35rem;
@@ -145,13 +297,11 @@
 }
 
 .viewBtn {
-  padding: 0.35rem 0.6rem;
-  border-radius: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 0.65rem;
   display: flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.7rem;
-  font-weight: 600;
+  justify-content: center;
   color: var(--text-muted);
   background: rgba(255, 255, 255, 0.03);
 }
@@ -161,17 +311,26 @@
   background: rgba(56, 189, 248, 0.1);
 }
 
-/* ---- Empty state ---- */
-.empty {
-  padding: 4rem;
+.emptyState {
+  padding: 2rem;
   text-align: center;
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 1rem;
   border: 1px dashed var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
 }
 
-/* ---- Virtualized wrapper ---- */
+.emptyIcon {
+  width: 56px;
+  height: 56px;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--accent-blue);
+}
+
 .virtualContainer {
   position: relative;
   overflow: auto;
@@ -183,7 +342,6 @@
   width: 100%;
 }
 
-/* ---- Grid row (virtualized) ---- */
 .gridRow {
   display: flex;
   gap: 1rem;
@@ -191,12 +349,11 @@
   flex-wrap: nowrap;
 }
 
-/* ---- List view ---- */
 .listRow {
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 0.75rem 1rem;
+  padding: 0.85rem 1rem;
   cursor: pointer;
   border-bottom: 1px solid var(--glass-border);
   transition: background 0.15s;
@@ -222,14 +379,10 @@
 .listTitle {
   font-size: 0.9rem;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .listAuthor {
   font-size: 0.8rem;
-  color: var(--text-muted);
 }
 
 .listStatus {
@@ -238,4 +391,45 @@
   padding: 0.2rem 0.5rem;
   border-radius: 9999px;
   flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    margin-top: 1rem;
+  }
+
+  .hero,
+  .stats,
+  .emptyState {
+    padding: 1rem;
+  }
+
+  .header {
+    align-items: stretch;
+  }
+
+  .viewToggle {
+    margin-left: 0;
+  }
+
+  .recentGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .searchRow {
+    flex-direction: column;
+  }
+
+  .clearBtn,
+  .primaryAction,
+  .secondaryAction,
+  .manageBtn {
+    width: 100%;
+  }
 }

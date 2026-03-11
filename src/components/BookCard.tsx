@@ -5,6 +5,7 @@ import type { BookEntry } from '../types.ts';
 import { Trash2, ExternalLink, BookOpen, CheckCircle, Clock, XCircle, Pencil, X, Save, Tag, Share2 } from 'lucide-react';
 import { generateAmazonLink } from '../utils/amazonLink.ts';
 import { shareBook } from '../utils/shareBook.ts';
+import { getBookCoverSrc } from '../utils/bookPresentation.ts';
 import s from './BookCard.module.css';
 
 interface BookCardProps {
@@ -141,7 +142,7 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
              onKeyDown={(e) => { if (e.key === 'Enter') onClick?.(); }}>
             <div className={s.cardInner}>
                 <img
-                    src={book.coverImg || 'https://via.placeholder.com/128x192?text=No+Cover'}
+                    src={getBookCoverSrc(book.coverImg)}
                     alt={book.title}
                     className={s.coverImg}
                 />

@@ -753,6 +753,39 @@ describe('useScanPipeline — runPipeline', () => {
     expect(pipelineResult?.isbn).toBe('9783161484100');
   });
 
+  it('returns confidence metadata for OCR-driven matches', async () => {
+    const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
+    const runOcr = vi.fn().mockResolvedValue({
+      isbn: '9780141036144',
+      allCandidates: ['9780141036144'],
+      confidence: 92,
+    });
+
+    const { result } = renderHook(() =>
+      useScanPipeline({
+        addLog: vi.fn(),
+        setStatus: vi.fn(),
+        runOcr,
+        tryBarcodeDecode,
+      }),
+    );
+
+    const img = new Image();
+    img.width = 640;
+    img.height = 480;
+    const canvas = document.createElement('canvas');
+
+    let pipelineResult: { isbn: string | null; confidence?: number; confidenceBand?: string; detectionMethod?: string } | null = null;
+    await act(async () => {
+      pipelineResult = await result.current.runPipeline(img, canvas, 'test');
+    });
+
+    expect(pipelineResult?.isbn).toBe('9780141036144');
+    expect(pipelineResult?.confidence).toBe(92);
+    expect(pipelineResult?.confidenceBand).toBe('high');
+    expect(pipelineResult?.detectionMethod).toBe('ocr');
+  });
+
   it('high-confidence ISBN causes early exit on first pass (confidence >= 85)', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
     const runOcr = vi.fn().mockResolvedValue({

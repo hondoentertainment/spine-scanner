@@ -1,4 +1,3 @@
-/* ---- Skip link (accessibility) ---- */
 .skipLink {
   position: absolute;
   left: -9999px;
@@ -17,7 +16,6 @@
   left: 0;
 }
 
-/* ---- Screen reader only (live region for view changes) ---- */
 .srOnly {
   position: absolute;
   width: 1px;
@@ -30,39 +28,36 @@
   border: 0;
 }
 
-/* ---- Reduced motion ---- */
-@media (prefers-reduced-motion: reduce) {
-  .scanView,
-  .lazyFallback {
-    animation: none !important;
-  }
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-bottom: 2rem;
 }
 
-/* ---- Header ---- */
-.header {
+.headerTop {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 3rem;
+  gap: 1rem;
   flex-wrap: wrap;
-  gap: 1.5rem;
 }
 
 .branding {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.9rem;
 }
 
 .logoBox {
   background: linear-gradient(135deg, var(--primary), var(--accent-purple));
-  padding: 0.75rem;
-  border-radius: 1rem;
+  padding: 0.85rem;
+  border-radius: 1.15rem;
   box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.4);
 }
 
 .appTitle {
-  font-size: 1.75rem;
+  font-size: 1.9rem;
   font-weight: 800;
   letter-spacing: -0.025em;
 }
@@ -72,7 +67,8 @@
 }
 
 .subtitle {
-  font-size: 0.875rem;
+  max-width: 48ch;
+  font-size: 0.95rem;
   color: var(--text-muted);
 }
 
@@ -83,23 +79,138 @@
   flex-wrap: wrap;
 }
 
-/* ---- Nav ---- */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 1rem;
+  padding: 1.35rem;
+  background:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.14), transparent 38%),
+    radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.18), transparent 34%),
+    var(--glass-bg);
+}
+
+.heroIntro,
+.heroStats {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.eyebrow,
+.sectionBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: fit-content;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--accent-blue);
+}
+
+.heroTitle {
+  font-size: clamp(1.75rem, 3vw, 2.45rem);
+  line-height: 1.05;
+}
+
+.heroText,
+.scanSubtitle,
+.lazyText {
+  color: var(--text-muted);
+}
+
+.heroActions,
+.scanTips,
+.quickGuide {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.heroActions {
+  grid-template-columns: repeat(auto-fit, minmax(180px, max-content));
+}
+
+.primaryAction,
+.secondaryAction,
+.batchToggle,
+.tipCardButton,
+.navBtn {
+  min-height: 44px;
+}
+
+.primaryAction,
+.secondaryAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  font-weight: 700;
+}
+
+.primaryAction {
+  color: white;
+  background: linear-gradient(135deg, var(--accent-blue), var(--primary));
+}
+
+.secondaryAction,
+.batchToggle {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.statCard,
+.guideCard,
+.tipCard {
+  padding: 1rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.statCard {
+  flex-direction: column;
+}
+
+.statCard strong {
+  font-size: 1.2rem;
+}
+
+.statLabel {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.quickGuide {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.guideCard p,
+.tipCard span,
+.statCard span:last-child {
+  color: var(--text-muted);
+}
+
 .nav {
   display: flex;
   padding: 0.4rem;
   gap: 0.4rem;
+  overflow-x: auto;
 }
 
 .navBtn {
-  padding: 0.6rem 1.2rem;
-  min-height: 44px;
+  padding: 0.7rem 1rem;
   min-width: 44px;
   border-radius: 0.75rem;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 0.9rem;
+  font-weight: 700;
   color: var(--text-muted);
   background: transparent;
   touch-action: manipulation;
@@ -110,43 +221,33 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
-/* ---- Scan view ---- */
 .scanView {
   animation: fadeIn 0.5s ease-out;
 }
 
 .scanHeader {
-  text-align: center;
-  margin-bottom: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
 }
 
 .scanTitle {
-  font-size: 1.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.scanSubtitle {
-  color: var(--text-muted);
-  margin-bottom: 0.75rem;
+  font-size: 1.7rem;
+  margin: 0.35rem 0 0.45rem;
 }
 
 .batchToggle {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  font-size: 0.85rem;
-  font-weight: 600;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 700;
   border-radius: 9999px;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.batchToggle:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
 }
 
 .batchToggleActive {
@@ -155,7 +256,19 @@
   color: white;
 }
 
-/* ---- Alerts ---- */
+.scanTips {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 1rem;
+}
+
+.tipCard {
+  flex-direction: column;
+}
+
+.tipCardButton {
+  text-align: left;
+}
+
 .alertError {
   margin-top: 1.5rem;
   padding: 1rem;
@@ -167,32 +280,41 @@
   background: rgba(248, 113, 113, 0.05);
 }
 
-.alertSuccess {
-  margin-top: 1.5rem;
-  padding: 1rem;
-  color: #4ade80;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  border: 1px solid rgba(74, 222, 128, 0.2);
-  background: rgba(74, 222, 128, 0.05);
-  animation: slideUp 0.3s ease-out;
-}
-
 .lazyFallback {
   min-height: 320px;
   border-radius: 1rem;
   background: rgba(255, 255, 255, 0.03);
   border: 1px dashed var(--glass-border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
 }
 
-.lazyText {
-  font-size: 0.9rem;
-  font-weight: 600;
+.skeletonBlock {
+  width: 100%;
+  max-width: 960px;
+  height: 180px;
+  border-radius: 1rem;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.1), rgba(255,255,255,0.04));
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+.skeletonGrid {
+  width: 100%;
+  max-width: 960px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.skeletonGrid span {
+  height: 92px;
+  border-radius: 1rem;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.1), rgba(255,255,255,0.04));
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
 }
 
 @keyframes fadeIn {
@@ -200,7 +322,57 @@
   to { opacity: 1; }
 }
 
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scanView,
+  .lazyFallback,
+  .skeletonBlock,
+  .skeletonGrid span {
+    animation: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .hero,
+  .quickGuide,
+  .scanTips {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .hero,
+  .guideCard,
+  .tipCard {
+    padding: 1rem;
+  }
+
+  .heroActions {
+    grid-template-columns: 1fr;
+  }
+
+  .headerTop,
+  .scanHeader {
+    align-items: stretch;
+  }
+
+  .nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .navBtn,
+  .primaryAction,
+  .secondaryAction,
+  .batchToggle {
+    width: 100%;
+  }
+
+  .skeletonGrid {
+    grid-template-columns: 1fr;
+  }
 }

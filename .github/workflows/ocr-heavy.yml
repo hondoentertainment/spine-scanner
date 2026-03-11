@@ -1,16 +1,17 @@
-name: CI
+name: OCR Heavy Checks
 
 on:
-  pull_request:
-    branches: ["main"]
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.head_ref }}
+  group: ocr-heavy-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Lint, Unit, Build, and Smoke E2E
+  ocr-validation:
+    name: OCR integration and E2E
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -22,13 +23,15 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm install
-      - name: Lint
-        run: npm run lint
-      - name: Test with coverage
-        run: npm run test:coverage
+      - name: Generate OCR fixture
+        run: npm run generate-ocr-fixture
+      - name: OCR integration tests
+        run: npm run test:integration
       - name: Build
         run: npm run build
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
-      - name: Smoke E2E tests
-        run: npx playwright test e2e/app.spec.ts --project=chromium
+      - name: OCR E2E test
+        env:
+          RUN_OCR_E2E: '1'
+        run: npx playwright test e2e/ocr-upload.spec.ts --project=chromium

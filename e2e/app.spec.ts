@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { uiContracts } from '../src/testing/uiContracts';
 
 test.describe('SpineScanner App', () => {
   test.beforeEach(async ({ page }) => {
@@ -7,9 +8,9 @@ test.describe('SpineScanner App', () => {
 
   test('renders the app title and navigation', async ({ page }) => {
     await expect(page.locator('h1')).toContainText('SpineScanner');
-    await expect(page.getByRole('tab', { name: /scanner/i })).toBeVisible();
-    await expect(page.getByRole('tab', { name: /library/i })).toBeVisible();
-    await expect(page.getByRole('tab', { name: /data/i })).toBeVisible();
+    await expect(page.getByTestId(uiContracts.navTabTestId('scan'))).toBeVisible();
+    await expect(page.getByTestId(uiContracts.navTabTestId('library'))).toBeVisible();
+    await expect(page.getByTestId(uiContracts.navTabTestId('data'))).toBeVisible();
   });
 
   test('scanner view is shown by default', async ({ page }) => {
@@ -17,17 +18,17 @@ test.describe('SpineScanner App', () => {
   });
 
   test('can navigate to Library view', async ({ page }) => {
-    await page.getByRole('tab', { name: /library/i }).click();
+    await page.getByTestId(uiContracts.navTabTestId('library')).click();
     await expect(page.getByRole('heading', { name: /Your Library/ })).toBeVisible();
   });
 
   test('can navigate to Data view', async ({ page }) => {
-    await page.getByRole('tab', { name: /data/i }).click();
+    await page.getByTestId(uiContracts.navTabTestId('data')).click();
     await expect(page.getByText('Manage Library Data')).toBeVisible();
   });
 
   test('library shows empty state when no books', async ({ page }) => {
-    await page.getByRole('tab', { name: /library/i }).click();
+    await page.getByTestId(uiContracts.navTabTestId('library')).click();
     await expect(page.getByText(/your library is empty/i)).toBeVisible();
   });
 
@@ -50,7 +51,7 @@ test.describe('SpineScanner App', () => {
   });
 
   test('manual ISBN input is accessible', async ({ page }) => {
-    const manualBtn = page.getByRole('button', { name: /type isbn/i }).first();
+    const manualBtn = page.getByTestId(uiContracts.scannerTypeIsbnTestId).first();
     await expect(manualBtn).toBeVisible();
     await manualBtn.click();
 
@@ -58,7 +59,7 @@ test.describe('SpineScanner App', () => {
   });
 
   test('search input in library works', async ({ page }) => {
-    await page.getByRole('tab', { name: /library/i }).click();
+    await page.getByTestId(uiContracts.navTabTestId('library')).click();
     const search = page.getByRole('textbox', { name: /search library/i });
     await expect(search).toBeVisible();
     await search.fill('Test');
@@ -66,22 +67,22 @@ test.describe('SpineScanner App', () => {
   });
 
   test('data export section is visible', async ({ page }) => {
-    await page.getByRole('tab', { name: /data/i }).click();
+    await page.getByTestId(uiContracts.navTabTestId('data')).click();
     await expect(page.getByText('Export Library')).toBeVisible();
     await expect(page.getByText('Import from File')).toBeVisible();
     await expect(page.getByText('Import from Web')).toBeVisible();
   });
 
   test('library status filters are visible', async ({ page }) => {
-    await page.getByRole('tab', { name: /library/i }).click();
+    await page.getByTestId(uiContracts.navTabTestId('library')).click();
     await expect(page.getByRole('button', { name: /all/i }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: /to read/i })).toBeVisible();
-    // Filter button shows "Reading (0)" — avoid matching "Toggle reading statistics"
+    // Filter button shows "Reading (0)" â€” avoid matching "Toggle reading statistics"
     await expect(page.getByRole('button', { name: /^Reading \(\d+\)$/ })).toBeVisible();
   });
 
   test('can switch between grid and list view', async ({ page }) => {
-    await page.getByRole('tab', { name: /library/i }).click();
+    await page.getByTestId(uiContracts.navTabTestId('library')).click();
     const listBtn = page.getByRole('button', { name: /list view/i });
     const gridBtn = page.getByRole('button', { name: /grid view/i });
     await expect(gridBtn).toBeVisible();
@@ -93,7 +94,7 @@ test.describe('SpineScanner App', () => {
   });
 
   test('shelf manager toggles', async ({ page }) => {
-    await page.getByRole('tab', { name: /library/i }).click();
+    await page.getByTestId(uiContracts.navTabTestId('library')).click();
     const shelfToggle = page.getByRole('button', { name: /toggle shelf manager/i });
     await shelfToggle.click();
     await expect(page.getByText('Shelves', { exact: true })).toBeVisible();
@@ -101,14 +102,14 @@ test.describe('SpineScanner App', () => {
   });
 
   test('data management can be closed', async ({ page }) => {
-    await page.getByRole('tab', { name: /data/i }).click();
+    await page.getByTestId(uiContracts.navTabTestId('data')).click();
     await expect(page.getByText('Manage Library Data')).toBeVisible();
     await page.getByRole('button', { name: /close data management/i }).click();
     // Should navigate back to library
     await expect(page.getByRole('heading', { name: /Your Library/ })).toBeVisible();
   });
 
-  test('full ISBN scan flow: manual entry → add book to library', async ({ page, context, browserName }) => {
+  test('full ISBN scan flow: manual entry â†’ add book to library', async ({ page, context, browserName }) => {
     test.skip(browserName === 'webkit', 'Manual-entry add flow flaky on Safari (mock/add timing)');
     const testIsbn = '9780141036144';
     const mockTitle = 'The Great Gatsby';
@@ -121,15 +122,15 @@ test.describe('SpineScanner App', () => {
     await context.route(/openlibrary\.org\/api\/books/, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) }));
 
     // Open manual ISBN entry
-    const manualBtn = page.getByRole('button', { name: /type isbn/i }).first();
+    const manualBtn = page.getByTestId(uiContracts.scannerTypeIsbnTestId).first();
     await manualBtn.click();
     await expect(page.getByRole('textbox', { name: /enter isbn/i })).toBeVisible();
 
     // Enter ISBN and submit; wait for API request
-    const input = page.getByRole('textbox', { name: /enter isbn/i });
+    const input = page.getByTestId(uiContracts.scannerManualInputTestId);
     await input.fill(testIsbn);
     const responsePromise = page.waitForResponse(/googleapis\.com\/books\/v1\/volumes/, { timeout: 5000 });
-    await page.getByRole('button', { name: /submit isbn/i }).click();
+    await page.getByTestId(uiContracts.scannerManualSubmitTestId).click();
     await responsePromise;
 
     // App navigates to library; book title visible in detail modal or list

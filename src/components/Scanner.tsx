@@ -7,18 +7,43 @@ import { useToast } from './Toast.tsx';
 import { useOcrEngine } from '../hooks/useOcrEngine.ts';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner.ts';
 import { useFrameAveraging } from '../hooks/useFrameAveraging.ts';
-import { useScanPipeline, assessVideoFrameQuality, CROP_MEDIUM, type OcrLanguage, type ScanProgress, type RunPipelineOptions } from '../hooks/useScanPipeline.ts';
+import { useScanPipeline, assessVideoFrameQuality, CROP_MEDIUM, type OcrLanguage, type ScanProgress, type RunPipelineOptions, type ScanConfidenceBand, type ScanDetectionMethod } from '../hooks/useScanPipeline.ts';
 import { buildErrorDiagnostics, formatDiagnostics } from '../utils/ocrDiagnostics.ts';
 import type { LiveScanTelemetry } from '../hooks/useBarcodeScanner.ts';
 import { hapticSuccess, hapticFailure, hapticHoldSteady } from '../utils/haptics.ts';
 import DebugPanel from './DebugPanel.tsx';
 import s from './Scanner.module.css';
+import { uiContracts } from '../testing/uiContracts.ts';
 
 /* ================================================================
  *  Types & Constants
  * ================================================================ */
 
 export type ScanMode = 'auto' | 'barcode' | 'ocr';
+
+type ScanResultMeta = {
+    detectionMethod?: ScanDetectionMethod;
+    confidence?: number;
+    confidenceBand?: ScanConfidenceBand;
+};
+
+const getScanResultSummary = (meta: ScanResultMeta): { title: string; detail: string } => {
+    if (meta.detectionMethod === 'barcode') {
+        return { title: 'Barcode verified', detail: 'Fastest path: barcode detection confirmed the ISBN.' };
+    }
+
+    if (meta.detectionMethod === 'ocr-multilang') {
+        const confidenceLabel = meta.confidence != null ? `${Math.round(meta.confidence)}% confidence` : 'confidence unavailable';
+        return { title: 'Multi-language OCR match', detail: `Fallback OCR found a match with ${confidenceLabel}.` };
+    }
+
+    if (meta.confidence != null) {
+        const bandLabel = meta.confidenceBand === 'high' ? 'High' : meta.confidenceBand === 'medium' ? 'Medium' : 'Low';
+        return { title: `OCR confidence: ${bandLabel}`, detail: `${Math.round(meta.confidence)}% confidence from OCR analysis.` };
+    }
+
+    return { title: 'OCR match found', detail: 'OCR found a likely ISBN match.' };
+};
 
 interface ScannerProps {
     onScan: (isbn: string, options?: { allowReview?: boolean; source?: 'scan' | 'manual' | 'ocr' | 'barcode' | 'suggestion' }) => Promise<void> | void;
@@ -73,6 +98,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const [zoomRange, setZoomRange] = useState<{ min: number; max: number; step: number } | null>(null);
     const [scanMode, setScanMode] = useState<ScanMode>('auto');
     const [submitting, setSubmitting] = useState(false);
+    const [lastScanMeta, setLastScanMeta] = useState<ScanResultMeta | null>(null);
 
     const abortControllerRef = useRef<AbortController | null>(null);
     useEffect(() => {
@@ -195,7 +221,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
         if (!canvas) { addLog('Error: Missing canvas'); return; }
         if (!video || video.readyState < 2) {
             addLog('Error: Video not ready');
-            setStatus('Camera starting — one moment...');
+            setStatus('Camera starting ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â one moment...');
             return;
         }
 
@@ -221,6 +247,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
         setStatus('Looking for ISBN...');
         setIsbnSuggestions([]);
         setRepairedMap({});
+        setLastScanMeta(null);
 
         try {
             const img = new Image();
@@ -241,6 +268,11 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
             }
 
             if (result.isbn) {
+                setLastScanMeta({
+                    detectionMethod: result.detectionMethod,
+                    confidence: result.confidence,
+                    confidenceBand: result.confidenceBand,
+                });
                 hapticSuccess();
                 setScanSuccessFlash(true);
                 setTimeout(() => setScanSuccessFlash(false), 800);
@@ -255,16 +287,18 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                     setShowManual(false);
                 }
             } else if (result.suggestions.length > 0 || (result.repairedMap && Object.keys(result.repairedMap).length > 0)) {
+                setLastScanMeta(null);
                 setIsbnSuggestions(result.suggestions);
                 setRepairedMap(result.repairedMap ?? {});
                 setShowManual(true);
                 setStatus(autoScan
                     ? 'Searching... adjust position'
-                    : 'We found something — tap a match below');
+                    : 'We found something ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tap a match below');
             } else {
+                setLastScanMeta(null);
                 hapticFailure();
                 if (!autoScan) {
-                    setStatus('Not found — try moving closer or type the ISBN');
+                    setStatus('Not found ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try moving closer or type the ISBN');
                     setShowManual(true);
                     const diag = result.diagnostics;
                     if (diag && (diag.skipReason || diag.quality?.isBlurry || diag.quality?.isDark)) {
@@ -279,19 +313,20 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 }
             }
         } catch (err: unknown) {
+            setLastScanMeta(null);
             hapticFailure();
             const msg = err instanceof Error ? err.message : String(err);
             addLog(`SCAN ERROR: ${msg}`);
             const isOcrWorkerError = /timeout|tesseract|worker|module|fallback|one-shot/i.test(msg);
             setStatus(isOcrWorkerError
-                ? 'Scan engine busy — upload a photo or type ISBN'
-                : 'Scan didn\'t work — try again or type ISBN');
+                ? 'Scan engine busy ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â upload a photo or type ISBN'
+                : 'Scan didn\'t work ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try again or type ISBN');
             setShowManual(true);
             setShowDebug(true);
             toastDetail({
                 message: isOcrWorkerError
-                    ? 'Scanner busy — upload a photo or enter ISBN'
-                    : 'Scan failed — try a photo upload or enter ISBN',
+                    ? 'Scanner busy ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â upload a photo or enter ISBN'
+                    : 'Scan failed ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try a photo upload or enter ISBN',
                 type: 'error',
                 details: buildErrorDiagnostics(msg, debugLogs),
             });
@@ -313,6 +348,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
         setStatus('Scanning your photo...');
         setIsbnSuggestions([]);
         setRepairedMap({});
+        setLastScanMeta(null);
 
         try {
             const imageSrc = await new Promise<string>((resolve, reject) => {
@@ -343,6 +379,11 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
             }
 
             if (result.isbn) {
+                setLastScanMeta({
+                    detectionMethod: result.detectionMethod,
+                    confidence: result.confidence,
+                    confidenceBand: result.confidenceBand,
+                });
                 hapticSuccess();
                 setScanSuccessFlash(true);
                 setTimeout(() => setScanSuccessFlash(false), 800);
@@ -352,13 +393,15 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                     source: scanMode === 'ocr' ? 'ocr' : scanMode === 'barcode' ? 'barcode' : 'scan',
                 });
             } else if (result.suggestions.length > 0 || (result.repairedMap && Object.keys(result.repairedMap).length > 0)) {
+                setLastScanMeta(null);
                 setIsbnSuggestions(result.suggestions);
                 setRepairedMap(result.repairedMap ?? {});
                 setShowManual(true);
-                setStatus('We found something — tap a match below');
+                setStatus('We found something ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tap a match below');
             } else {
+                setLastScanMeta(null);
                 hapticFailure();
-                setStatus('Not found — try a clearer photo or type ISBN');
+                setStatus('Not found ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try a clearer photo or type ISBN');
                 setShowManual(true);
                 const diag = result.diagnostics;
                 if (diag && (diag.skipReason || diag.quality?.isBlurry || diag.quality?.isDark)) {
@@ -370,19 +413,20 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 }
             }
         } catch (err: unknown) {
+            setLastScanMeta(null);
             hapticFailure();
             const msg = err instanceof Error ? err.message : String(err);
             addLog(`PHOTO SCAN ERROR: ${msg}`);
             const isOcrWorkerError = /timeout|tesseract|worker|module|fallback|one-shot/i.test(msg);
             setStatus(isOcrWorkerError
-                ? 'Scanner busy — try another photo or type ISBN'
-                : 'Didn\'t work — try a different photo or type ISBN');
+                ? 'Scanner busy ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try another photo or type ISBN'
+                : 'Didn\'t work ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try a different photo or type ISBN');
             setShowManual(true);
             setShowDebug(true);
             toastDetail({
                 message: isOcrWorkerError
-                    ? 'Scanner busy — try another photo or enter ISBN'
-                    : 'Scan failed — try another photo or enter ISBN',
+                    ? 'Scanner busy ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try another photo or enter ISBN'
+                    : 'Scan failed ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try another photo or enter ISBN',
                 type: 'error',
                 details: buildErrorDiagnostics(msg, debugLogs),
             });
@@ -418,6 +462,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
 
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        setLastScanMeta(null);
         const cleanIsbn = manualIsbn.toUpperCase().replace(/[^0-9X]/g, '');
         if (cleanIsbn.length !== 10 && cleanIsbn.length !== 13) {
             toast('Enter a 10 or 13 digit ISBN.', 'warning');
@@ -428,7 +473,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
             if (nearMisses.length > 0) {
                 setIsbnSuggestions(nearMisses);
                 setRepairedMap(nearMisses.reduce((acc, m) => ({ ...acc, [m]: cleanIsbn }), {}));
-                setStatus('That doesn\'t look right — did you mean one of these?');
+                setStatus('That doesn\'t look right ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â did you mean one of these?');
                 toast(`Did you mean ${nearMisses[0]}? Tap to use it.`, 'info');
                 return;
             }
@@ -514,12 +559,14 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     }, [zoomRange]);
 
     const getSimpleHint = (): string => {
-        if (liveQualityHint === 'ready') return 'Ready — tap Scan';
+        if (liveQualityHint === 'ready') return 'Ready ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tap Scan';
         if (liveQualityHint === 'blurry') return 'Hold steady...';
-        if (liveQualityHint === 'dark') return hasTorch && !torchOn ? 'Too dark — tap flashlight' : 'Need more light';
-        if (liveQualityHint === 'blurry-dark') return hasTorch && !torchOn ? 'Hold steady — tap flashlight' : 'Hold steady, need more light';
+        if (liveQualityHint === 'dark') return hasTorch && !torchOn ? 'Too dark ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tap flashlight' : 'Need more light';
+        if (liveQualityHint === 'blurry-dark') return hasTorch && !torchOn ? 'Hold steady ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tap flashlight' : 'Hold steady, need more light';
         return 'Center the barcode in the frame';
     };
+
+    const scanResultSummary = lastScanMeta ? getScanResultSummary(lastScanMeta) : null;
 
     const getProgressPercent = (): number => {
         if (!scanProgress || scanProgress.totalPasses == null || scanProgress.totalPasses <= 0) return 0;
@@ -528,7 +575,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
         return Math.min(100, Math.max(0, ((completedPasses + withinPass) / scanProgress.totalPasses) * 100));
     };
 
-    /* ── Render ────────────────────────────────────────────────── */
+    /* ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Render ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ */
 
     const systemStatusLabel = cameraError ? 'Camera Unavailable' : !cameraReady ? 'Initializing' : 'System Ready';
     const systemDotClass = cameraError ? s.systemDotError : !cameraReady ? s.systemDotWarning : '';
@@ -536,7 +583,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     return (
         <div ref={containerRef} className={s.scannerLayout} tabIndex={0} aria-label="Book scanner: press Space or Enter to capture" aria-busy={processing || isScanning}>
 
-            {/* ═══════ LEFT PANEL: Controls ═══════ */}
+            {/* ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â LEFT PANEL: Controls ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â */}
             <div className={s.controlsPanel}>
                 <div className={s.systemStatus} role="status" aria-live="polite">
                     <span className={`${s.systemDot} ${systemDotClass}`} />
@@ -583,6 +630,13 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                     <p className={s.statusText}>{status}</p>
                 </div>
 
+                {scanResultSummary && !processing && (
+                    <div className={s.scanHealthCard} aria-live="polite">
+                        <p className={s.scanHealthTitle}>{scanResultSummary.title}</p>
+                        <p className={s.scanHealthText}>{scanResultSummary.detail}</p>
+                    </div>
+                )}
+
                 {processing && scanProgress && (scanProgress.phase === 'ocr' || scanProgress.phase === 'ocr-multilang') && scanProgress.totalPasses != null && scanProgress.totalPasses > 0 && (
                     <div className={s.progressContainer} role="progressbar" aria-valuenow={Math.round(getProgressPercent())} aria-valuemin={0} aria-valuemax={100} aria-label="Scan progress">
                         <div className={s.progressBarTrack}>
@@ -602,7 +656,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 )}
 
                 {/* Hidden file inputs */}
-                <input ref={fileInputRef} type="file" accept="image/*"
+                <input ref={fileInputRef} type="file" accept="image/*" data-testid={uiContracts.scannerFileInputTestId}
                     onChange={handleFileUpload} style={{ display: 'none' }} aria-hidden="true" />
                 <input ref={takePhotoInputRef} type="file" accept="image/*" capture="environment"
                     onChange={handleFileUpload} style={{ display: 'none' }} aria-hidden="true" />
@@ -632,17 +686,17 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                                 Add by photo
                             </button>
                         )}
-                        <button onClick={() => setShowManual(true)} className={s.secondaryBtn}>
+                        <button onClick={() => setShowManual(true)} data-testid={uiContracts.scannerTypeIsbnTestId} className={s.secondaryBtn}>
                             <span className={s.secondaryBtnIcon}><Edit3 size={16} /></span>
                             Type ISBN manually
                         </button>
                         {showManual && (
                             <form onSubmit={handleManualSubmit} className={s.manualForm}>
-                                <input type="text" inputMode="text" pattern="[0-9Xx\-]{10,17}" placeholder="Enter ISBN..." value={manualIsbn}
+                                <input type="text" inputMode="text" pattern="[0-9Xx\-]{10,17}" placeholder="Enter ISBN..." value={manualIsbn} data-testid={uiContracts.scannerManualInputTestId}
                                     onChange={(e) => setManualIsbn(e.target.value)} aria-label="Enter ISBN manually"
                                     className={s.manualInput} autoFocus />
                                 <button type="submit" disabled={manualIsbn.length < 5 || isScanning || submitting}
-                                    aria-label="Submit ISBN" className={s.submitBtn}>
+                                    aria-label="Submit ISBN" data-testid={uiContracts.scannerManualSubmitTestId} className={s.submitBtn}>
                                     {isScanning || submitting ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
                                 </button>
                             </form>
@@ -651,11 +705,11 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 ) : showManual ? (
                     <div className={s.manualSection}>
                         <form onSubmit={handleManualSubmit} className={s.manualForm}>
-                            <input type="text" inputMode="text" pattern="[0-9Xx\-]{10,17}" placeholder="Type ISBN number..." value={manualIsbn}
+                            <input type="text" inputMode="text" pattern="[0-9Xx\-]{10,17}" placeholder="Type ISBN number..." value={manualIsbn} data-testid={uiContracts.scannerManualInputTestId}
                                 onChange={(e) => setManualIsbn(e.target.value)} aria-label="Enter ISBN manually"
                                 className={s.manualInput} autoFocus />
                             <button type="submit" disabled={manualIsbn.length < 5 || isScanning || submitting}
-                                aria-label="Submit ISBN" className={s.submitBtn}>
+                                aria-label="Submit ISBN" data-testid={uiContracts.scannerManualSubmitTestId} className={s.submitBtn}>
                                 {isScanning || submitting ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
                             </button>
                         </form>
@@ -668,6 +722,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                         <button onClick={capture} disabled={processing || submitting || isScanning || !cameraReady || liveQualityHint === 'blurry' || liveQualityHint === 'blurry-dark'}
                             aria-label={processing ? 'Scanning in progress' : (liveQualityHint === 'blurry' || liveQualityHint === 'blurry-dark') ? 'Hold steady to scan' : 'Scan book'}
                             aria-describedby="status-text"
+                            data-testid={uiContracts.scannerCaptureTestId}
                             className={s.primaryBtn}>
                             {processing ? <Loader2 className="animate-spin" size={24} /> : (
                                 <span className={s.ctaIcon}><Camera size={24} /></span>
@@ -690,6 +745,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                                 Choose from gallery
                             </button>
                             <button onClick={() => { hapticHoldSteady(); setShowManual(true); }}
+                                data-testid={uiContracts.scannerTypeIsbnTestId}
                                 className={s.secondaryBtn}>
                                 <span className={s.secondaryBtnIcon}><Edit3 size={16} /></span>
                                 Type ISBN
@@ -703,7 +759,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                         <p className={s.suggestionHeader}>
                             {Object.keys(repairedMap).length > 0
                                 ? 'Did you mean one of these?'
-                                : 'Possible matches — tap to add:'}
+                                : 'Possible matches ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tap to add:'}
                         </p>
                         <div className={s.suggestionRow}>
                         {Object.entries(repairedMap).map(([repaired, original], idx) => (
@@ -745,7 +801,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 </div>
             </div>
 
-            {/* ═══════ RIGHT PANEL: Camera Feed ═══════ */}
+            {/* ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â RIGHT PANEL: Camera Feed ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â */}
             <div ref={cameraPanelRef} className={s.cameraPanel}>
                 <Webcam
                 audio={false}
@@ -755,7 +811,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 onUserMedia={(stream) => {
                     setCameraError(null);
                     setCameraReady(true);
-                    setStatus('Ready — point at a barcode or ISBN');
+                    setStatus('Ready ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â point at a barcode or ISBN');
                     try {
                         const track = stream.getVideoTracks()[0];
                         if (track) {
@@ -787,7 +843,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 onUserMediaError={(err) => {
                     const msg = err instanceof Error ? err.message : 'Camera access denied';
                     setCameraError(`Can't access camera: ${msg}`);
-                    setStatus('No camera — upload a photo or type the ISBN');
+                    setStatus('No camera ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â upload a photo or type the ISBN');
                     addLog(`Camera error: ${msg}`);
                 }}
                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
@@ -798,7 +854,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 {!cameraReady && !cameraError && (
                     <div className={s.cameraLoadingOverlay} aria-hidden="true">
                         <div className={s.cameraLoadingSkeleton} />
-                        <p className={s.cameraLoadingText}>Starting camera…</p>
+                        <p className={s.cameraLoadingText}>Starting cameraÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦</p>
                     </div>
                 )}
 
