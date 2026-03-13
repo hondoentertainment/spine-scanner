@@ -12,6 +12,7 @@ import { useOnlineStatus } from './hooks/useOnlineStatus.ts';
 import { useTheme } from './hooks/useTheme.ts';
 import { useToast } from './components/Toast.tsx';
 import { mergeSync, pushBooks } from './lib/syncBooks.ts';
+import { formatRelativeTime } from './utils/formatRelativeTime.ts';
 import type { BookEntry } from './types.ts';
 import { BookOpen, Library, Scan, AlertCircle, Database, Layers, User, Sparkles, Cloud, BookMarked, ChevronRight } from 'lucide-react';
 import { generateAmazonLink } from './utils/amazonLink.ts';
@@ -44,7 +45,10 @@ function App() {
   const { addBook, books, setBooks, shelves, setShelves } = useBookStore();
   const { user, recoveryMode, initialize: initAuth } = useAuthStore();
   const { preferences, loadFromCloud, saveToCloud, updatePreferences } = useProfileStore();
-  const { pendingChanges, markDirty, markSynced, flushing, setFlushing } = useSyncQueue();
+  const { pendingChanges, markDirty, markSynced, markSyncFailed, flushing, setFlushing } = useSyncQueue();
+  const lastSyncFailedAt = useSyncQueue((s) => s.lastSyncFailedAt);
+  const lastSyncedAt = useSyncQueue((s) => s.lastSyncedAt);
+  const syncFailedRecently = lastSyncFailedAt != null && Date.now() - lastSyncFailedAt < 90_000;
   const { online, justReconnected, clearReconnected } = useOnlineStatus();
   const { theme, toggleTheme } = useTheme();
   const { toast, confirm } = useToast();
@@ -57,6 +61,7 @@ function App() {
   const initialSyncDone = useRef(false);
   const prevBooksRef = useRef(books);
   const prevShelvesRef = useRef(shelves);
+  const batchBooksAddedRef = useRef(0);
 
   useEffect(() => {
     initAuth();
@@ -154,8 +159,8 @@ function App() {
     prevShelvesRef.current = shelves;
   }, [books, shelves, user, markDirty]);
 
-  const flushQueue = useCallback(async () => {
-    if (!user || flushing) return;
+  const flushQueue = useCallback(async (): Promise<boolean> => {
+    if (!user || flushing) return false;
     setFlushing(true);
     try {
       const merged = await mergeSync(user.id, books, shelves);
@@ -165,23 +170,28 @@ function App() {
         markSynced();
         prevBooksRef.current = merged.books;
         prevShelvesRef.current = merged.shelves;
+        return true;
       }
     } catch (err) {
       console.error('[sync] Flush failed:', err);
+      markSyncFailed();
       toast('Sync failed. Will retry when online.', 'error');
     } finally {
       setFlushing(false);
     }
-  }, [user, flushing, books, shelves, setBooks, setShelves, markSynced, setFlushing, toast]);
+    return false;
+  }, [user, flushing, books, shelves, setBooks, setShelves, markSynced, markSyncFailed, setFlushing, toast]);
 
   useEffect(() => {
-    if (justReconnected && user && pendingChanges > 0 && !flushing) {
-      clearReconnected();
-      void flushQueue();
-    } else if (justReconnected) {
-      clearReconnected();
+    if (!justReconnected) return;
+    const wasReconnect = true;
+    clearReconnected();
+    if (user && pendingChanges > 0 && !flushing) {
+      void flushQueue().then((ok) => {
+        if (ok && wasReconnect) toast('Back online – changes synced', 'success');
+      });
     }
-  }, [justReconnected, user, pendingChanges, flushing, clearReconnected, flushQueue]);
+  }, [justReconnected, user, pendingChanges, flushing, clearReconnected, flushQueue, toast]);
 
   const handleSyncNow = useCallback(async () => {
     if (!user) return;
@@ -215,12 +225,22 @@ function App() {
     setView('library');
   }, [addBook, books, user, online, toast, track]);
 
+  useEffect(() => {
+    if (!batchMode) batchBooksAddedRef.current = 0;
+  }, [batchMode]);
+
   const addBookAndOpen = useCallback((newBook: BookEntry, successMessage: string, trackMethod: string, forceOpen = false) => {
     addBook(newBook);
     track('book_added', { method: trackMethod, isbn: newBook.isbn });
-    toast(batchMode && !forceOpen ? 'Added. Ready for the next book.' : successMessage, 'success');
-
-    if (!batchMode || forceOpen) {
+    const viewLibrary = () => { setOpenBookIsbn(newBook.isbn); setView('library'); };
+    if (batchMode && !forceOpen) {
+      toast('Added. Ready for the next book.', 'success', 4000, undefined, { label: 'View in Library', onClick: viewLibrary });
+      batchBooksAddedRef.current += 1;
+      if (batchBooksAddedRef.current === 1) {
+        toast("Batch mode: you'll stay on scanner. Tap Library when done.", 'info', 4500);
+      }
+    } else {
+      toast(successMessage, 'success');
       setOpenBookIsbn(newBook.isbn);
       setView('library');
     }
@@ -332,7 +352,7 @@ function App() {
     const labels: Record<string, string> = {
       scan: 'Scanner view',
       library: 'Library view',
-      data: 'Data management view',
+      data: 'Import and export view',
       profile: 'Profile view',
     };
     setView(newView);
@@ -342,7 +362,7 @@ function App() {
   const navItems: Array<{ key: 'scan' | 'library' | 'data' | 'profile'; label: string; icon: ReactNode }> = [
     { key: 'scan', label: 'Add Books', icon: <Scan size={18} /> },
     { key: 'library', label: 'Library', icon: <Library size={18} /> },
-    { key: 'data', label: 'Data', icon: <Database size={18} /> },
+    { key: 'data', label: 'Import & Export', icon: <Database size={18} /> },
     { key: 'profile', label: 'Profile', icon: <User size={18} /> },
   ];
 
@@ -373,9 +393,10 @@ function App() {
             <AuthPanel
               onSyncNow={handleSyncNow}
               syncing={flushing}
-              lastSynced={useSyncQueue.getState().lastSyncedAt}
+              lastSyncedAt={lastSyncedAt}
               online={online}
               pendingChanges={pendingChanges}
+              syncFailedRecently={syncFailedRecently}
               onOpenProfile={() => handleViewChange('profile')}
             />
           </div>
@@ -412,7 +433,7 @@ function App() {
             <div className={`glass ${styles.statCard}`}>
               <span className={styles.statLabel}>Sync status</span>
               <strong>{online ? 'Online' : 'Offline'}</strong>
-              <span>{pendingChanges > 0 ? `${pendingChanges} change${pendingChanges === 1 ? '' : 's'} waiting to sync` : 'Everything is up to date.'}</span>
+              <span>{pendingChanges > 0 ? `${pendingChanges} change${pendingChanges === 1 ? '' : 's'} to sync` : lastSyncedAt ? `Synced ${formatRelativeTime(lastSyncedAt)}` : 'Everything is up to date.'}</span>
             </div>
           </div>
         </section>
@@ -509,7 +530,16 @@ function App() {
                   </button>
                 </div>
 
-                <Scanner onScan={handleScan} onPhotoCapture={handlePhotoCapture} isScanning={loading} batchMode={batchMode} />
+                <Scanner
+                  onScan={handleScan}
+                  onPhotoCapture={handlePhotoCapture}
+                  isScanning={loading}
+                  batchMode={batchMode}
+                  onViewLibrary={(isbn) => {
+                    if (isbn) setOpenBookIsbn(isbn);
+                    handleViewChange('library');
+                  }}
+                />
 
                 {error && (
                   <div className={`glass ${styles.alertError}`}>

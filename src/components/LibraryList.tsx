@@ -25,7 +25,7 @@ interface LibraryListProps {
 }
 
 const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning, initialOpenIsbn, onOpenComplete }) => {
-    const { books, shelves } = useBookStore();
+    const { books, shelves, updateBookStatus } = useBookStore();
     const { preferences, updatePreferences } = useProfileStore();
     const [searchTerm, setSearchTerm] = useState('');
     const sortBy = preferences.librarySortBy;
@@ -150,13 +150,6 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
         { value: 'dnf', label: 'DNF', icon: <XCircle size={14} />, color: '#ef4444' },
     ];
 
-    const statusColors: Record<string, string> = {
-        'to-read': '#38bdf8',
-        reading: '#a855f7',
-        read: '#22c55e',
-        dnf: '#ef4444',
-    };
-
     const emptyLibrary = books.length === 0;
     const emptyFilteredResults = !emptyLibrary && filteredAndSorted.length === 0;
 
@@ -171,7 +164,7 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
                     </p>
                     <div className={s.heroActions}>
                         <button type="button" onClick={onStartScanning} className={`glass ${s.primaryAction}`}>
-                            <ScanLine size={18} /> Add a book
+                            <ScanLine size={18} /> {emptyLibrary ? 'Add a book' : 'Continue scanning'}
                         </button>
                         <button type="button" onClick={() => setShowStats(!showStats)} className={`glass ${s.secondaryAction}`}>
                             <BarChart3 size={18} /> {showStats ? 'Hide stats' : 'Show stats'}
@@ -185,11 +178,21 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
                         <strong>{insights.totalBooks}</strong>
                         <span>{insights.toReadCount} still waiting on the shelf</span>
                     </div>
-                    <div className={`glass ${s.highlightCard}`}>
-                        <span className={s.highlightLabel}>Reading now</span>
-                        <strong>{insights.currentlyReading?.title ?? 'Choose your next book'}</strong>
-                        <span>{insights.currentlyReading?.author ?? 'Mark a book as reading to pin it here.'}</span>
-                    </div>
+                    {insights.currentlyReading ? (
+                        <div className={`glass ${s.highlightCard}`}>
+                            <span className={s.highlightLabel}>Reading now</span>
+                            <strong>{insights.currentlyReading.title}</strong>
+                            <span>{insights.currentlyReading.author}</span>
+                        </div>
+                    ) : (
+                        <button type="button" className={`glass ${s.highlightCard} ${s.highlightCardCta}`}
+                            onClick={() => setStatusFilter('to-read')}
+                            aria-label="Show To Read books to pick your next read">
+                            <span className={s.highlightLabel}>Reading now</span>
+                            <strong>Choose your next book</strong>
+                            <span>Tap a book and mark as Reading to pin it here.</span>
+                        </button>
+                    )}
                     <div className={`glass ${s.highlightCard}`}>
                         <span className={s.highlightLabel}>Finished</span>
                         <strong>{insights.completionRate}% complete</strong>
@@ -438,13 +441,18 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
                                             <div className={s.listTitle}>{book.title}</div>
                                             <div className={s.listAuthor}>{book.author}</div>
                                         </div>
-                                        <span className={s.listStatus}
-                                            style={{
-                                                color: statusColors[book.status] || 'var(--text-muted)',
-                                                background: `${statusColors[book.status] || 'var(--text-muted)'}20`,
-                                            }}>
-                                            {book.status.replace('-', ' ')}
-                                        </span>
+                                        <div className={s.listStatusChips} onClick={(e) => e.stopPropagation()}>
+                                            {statusFilters.filter(f => f.value !== 'all').map((f) => (
+                                                <button key={f.value}
+                                                    type="button"
+                                                    onClick={() => updateBookStatus(book.id, f.value as BookEntry['status'])}
+                                                    className={`${s.listStatusChip} ${book.status === f.value ? s.listStatusChipActive : ''}`}
+                                                    style={book.status === f.value ? { color: f.color, background: `${f.color}20` } : undefined}
+                                                    title={f.label} aria-label={`Set status to ${f.label}`}>
+                                                    {f.icon}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
                             );

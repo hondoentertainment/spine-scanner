@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useBookLookup } from '../hooks/useBookLookup.ts';
 import { useToast } from './Toast.tsx';
@@ -21,7 +21,7 @@ type ExportFormat = 'json' | 'goodreads' | 'librarything' | 'storygraph';
 const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
     const { books, shelves, addBook, removeBook, setShelves } = useBookStore();
     const { lookupByIsbn } = useBookLookup();
-    const { toast, confirm } = useToast();
+    const { toast } = useToast();
 
     const [importing, setImporting] = useState(false);
     const [result, setResult] = useState<ImportResult | null>(null);
@@ -29,6 +29,8 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
     const [webImportStep, setWebImportStep] = useState<'idle' | 'fetching' | 'confirm'>('idle');
     const [foundIsbns, setFoundIsbns] = useState<string[]>([]);
     const [exportFormat, setExportFormat] = useState<ExportFormat>('json');
+    const [deleteConfirmStep, setDeleteConfirmStep] = useState<'idle' | 'confirm'>('idle');
+    const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
 
     const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -162,25 +164,29 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
         toast('Export downloaded', 'success');
     };
 
-    const removeAllBooks = async () => {
-        const yes = await confirm({
-            title: 'Remove All Books',
-            message: `This will permanently delete all ${books.length} books. This action is irreversible.`,
-            confirmLabel: 'Yes, remove everything',
-            danger: true,
-        });
-        if (yes) {
-            books.forEach(b => removeBook(b.id));
-            toast('Library cleared', 'info');
-            onClose?.();
-        }
-    };
+    const handleDeleteAllClick = useCallback(() => {
+        setDeleteConfirmStep('confirm');
+        setDeleteConfirmInput('');
+    }, []);
+
+    const handleDeleteAllCancel = useCallback(() => {
+        setDeleteConfirmStep('idle');
+        setDeleteConfirmInput('');
+    }, []);
+
+    const removeAllBooks = useCallback(() => {
+        books.forEach(b => removeBook(b.id));
+        toast('Library cleared', 'info');
+        setDeleteConfirmStep('idle');
+        setDeleteConfirmInput('');
+        onClose?.();
+    }, [books, removeBook, toast, onClose]);
 
     return (
-        <div className={`glass ${s.container}`}>
+        <div className={`glass ${s.container}`} role="region" aria-label="Import and export library">
             <div className={s.header}>
-                <h2 className={s.title}>Manage Library Data</h2>
-                {onClose && <button onClick={onClose} aria-label="Close data management" className={s.closeBtn}><X /></button>}
+                <h2 className={s.title}>Import & Export</h2>
+                {onClose && <button onClick={onClose} aria-label="Close import and export" className={s.closeBtn}><X /></button>}
             </div>
 
             {/* Export */}
@@ -263,10 +269,38 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
             )}
 
             {/* Danger zone */}
-            <section className={s.dangerSection}>
-                <button onClick={removeAllBooks} className={s.dangerBtn}>
-                    <Trash2 size={16} /> Remove all books from library
-                </button>
+            <section className={s.dangerSection} aria-label="Danger zone: delete all">
+                {deleteConfirmStep === 'idle' ? (
+                    <button onClick={handleDeleteAllClick} className={s.dangerBtn}>
+                        <Trash2 size={16} /> Remove all books from library
+                    </button>
+                ) : (
+                    <div className={s.deleteConfirmBox}>
+                        <p className={s.deleteConfirmMsg}>This cannot be undone. Type <strong>DELETE</strong> to confirm.</p>
+                        <input
+                            type="text"
+                            value={deleteConfirmInput}
+                            onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                            placeholder="Type DELETE"
+                            className={`glass ${s.deleteConfirmInput}`}
+                            aria-label="Type DELETE to confirm permanent deletion"
+                            autoComplete="off"
+                        />
+                        <div className={s.deleteConfirmActions}>
+                            <button onClick={handleDeleteAllCancel} className={s.dangerCancelBtn}>
+                                Cancel
+                            </button>
+                            <button
+                                onClick={removeAllBooks}
+                                disabled={deleteConfirmInput !== 'DELETE'}
+                                className={s.dangerBtn}
+                                aria-label="Permanently delete all books"
+                            >
+                                <Trash2 size={16} /> Permanently delete all {books.length} books
+                            </button>
+                        </div>
+                    </div>
+                )}
             </section>
         </div>
     );

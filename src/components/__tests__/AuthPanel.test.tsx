@@ -47,7 +47,7 @@ vi.mock('../../lib/profiles', () => ({
 const defaultProps = {
   onSyncNow: vi.fn(),
   syncing: false,
-  lastSynced: null,
+  lastSyncedAt: null,
   online: true,
   pendingChanges: 0,
   onOpenProfile: vi.fn(),

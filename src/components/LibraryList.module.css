@@ -107,6 +107,18 @@
   gap: 0.35rem;
 }
 
+.highlightCardCta {
+  cursor: pointer;
+  text-align: left;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.highlightCardCta:hover {
+  background: rgba(168, 85, 247, 0.12);
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
 .highlightCard strong {
   font-size: 1.1rem;
 }
@@ -391,6 +403,32 @@
   padding: 0.2rem 0.5rem;
   border-radius: 9999px;
   flex-shrink: 0;
+}
+
+.listStatusChips {
+  display: flex;
+  gap: 0.2rem;
+  flex-shrink: 0;
+}
+
+.listStatusChip {
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  border-radius: 9999px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.listStatusChip:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.listStatusChipActive {
+  font-weight: 600;
 }
 
 @media (max-width: 900px) {

@@ -2,21 +2,23 @@ import React, { useState } from 'react';
 import { useAuthStore } from '../store/useAuthStore.ts';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
 import { upsertProfile } from '../lib/profiles.ts';
-import { LogIn, LogOut, UserPlus, Cloud, CloudOff, AlertCircle, Loader, X, WifiOff, Settings, Mail, ArrowLeft, CheckCircle2, KeyRound } from 'lucide-react';
+import { LogIn, LogOut, UserPlus, Cloud, CloudOff, AlertCircle, Loader, X, WifiOff, Settings, Mail, ArrowLeft, CheckCircle2, KeyRound, RefreshCw } from 'lucide-react';
 import s from './AuthPanel.module.css';
+import { formatRelativeTime } from '../utils/formatRelativeTime.ts';
 
 interface AuthPanelProps {
   onSyncNow: () => void;
   syncing: boolean;
-  lastSynced: string | null;
+  lastSyncedAt: string | null;
   online: boolean;
   pendingChanges: number;
+  syncFailedRecently?: boolean;
   onOpenProfile?: () => void;
 }
 
 type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset-sent' | 'confirm-pending';
 
-const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, online, pendingChanges, onOpenProfile }) => {
+const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSyncedAt, online, pendingChanges, syncFailedRecently, onOpenProfile }) => {
   const {
     user, profile, loading, error, confirmationPending,
     signIn, signUp, signInWithGoogle, signOut, loadProfile,
@@ -120,13 +122,18 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSynced, o
           )}
         </button>
 
-        {lastSynced && online && pendingChanges === 0 && (
-          <span className={s.syncedTime}>Synced {new Date(lastSynced).toLocaleTimeString()}</span>
+        {lastSyncedAt && online && pendingChanges === 0 && (
+          <span className={s.syncedTime}>Synced {formatRelativeTime(lastSyncedAt)}</span>
         )}
         {pendingChanges > 0 && !syncing && (
           <span className={s.pendingText} style={{ color: online ? '#f59e0b' : '#ef4444' }}>
-            {pendingChanges} pending {online ? '' : '(offline)'}
+            {pendingChanges} change{pendingChanges === 1 ? '' : 's'} to sync{online ? '' : ' (offline)'}
           </span>
+        )}
+        {syncFailedRecently && online && pendingChanges > 0 && !syncing && (
+          <button onClick={onSyncNow} className={`glass ${s.retryBtn}`} aria-label="Retry sync">
+            <RefreshCw size={12} /> Retry
+          </button>
         )}
 
         <button onClick={signOut} className={`glass ${s.signOutBtn}`} aria-label="Sign out">

@@ -6,6 +6,7 @@ describe('useSyncQueue', () => {
     useSyncQueue.setState({
       pendingChanges: 0,
       lastSyncedAt: null,
+      lastSyncFailedAt: null,
       flushing: false,
     });
   });
@@ -94,5 +95,23 @@ describe('useSyncQueue', () => {
 
     expect(first).not.toBe(second);
     expect(new Date(second!).getTime()).toBeGreaterThan(new Date(first!).getTime());
+  });
+
+  it('markSyncFailed sets lastSyncFailedAt', () => {
+    expect(useSyncQueue.getState().lastSyncFailedAt).toBeNull();
+    useSyncQueue.getState().markSyncFailed();
+    expect(useSyncQueue.getState().lastSyncFailedAt).not.toBeNull();
+  });
+
+  it('markSynced clears lastSyncFailedAt', () => {
+    useSyncQueue.getState().markSyncFailed();
+    useSyncQueue.getState().markSynced();
+    expect(useSyncQueue.getState().lastSyncFailedAt).toBeNull();
+  });
+
+  it('reset clears lastSyncFailedAt', () => {
+    useSyncQueue.getState().markSyncFailed();
+    useSyncQueue.getState().reset();
+    expect(useSyncQueue.getState().lastSyncFailedAt).toBeNull();
   });
 });

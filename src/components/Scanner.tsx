@@ -1,6 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
-import { Camera, Loader2, Edit3, Check, ImagePlus, Zap, Image as ImageIcon, X, Flashlight, Maximize2, HelpCircle, Settings, SwitchCamera, ZoomIn, ZoomOut } from 'lucide-react';
+import { Camera, Loader2, Edit3, Check, ImagePlus, Zap, Image as ImageIcon, X, Flashlight, Maximize2, HelpCircle, Settings, SwitchCamera, ZoomIn, ZoomOut, Layers, Library } from 'lucide-react';
 import { isValidIsbn, formatIsbnForDisplay } from '../utils/isbnValidation.ts';
 import { getNearMissCandidates } from '../utils/ocr.ts';
 import { useToast } from './Toast.tsx';
@@ -50,6 +50,7 @@ interface ScannerProps {
     onPhotoCapture?: (imageDataUrl: string) => void;
     isScanning: boolean;
     batchMode?: boolean;
+    onViewLibrary?: (isbn?: string) => void;
 }
 
 const EMPTY_TELEMETRY: LiveScanTelemetry = {
@@ -69,7 +70,7 @@ const getVideoConstraints = (facing: 'environment' | 'user' = 'environment'): Me
  *  Component
  * ================================================================ */
 
-const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, batchMode: batchModeProp = false }) => {
+const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, batchMode: batchModeProp = false, onViewLibrary }) => {
     const webcamRef = useRef<Webcam>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -99,6 +100,8 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     const [scanMode, setScanMode] = useState<ScanMode>('auto');
     const [submitting, setSubmitting] = useState(false);
     const [lastScanMeta, setLastScanMeta] = useState<ScanResultMeta | null>(null);
+    const [ocrElapsedSec, setOcrElapsedSec] = useState(0);
+    const [lastBatchAddIsbn, setLastBatchAddIsbn] = useState<string | null>(null);
 
     const abortControllerRef = useRef<AbortController | null>(null);
     useEffect(() => {
@@ -187,6 +190,18 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     useEffect(() => {
         if (cameraReady && !cameraError) preWarm();
     }, [cameraReady, cameraError, preWarm]);
+
+    const inOcrPhase = processing && scanProgress && (scanProgress.phase === 'ocr' || scanProgress.phase === 'ocr-multilang');
+    useEffect(() => {
+        if (!inOcrPhase) {
+            setOcrElapsedSec(0);
+            return;
+        }
+        setOcrElapsedSec(0);
+        const start = Date.now();
+        const interval = setInterval(() => setOcrElapsedSec(Math.floor((Date.now() - start) / 1000)), 1000);
+        return () => clearInterval(interval);
+    }, [inOcrPhase]);
 
     useEffect(() => {
         if (!cameraReady || cameraError || processing || isScanning) {
@@ -283,6 +298,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 });
                 if (batchModeProp) {
                     setStatus('Book added! Point at next book');
+                    setLastBatchAddIsbn(result.isbn);
                     setIsbnSuggestions([]);
                     setShowManual(false);
                 }
@@ -392,16 +408,22 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 await submitScan(result.isbn, {
                     source: scanMode === 'ocr' ? 'ocr' : scanMode === 'barcode' ? 'barcode' : 'scan',
                 });
+                if (batchModeProp) {
+                    setStatus('Book added! Point at next book');
+                    setLastBatchAddIsbn(result.isbn);
+                    setIsbnSuggestions([]);
+                    setShowManual(false);
+                }
             } else if (result.suggestions.length > 0 || (result.repairedMap && Object.keys(result.repairedMap).length > 0)) {
                 setLastScanMeta(null);
                 setIsbnSuggestions(result.suggestions);
                 setRepairedMap(result.repairedMap ?? {});
                 setShowManual(true);
-                setStatus('We found something ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tap a match below');
+                setStatus('We found something ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tap a match below');
             } else {
                 setLastScanMeta(null);
                 hapticFailure();
-                setStatus('Not found ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try a clearer photo or type ISBN');
+                setStatus('Not found ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try a clearer photo or type ISBN');
                 setShowManual(true);
                 const diag = result.diagnostics;
                 if (diag && (diag.skipReason || diag.quality?.isBlurry || diag.quality?.isDark)) {
@@ -625,9 +647,14 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
 
                 <div className={s.statusLine} role="status" aria-live="polite" aria-atomic="true">
                     <p className={s.statusHeading} id="status-text">
-                        {processing ? 'Scanning...' : cameraError ? 'No camera' : 'Ready to scan'}
+                        {processing ? (inOcrPhase ? `Analyzing spine… ${ocrElapsedSec}s` : 'Scanning...') : cameraError ? 'No camera' : 'Ready to scan'}
                     </p>
                     <p className={s.statusText}>{status}</p>
+                    {batchModeProp && lastBatchAddIsbn && onViewLibrary && !processing && (
+                        <button type="button" onClick={() => onViewLibrary(lastBatchAddIsbn)} className={s.viewLibraryLink}>
+                            <Library size={14} /> View in Library
+                        </button>
+                    )}
                 </div>
 
                 {scanResultSummary && !processing && (
@@ -874,6 +901,13 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 {cameraReady && !cameraError && (
                     <div className={s.liveFeedBadge}>
                         <Zap size={12} /> Live Feed
+                    </div>
+                )}
+
+                {/* Batch mode badge */}
+                {batchModeProp && cameraReady && !cameraError && (
+                    <div className={s.batchModeBadge} role="status" aria-label="Batch mode – stay on scanner">
+                        <Layers size={12} /> Batch mode – stay on scanner
                     </div>
                 )}
 

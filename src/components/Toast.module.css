@@ -88,6 +88,36 @@
   opacity: 1;
 }
 
+/* ---- Toast action button ---- */
+.actionSection {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.actionButton {
+  display: inline-block;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.actionButton:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.toastWithAction .actionSection {
+  margin-top: 0.5rem;
+}
+
 /* ---- Toast details (diagnostic) ---- */
 .detailsSection {
   margin-top: 0.5rem;

@@ -4,12 +4,18 @@ import styles from './Toast.module.css';
 
 type ToastType = 'success' | 'error' | 'info' | 'warning';
 
+interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 interface Toast {
   id: string;
   message: string;
   type: ToastType;
   duration: number;
   details?: string;
+  action?: ToastAction;
 }
 
 interface ConfirmOptions {
@@ -25,11 +31,12 @@ export interface ToastOptions {
   type?: ToastType;
   duration?: number;
   details?: string;
+  action?: ToastAction;
 }
 
 interface ToastContextValue {
-  /** Show a toast. Pass message + optional type/duration, or use toastDetail for diagnostic info. */
-  toast: (message: string, type?: ToastType, duration?: number, details?: string) => void;
+  /** Show a toast. Pass message + optional type/duration/details/action. */
+  toast: (message: string, type?: ToastType, duration?: number, details?: string, action?: ToastAction) => void;
   /** Show a diagnostic toast with expandable details for OCR/scanner troubleshooting. */
   toastDetail: (options: ToastOptions) => void;
   confirm: (options: ConfirmOptions) => Promise<boolean>;
@@ -84,10 +91,10 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const toast = useCallback(
-    (message: string, type: ToastType = 'info', duration = 3500, details?: string) => {
+    (message: string, type: ToastType = 'info', duration = 3500, details?: string, action?: ToastAction) => {
       const id = crypto.randomUUID();
       const d = details ? (type === 'error' ? 12000 : 6000) : duration;
-      setToasts((prev) => [...prev, { id, message, type, duration: d, details }]);
+      setToasts((prev) => [...prev, { id, message, type, duration: d, details, action }]);
       if (details && (type === 'error' || type === 'warning')) {
         setExpandedDetails((prev) => new Set(prev).add(id));
       }
@@ -100,8 +107,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const toastDetail = useCallback(
     (options: ToastOptions) => {
-      const { message, type = 'error', duration = 12000, details } = options;
-      toast(message, type, duration, details);
+      const { message, type = 'error', duration = 12000, details, action } = options;
+      toast(message, type, duration, details, action);
     },
     [toast],
   );
@@ -132,7 +139,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       {/* Toast stack */}
       <div className={styles.container} role="status" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`${styles.toast} ${styles[t.type]} ${t.details ? styles.toastWithDetails : ''}`}>
+          <div key={t.id} className={`${styles.toast} ${styles[t.type]} ${t.details ? styles.toastWithDetails : ''} ${t.action ? styles.toastWithAction : ''}`}>
             <div className={styles.toastHeader}>
               <span className={styles.icon}>{icons[t.type]}</span>
               <span className={styles.message}>{t.message}</span>
@@ -144,6 +151,17 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 <X size={14} />
               </button>
             </div>
+            {t.action && (
+              <div className={styles.actionSection}>
+                <button
+                  type="button"
+                  onClick={() => { t.action!.onClick(); removeToast(t.id); }}
+                  className={styles.actionButton}
+                >
+                  {t.action.label}
+                </button>
+              </div>
+            )}
             {t.details && (
               <div className={styles.detailsSection}>
                 <button

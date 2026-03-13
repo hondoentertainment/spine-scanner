@@ -30,12 +30,12 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
     const bookShelves = shelves.filter((sh) => bookShelfIds.includes(sh.id));
     const availableShelves = shelves.filter((sh) => !bookShelfIds.includes(sh.id));
 
-    const statusIcons = {
-        'to-read': <Clock size={16} />,
-        'reading': <BookOpen size={16} />,
-        'read': <CheckCircle size={16} />,
-        'dnf': <XCircle size={16} />,
-    };
+    const statusChips: { status: BookEntry['status']; icon: React.ReactNode; label: string }[] = [
+        { status: 'to-read', icon: <Clock size={11} />, label: 'To Read' },
+        { status: 'reading', icon: <BookOpen size={11} />, label: 'Reading' },
+        { status: 'read', icon: <CheckCircle size={11} />, label: 'Read' },
+        { status: 'dnf', icon: <XCircle size={11} />, label: 'DNF' },
+    ];
 
     const handleEdit = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -204,11 +204,11 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
             </div>
 
             <div className={s.statusRow} onClick={(e) => e.stopPropagation()}>
-                {(['to-read', 'reading', 'read', 'dnf'] as const).map((st) => (
-                    <button key={st} onClick={() => updateBookStatus(book.id, st)}
-                        className={`status-badge ${book.status === st ? `status-${st}` : ''} ${s.statusBtn}`}
-                        title={st.replace('-', ' ')} aria-label={`Set status to ${st.replace('-', ' ')}`}>
-                        {statusIcons[st]}
+                {statusChips.map(({ status, icon, label }) => (
+                    <button key={status} onClick={() => updateBookStatus(book.id, status)}
+                        className={`status-badge ${book.status === status ? `status-${status}` : ''} ${s.statusBtn}`}
+                        title={label} aria-label={`Set status to ${label}`}>
+                        {icon}
                     </button>
                 ))}
             </div>
