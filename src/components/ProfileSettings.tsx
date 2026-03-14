@@ -382,6 +382,17 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           </div>
           {preferences.showShelvesDefault && <CheckCircle size={18} className={s.check} />}
         </button>
+        <button
+          type="button"
+          onClick={() => updatePreferences({ onboardingCompleted: false })}
+          className={s.toggleRow}
+        >
+          <Bookmark size={18} />
+          <div className={s.toggleLabel}>
+            <span>Replay first-run tour</span>
+            <span className={s.toggleHint}>Show the onboarding checklist again on next visit</span>
+          </div>
+        </button>
       </div>
     </div>
   );

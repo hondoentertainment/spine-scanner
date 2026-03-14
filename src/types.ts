@@ -12,12 +12,43 @@ export interface BookEntry {
   notes: string;
   dateAdded: string;
   shelfIds: string[];
+  needsReview?: boolean;
+  reviewReason?: string;
+  pagesFinished?: number;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  lastProgressAt?: string | null;
 }
 
 export interface Shelf {
   id: string;
   name: string;
   color: string;
+}
+
+export interface SmartShelf {
+  id: string;
+  name: string;
+  color: string;
+  searchTerm?: string;
+  statusFilter?: BookEntry['status'] | 'all';
+  minPageCount?: number | null;
+  maxPageCount?: number | null;
+  reviewOnly?: boolean;
+}
+
+export interface SavedView {
+  id: string;
+  name: string;
+  searchTerm: string;
+  statusFilter: BookEntry['status'] | 'all';
+  shelfId: string | null;
+  sortBy: ProfilePreferences['librarySortBy'];
+  sortAsc: boolean;
+  smartShelfId?: string | null;
+  reviewOnly?: boolean;
+  minPageCount?: number | null;
+  maxPageCount?: number | null;
 }
 
 export const SHELF_COLORS = [
@@ -43,6 +74,9 @@ export interface ProfilePreferences {
   batchModeDefault: boolean;
   showStatsDefault: boolean;
   showShelvesDefault: boolean;
+  onboardingCompleted: boolean;
+  smartShelves: SmartShelf[];
+  savedViews: SavedView[];
 }
 
 export const DEFAULT_PREFERENCES: ProfilePreferences = {
@@ -54,4 +88,7 @@ export const DEFAULT_PREFERENCES: ProfilePreferences = {
   batchModeDefault: false,
   showStatsDefault: false,
   showShelvesDefault: false,
+  onboardingCompleted: false,
+  smartShelves: [],
+  savedViews: [],
 };

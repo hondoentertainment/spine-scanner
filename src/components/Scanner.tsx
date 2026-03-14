@@ -50,6 +50,8 @@ interface ScannerProps {
     onPhotoCapture?: (imageDataUrl: string) => void;
     isScanning: boolean;
     batchMode?: boolean;
+    onOpenSupport?: () => void;
+    onOpenPrivacy?: () => void;
     onViewLibrary?: (isbn?: string) => void;
 }
 
@@ -66,11 +68,21 @@ const getVideoConstraints = (facing: 'environment' | 'user' = 'environment'): Me
     ...(({ focusMode: { ideal: 'continuous' } }) as any),
 });
 
+const SCANNER_DEBUG_ENABLED = import.meta.env.DEV || import.meta.env.VITE_ENABLE_SCANNER_DEBUG === 'true';
+
 /* ================================================================
  *  Component
  * ================================================================ */
 
-const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, batchMode: batchModeProp = false, onViewLibrary }) => {
+const Scanner: React.FC<ScannerProps> = ({
+    onScan,
+    onPhotoCapture,
+    isScanning,
+    batchMode: batchModeProp = false,
+    onOpenSupport,
+    onOpenPrivacy,
+    onViewLibrary,
+}) => {
     const webcamRef = useRef<Webcam>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -338,7 +350,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 ? 'Scan engine busy ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â upload a photo or type ISBN'
                 : 'Scan didn\'t work ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try again or type ISBN');
             setShowManual(true);
-            setShowDebug(true);
+            if (SCANNER_DEBUG_ENABLED) setShowDebug(true);
             toastDetail({
                 message: isOcrWorkerError
                     ? 'Scanner busy ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â upload a photo or enter ISBN'
@@ -444,7 +456,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 ? 'Scanner busy ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try another photo or type ISBN'
                 : 'Didn\'t work ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try a different photo or type ISBN');
             setShowManual(true);
-            setShowDebug(true);
+            if (SCANNER_DEBUG_ENABLED) setShowDebug(true);
             toastDetail({
                 message: isOcrWorkerError
                     ? 'Scanner busy ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try another photo or enter ISBN'
@@ -456,7 +468,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
             processingRef.current = false;
             setProcessing(false);
         }
-    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, debugLogs, scanMode]);
+    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, debugLogs, scanMode, batchModeProp]);
 
     const handlePhotoOnlyFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -817,13 +829,13 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 )}
 
                 <div className={s.panelFooter}>
-                    <button type="button" className={s.footerLink} onClick={() => setShowDebug(prev => !prev)}>
+                    <button type="button" className={s.footerLink} onClick={onOpenSupport}>
                         <HelpCircle size={12} style={{ marginRight: '0.25rem', verticalAlign: 'middle' }} />
                         Help Center
                     </button>
-                    <button type="button" className={s.footerLink} onClick={() => setShowDebug(prev => !prev)}>
+                    <button type="button" className={s.footerLink} onClick={onOpenPrivacy}>
                         <Settings size={12} style={{ marginRight: '0.25rem', verticalAlign: 'middle' }} />
-                        Scanner Settings
+                        Privacy & camera
                     </button>
                 </div>
             </div>
@@ -928,9 +940,11 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                         <button type="button" onClick={toggleFullscreen} className={s.cameraControlBtn} aria-label="Toggle fullscreen">
                             <Maximize2 size={16} />
                         </button>
-                        <button type="button" onClick={() => setShowDebug(prev => !prev)} className={s.cameraControlBtn} aria-label="Toggle debug info">
-                            <X size={16} />
-                        </button>
+                        {SCANNER_DEBUG_ENABLED && (
+                            <button type="button" onClick={() => setShowDebug(prev => !prev)} className={s.cameraControlBtn} aria-label="Toggle scanner diagnostics">
+                                <Settings size={16} />
+                            </button>
+                        )}
                     </div>
                 )}
 
@@ -978,12 +992,14 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                     </div>
                 )}
 
-                <DebugPanel
-                    logs={debugLogs}
-                    telemetry={liveTelemetry}
-                    show={showDebug}
-                    onToggle={() => setShowDebug(prev => !prev)}
-                />
+                {SCANNER_DEBUG_ENABLED && (
+                    <DebugPanel
+                        logs={debugLogs}
+                        telemetry={liveTelemetry}
+                        show={showDebug}
+                        onToggle={() => setShowDebug(prev => !prev)}
+                    />
+                )}
             </div>
         </div>
     );

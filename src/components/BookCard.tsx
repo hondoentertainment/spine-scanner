@@ -6,6 +6,7 @@ import { Trash2, ExternalLink, BookOpen, CheckCircle, Clock, XCircle, Pencil, X,
 import { generateAmazonLink } from '../utils/amazonLink.ts';
 import { shareBook } from '../utils/shareBook.ts';
 import { getBookCoverSrc } from '../utils/bookPresentation.ts';
+import { getReadingProgressPercent } from '../utils/bookState.ts';
 import s from './BookCard.module.css';
 
 interface BookCardProps {
@@ -14,7 +15,17 @@ interface BookCardProps {
 }
 
 const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
-    const { updateBook, updateBookStatus, updateBookNotes, removeBook, shelves, assignShelf, unassignShelf } = useBookStore();
+    const {
+        updateBook,
+        updateBookStatus,
+        updateBookNotes,
+        updateReadingProgress,
+        markNeedsReview,
+        removeBook,
+        shelves,
+        assignShelf,
+        unassignShelf,
+    } = useBookStore();
     const { toast, confirm } = useToast();
     const [editing, setEditing] = useState(false);
     const [showShelfPicker, setShowShelfPicker] = useState(false);
@@ -29,6 +40,8 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
     const bookShelfIds = book.shelfIds || [];
     const bookShelves = shelves.filter((sh) => bookShelfIds.includes(sh.id));
     const availableShelves = shelves.filter((sh) => !bookShelfIds.includes(sh.id));
+    const progressPercent = getReadingProgressPercent(book);
+    const progressValue = Math.min(book.pageCount || 0, book.pagesFinished || 0);
 
     const statusChips: { status: BookEntry['status']; icon: React.ReactNode; label: string }[] = [
         { status: 'to-read', icon: <Clock size={11} />, label: 'To Read' },
@@ -211,6 +224,36 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
                         {icon}
                     </button>
                 ))}
+            </div>
+
+            <div className={s.progressBlock} onClick={(e) => e.stopPropagation()}>
+                <div className={s.progressHeader}>
+                    <span>Progress</span>
+                    <span>{progressPercent}%</span>
+                </div>
+                <div className={s.progressTrack}>
+                    <span className={s.progressFill} style={{ width: `${progressPercent}%` }} />
+                </div>
+                <div className={s.quickActions}>
+                    <button type="button" className={s.quickBtn} onClick={() => updateBookStatus(book.id, 'reading')}>
+                        Start
+                    </button>
+                    <button
+                        type="button"
+                        className={s.quickBtn}
+                        onClick={() => updateReadingProgress(book.id, progressValue + 25)}
+                    >
+                        +25 pages
+                    </button>
+                    <button type="button" className={s.quickBtn} onClick={() => updateBookStatus(book.id, 'read')}>
+                        Finish
+                    </button>
+                    {book.needsReview && (
+                        <button type="button" className={s.quickBtn} onClick={() => markNeedsReview(book.id, false)}>
+                            Resolve review
+                        </button>
+                    )}
+                </div>
             </div>
 
             <textarea placeholder="Add your notes or quotes..." value={book.notes}

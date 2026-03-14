@@ -1,4 +1,5 @@
 import type { BookEntry, Shelf } from '../types.ts';
+import { normalizeBookEntry } from './bookState.ts';
 
 export const exportToJSON = (books: BookEntry[], shelves: Shelf[] = []): string => {
     return JSON.stringify({ version: 2, exportedAt: new Date().toISOString(), books, shelves }, null, 2);
@@ -7,10 +8,10 @@ export const exportToJSON = (books: BookEntry[], shelves: Shelf[] = []): string 
 export const importFromJSON = (json: string): { books: BookEntry[]; shelves: Shelf[] } => {
     const data = JSON.parse(json);
     if (Array.isArray(data)) {
-        return { books: data.map((book) => ({ ...book, shelfIds: book.shelfIds || [] })), shelves: [] };
+        return { books: data.map((book) => normalizeBookEntry({ ...book, shelfIds: book.shelfIds || [] })), shelves: [] };
     }
     if (data.books && Array.isArray(data.books)) {
-        const books = data.books.map((book: BookEntry) => ({ ...book, shelfIds: book.shelfIds || [] }));
+        const books = data.books.map((book: BookEntry) => normalizeBookEntry({ ...book, shelfIds: book.shelfIds || [] }));
         const shelves = Array.isArray(data.shelves) ? data.shelves : [];
         return { books, shelves };
     }

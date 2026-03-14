@@ -6,6 +6,7 @@ import type { BookEntry } from '../types.ts';
 import { generateAmazonLink } from '../utils/amazonLink.ts';
 import { shareBook } from '../utils/shareBook.ts';
 import { isBookPhotoOnly } from '../utils/libraryUtils.ts';
+import { getReadingProgressPercent } from '../utils/bookState.ts';
 import {
   X, ExternalLink, BookOpen, CheckCircle, Clock, XCircle,
   Pencil, Save, Tag, Trash2, Share2
@@ -32,7 +33,17 @@ const statusIcons: Record<BookEntry['status'], React.ReactNode> = {
 };
 
 const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
-  const { updateBook, updateBookStatus, updateBookNotes, removeBook, shelves, assignShelf, unassignShelf } = useBookStore();
+  const {
+    updateBook,
+    updateBookStatus,
+    updateBookNotes,
+    updateReadingProgress,
+    markNeedsReview,
+    removeBook,
+    shelves,
+    assignShelf,
+    unassignShelf,
+  } = useBookStore();
   const { toast, confirm } = useToast();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
   const [editing, setEditing] = useState(false);
@@ -48,6 +59,8 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   const bookShelfIds = book.shelfIds || [];
   const bookShelves = shelves.filter((s) => bookShelfIds.includes(s.id));
   const availableShelves = shelves.filter((s) => !bookShelfIds.includes(s.id));
+  const progressPercent = getReadingProgressPercent(book);
+  const progressValue = book.pagesFinished || 0;
 
   const handleEdit = () => {
     setDraft({
@@ -218,6 +231,39 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
               <span className={styles.statusLabel}>{statusLabels[s]}</span>
             </button>
           ))}
+        </div>
+
+        <div className={styles.progressSection}>
+          <div className={styles.progressHeader}>
+            <strong>Reading progress</strong>
+            <span>{progressPercent}% complete</span>
+          </div>
+          <div className={styles.progressTrack}>
+            <span className={styles.progressFill} style={{ width: `${progressPercent}%` }} />
+          </div>
+          <div className={styles.progressMeta}>
+            <span>{book.pageCount > 0 ? `${progressValue} / ${book.pageCount} complete` : `${progressValue} logged`}</span>
+            {book.lastProgressAt && <span>Updated {new Date(book.lastProgressAt).toLocaleDateString()}</span>}
+          </div>
+          <div className={styles.progressActions}>
+            <button type="button" className={styles.quickBtn} onClick={() => updateBookStatus(book.id, 'reading')}>
+              Start reading
+            </button>
+            <button type="button" className={styles.quickBtn} onClick={() => updateReadingProgress(book.id, progressValue + 25)}>
+              {book.pageCount > 0 ? '+25 pages' : 'Log progress'}
+            </button>
+            <button type="button" className={styles.quickBtn} onClick={() => updateBookStatus(book.id, 'read')}>
+              Finish book
+            </button>
+            <button type="button" className={styles.quickBtn} onClick={() => updateBookStatus(book.id, 'dnf')}>
+              Mark DNF
+            </button>
+            {book.needsReview && (
+              <button type="button" className={styles.quickBtn} onClick={() => markNeedsReview(book.id, false)}>
+                Resolve review
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Shelf chips */}

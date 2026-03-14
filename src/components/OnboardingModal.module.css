@@ -1,0 +1,113 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 6000;
+  background: rgba(2, 6, 23, 0.74);
+  backdrop-filter: blur(10px);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.modal {
+  width: min(680px, 100%);
+  padding: 1.25rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.progressRow,
+.actions,
+.primaryGroup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-blue);
+}
+
+.progressText,
+.body {
+  color: var(--text-muted);
+}
+
+.progressBar {
+  height: 10px;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.progressFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.2s ease;
+}
+
+.hero {
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.iconBadge {
+  width: 48px;
+  height: 48px;
+  border-radius: 1rem;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 1.4rem;
+  margin-bottom: 0.45rem;
+}
+
+.primaryBtn,
+.secondaryBtn {
+  min-height: 44px;
+  padding: 0.75rem 1rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  font-weight: 700;
+}
+
+.primaryBtn {
+  color: white;
+  background: linear-gradient(135deg, var(--accent-blue), var(--primary));
+}
+
+.secondaryBtn {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+@media (max-width: 640px) {
+  .hero {
+    flex-direction: column;
+  }
+
+  .primaryBtn,
+  .secondaryBtn {
+    width: 100%;
+  }
+}
