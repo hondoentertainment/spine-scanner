@@ -22,9 +22,9 @@
     "test:e2e:desktop": "playwright test --project=chromium"
   },
   "dependencies": {
-    "@sentry/react": "^10.42.0",
-    "@supabase/supabase-js": "^2.98.0",
-    "@tanstack/react-virtual": "^3.13.21",
+    "@sentry/react": "^10.43.0",
+    "@supabase/supabase-js": "^2.99.1",
+    "@tanstack/react-virtual": "^3.13.22",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
     "lucide-react": "^0.577.0",
@@ -32,7 +32,7 @@
     "react-dom": "^19.2.0",
     "react-webcam": "^7.2.0",
     "tesseract.js": "^7.0.0",
-    "zustand": "^5.0.11"
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
