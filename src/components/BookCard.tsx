@@ -168,6 +168,25 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
                 </div>
             </div>
 
+            {/* Reading progress bar */}
+            {book.status === 'reading' && book.pageCount > 0 && (book.progressPages ?? 0) > 0 && (
+                <div className={s.progressWrap} onClick={(e) => e.stopPropagation()}>
+                    <div className={s.progressBarTrack}
+                        role="progressbar"
+                        aria-valuenow={book.progressPages}
+                        aria-valuemin={0}
+                        aria-valuemax={book.pageCount}>
+                        <div
+                            className={s.progressBarFill}
+                            style={{ width: `${Math.min(100, ((book.progressPages ?? 0) / book.pageCount) * 100)}%` }}
+                        />
+                    </div>
+                    <span className={s.progressText}>
+                        {book.progressPages} / {book.pageCount} pages
+                    </span>
+                </div>
+            )}
+
             {/* Shelf chips */}
             <div className={s.shelfRow} onClick={(e) => e.stopPropagation()}>
                 {bookShelves.map((shelf) => (

@@ -32,7 +32,16 @@ export const useBookStore = create<BookStore>()(
         })),
       updateBookStatus: (id, status) =>
         set((state) => ({
-          books: state.books.map((b) => (b.id === id ? { ...b, status } : b)),
+          books: state.books.map((b) => {
+            if (b.id !== id) return b;
+            const now = new Date().toISOString();
+            return {
+              ...b,
+              status,
+              startedAt: status === 'reading' ? (b.startedAt ?? now) : b.startedAt,
+              finishedAt: status === 'read' ? (b.finishedAt ?? now) : b.finishedAt,
+            };
+          }),
         })),
       updateBookNotes: (id, notes) =>
         set((state) => ({

@@ -285,6 +285,61 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
           ))}
         </div>
 
+        {/* Reading progress */}
+        {book.status === 'reading' && (
+          <div className={styles.progressPanel}>
+            <div className={styles.progressHeader}>
+              <span className={styles.progressLabel}>Reading progress</span>
+              {book.startedAt && (
+                <span className={styles.progressDate}>
+                  Started {new Date(book.startedAt).toLocaleDateString()}
+                </span>
+              )}
+            </div>
+            <div className={styles.progressInputRow}>
+              <input
+                type="number"
+                min={0}
+                max={book.pageCount || undefined}
+                value={book.progressPages ?? ''}
+                onChange={(e) =>
+                  updateBook(book.id, { progressPages: parseInt(e.target.value) || 0 })
+                }
+                className={styles.progressInput}
+                aria-label="Current page"
+                placeholder="0"
+              />
+              {book.pageCount > 0 && (
+                <span className={styles.progressOf}>of {book.pageCount} pages</span>
+              )}
+            </div>
+            {book.pageCount > 0 && (book.progressPages ?? 0) > 0 && (
+              <div className={styles.progressBarTrack} role="progressbar"
+                aria-valuenow={book.progressPages}
+                aria-valuemin={0}
+                aria-valuemax={book.pageCount}>
+                <div
+                  className={styles.progressBarFill}
+                  style={{ width: `${Math.min(100, ((book.progressPages ?? 0) / book.pageCount) * 100)}%` }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {book.status === 'read' && book.finishedAt && (
+          <div className={styles.finishedBadge}>
+            Finished {new Date(book.finishedAt).toLocaleDateString()}
+            {book.startedAt && (() => {
+              const days = Math.round(
+                (new Date(book.finishedAt!).getTime() - new Date(book.startedAt).getTime()) /
+                (1000 * 60 * 60 * 24)
+              );
+              return days > 0 ? ` · ${days} day${days !== 1 ? 's' : ''}` : null;
+            })()}
+          </div>
+        )}
+
         {/* Shelf chips */}
         <div className={styles.shelves}>
           {bookShelves.map((shelf) => (

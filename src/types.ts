@@ -22,6 +22,12 @@ export interface BookEntry {
   metadataSource?: MetadataSource;
   /** Fields the user has manually edited; metadata refreshes skip these. */
   userEditedFields?: UserEditableField[];
+  /** ISO date when the book's status was first set to 'reading'. */
+  startedAt?: string;
+  /** ISO date when the book's status was first set to 'read'. */
+  finishedAt?: string;
+  /** User-entered current page for in-progress books. */
+  progressPages?: number;
 }
 
 export interface Shelf {

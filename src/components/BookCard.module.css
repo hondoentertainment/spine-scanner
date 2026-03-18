@@ -49,6 +49,33 @@
   color: var(--accent-blue);
 }
 
+/* ---- Reading progress ---- */
+.progressWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+}
+
+.progressBarTrack {
+  height: 4px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.progressBarFill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #a855f7, #6366f1);
+  transition: width 0.3s ease;
+}
+
+.progressText {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
 /* ---- Shelf chips ---- */
 .shelfRow {
   display: flex;

@@ -80,6 +80,15 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       .sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime())
       .slice(0, 4);
 
+    const thisYear = new Date().getFullYear();
+    const booksFinishedThisYear = books.filter((book) => {
+      if (!book.finishedAt) return false;
+      return new Date(book.finishedAt).getFullYear() === thisYear;
+    });
+    const pagesReadThisYear = booksFinishedThisYear.reduce(
+      (sum, book) => sum + (book.pageCount || 0), 0
+    );
+
     return {
       total,
       reading,
@@ -91,6 +100,8 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       shelfCount,
       completionRate,
       recentBooks,
+      booksThisYear: booksFinishedThisYear.length,
+      pagesThisYear: pagesReadThisYear,
     };
   }, [books, shelves]);
 
@@ -173,6 +184,11 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           <div className={s.summaryLabel}>Shelves</div>
           <div className={s.summaryValue}>{summary.shelfCount}</div>
           <div className={s.summaryMeta}>custom collections</div>
+        </div>
+        <div className={s.summaryCard}>
+          <div className={s.summaryLabel}>This year</div>
+          <div className={s.summaryValue}>{summary.booksThisYear}</div>
+          <div className={s.summaryMeta}>{summary.pagesThisYear.toLocaleString()} pages finished</div>
         </div>
       </div>
 
