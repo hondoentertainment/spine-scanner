@@ -2,12 +2,13 @@ import React, { useMemo } from 'react';
 import { useAuthStore } from '../store/useAuthStore.ts';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useProfileStore } from '../store/useProfileStore.ts';
+import { useAnalyticsStore } from '../store/useAnalyticsStore.ts';
 import { useTheme } from '../hooks/useTheme.ts';
 import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
 import {
   X, User, Sun, Moon, Monitor, LayoutGrid, List, ArrowUpDown,
-  CheckCircle, Layers, BarChart3, Tag, BookOpen, Clock3, Bookmark, Flame,
+  CheckCircle, Layers, BarChart3, Tag, BookOpen, Clock3, Bookmark, Flame, ScanLine,
 } from 'lucide-react';
 import type { ProfilePreferences } from '../types.ts';
 import s from './ProfileSettings.module.css';
@@ -56,6 +57,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
   const { preferences, updatePreferences } = useProfileStore();
   const { setTheme } = useTheme();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
+  const scanStats = useAnalyticsStore((state) => state.getSummary());
   const displayName = profile?.username ?? profile?.displayName ?? user?.user_metadata?.full_name ?? user?.email ?? 'Local reader';
   const avatarUrl = profile?.avatarUrl ?? user?.user_metadata?.avatar_url ?? null;
   const joinedLabel = user?.created_at
@@ -259,6 +261,51 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           </div>
         )}
       </div>
+
+      {scanStats.totalScans > 0 && (
+        <div className={s.letterboxdPanel}>
+          <div className={s.panelHeader}>
+            <div>
+              <h3 className={s.panelTitle}>Scan statistics</h3>
+              <p className={s.panelSubtitle}>How your scanner has performed across all sessions.</p>
+            </div>
+            <div className={s.panelIcon}>
+              <ScanLine size={16} />
+            </div>
+          </div>
+          <div className={s.scanStatsGrid}>
+            <div className={s.scanStatCard}>
+              <div className={s.scanStatValue}>{scanStats.totalScans}</div>
+              <div className={s.scanStatLabel}>Total scans</div>
+            </div>
+            <div className={s.scanStatCard}>
+              <div className={s.scanStatValue} style={{ color: scanStats.successRate >= 75 ? '#22c55e' : scanStats.successRate >= 50 ? '#f59e0b' : '#ef4444' }}>
+                {scanStats.successRate}%
+              </div>
+              <div className={s.scanStatLabel}>Success rate</div>
+            </div>
+            <div className={s.scanStatCard}>
+              <div className={s.scanStatValue}>{scanStats.barcodeSuccesses}</div>
+              <div className={s.scanStatLabel}>Barcode hits</div>
+            </div>
+            <div className={s.scanStatCard}>
+              <div className={s.scanStatValue}>{scanStats.ocrSuccesses}</div>
+              <div className={s.scanStatLabel}>OCR hits</div>
+            </div>
+          </div>
+          {scanStats.barcodeSuccesses + scanStats.ocrSuccesses > 0 && (
+            <div className={s.methodBar} aria-label={`Scan method split: ${scanStats.barcodeVsOcrRatio}`}>
+              <div
+                className={s.methodBarBarcode}
+                style={{ width: `${Math.round((scanStats.barcodeSuccesses / (scanStats.barcodeSuccesses + scanStats.ocrSuccesses)) * 100)}%` }}
+              />
+            </div>
+          )}
+          {scanStats.barcodeSuccesses + scanStats.ocrSuccesses > 0 && (
+            <p className={s.methodLabel}>{scanStats.barcodeVsOcrRatio}</p>
+          )}
+        </div>
+      )}
 
       <div className={s.section}>
         <h3 className={s.sectionTitle}>Theme</h3>

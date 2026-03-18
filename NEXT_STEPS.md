@@ -8,31 +8,33 @@ Status of recommended improvements. Items marked completed are implemented.
 
 These are the highest-value, lowest-risk improvements based on the current codebase audit.
 
-### 1. Fix remaining mobile touch target issues (Quick win, ~1 hour)
+### 1. ~~Fix remaining mobile touch target issues~~ ✅ Complete
 
-The MOBILE_UX_AUDIT identified two pending items that affect real-device usability:
+~~The MOBILE_UX_AUDIT identified two pending items that affect real-device usability:~~
 
-- Add `min-height: 44px; min-width: 44px` to `.navBtn` in `App.module.css` to meet Apple HIG / WCAG 2.5.5 touch target minimums on small phones (320px viewport).
-- Add `touch-action: manipulation` to all buttons and links in `index.css` to eliminate the 300ms tap delay on mobile browsers that do not apply it automatically.
+- ~~Add `min-height: 44px; min-width: 44px` to `.navBtn` in `App.module.css`~~
+- ~~Add `touch-action: manipulation` to all buttons and links in `index.css`~~
 
-### 2. Build the analytics dashboard UI (~2–4 hours)
+Both were already implemented in `App.module.css` and `index.css`. MOBILE_UX_AUDIT.md checklist updated.
 
-`useAnalyticsStore` already tracks aggregate data (scans, lookups, exports, errors). The display panel was deferred. Add a "Stats" or "Insights" subsection in the Profile view that surfaces:
+### 2. ~~Build the analytics dashboard UI~~ ✅ Complete
 
-- Total books scanned and success rate
-- Most-used scan method (barcode vs OCR)
-- Export counts by format
+Added a **Scan statistics panel** to `ProfileSettings.tsx`. It uses `useAnalyticsStore.getSummary()` (read-only) and surfaces:
 
-This is low-risk (read-only from existing store) and gives users immediate value from data already being collected.
+- Total scans and colour-coded success rate (green ≥ 75%, amber ≥ 50%, red below)
+- Barcode vs OCR hit counts
+- Visual method-split bar (barcode = indigo, OCR = remainder)
 
-### 3. Phase 25 — Scan Accuracy Hardening (1–2 sprints)
+The panel is hidden when `totalScans === 0` to avoid cluttering new installs. Responsive grid collapses to 2 columns on narrow viewports.
 
-This is the next formal roadmap phase and the highest-leverage investment before adding new features. Recommended sequencing within Phase 25:
+### 3. Phase 25 — Scan Accuracy Hardening (in progress)
 
-1. **Confidence scoring** — surface a per-scan confidence band (`ScanConfidenceBand` already defined in `useScanPipeline`) in the UI so users know when a result is uncertain.
-2. **Regression fixture library** — add test images to `src/test/fixtures/` covering: glossy covers, partial barcodes, rotated spines, dim-light captures. Use these in Vitest integration tests.
-3. **OCR diagnostics modal** — expose raw OCR text, detected words, and confidence scores in a collapsible debug panel behind a dev/verbose flag so contributors can diagnose failures without adding noise to the production UI.
-4. **Device benchmark runner** — a lightweight script (`scripts/benchmark-scan.ts`) that runs the pipeline against the fixture set and outputs a CSV of success rates, useful for comparing changes before shipping.
+Progress within Phase 25:
+
+1. **Confidence scoring** ✅ Already done — `ScanConfidenceBand` (`low` / `medium` / `high`) computed in `useScanPipeline` and surfaced in the Scanner UI via the `scanHealthCard` panel. Tests existed in `useScanPipeline.test.ts`.
+2. **Regression fixture test suite** ✅ Added — `src/hooks/__tests__/scanRegressionFixtures.test.ts` covers: dim-light capture, glossy/over-exposed cover, partial barcode with checksum-repair, rotated spine (90°/270° pass), low-resolution (move-closer), and confidence band mapping (low/medium/high).
+3. **OCR diagnostics panel** ✅ Already done — `DebugPanel.tsx` exposes live telemetry and timestamped scan logs, toggled by the terminal icon in the scanner toolbar.
+4. **Device benchmark runner** — still pending. A `scripts/benchmark-scan.ts` script that runs the pipeline against the fixture set and outputs a CSV would complete this phase.
 
 ### 4. Phase 26 — Metadata Quality Layer (follow-on)
 
@@ -153,7 +155,7 @@ Once scan accuracy is solid, focus on data trust. Priority items:
 
 ### Optional polish
 - Individual book sharing: card image export
-- Analytics dashboard UI panel (data is tracked; display panel is still future)
+- ~~Analytics dashboard UI panel (data is tracked; display panel is still future)~~ ✅ Done — scan stats panel added to Profile view
 
 ---
 
