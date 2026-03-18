@@ -539,6 +539,52 @@
   flex-shrink: 0;
 }
 
+.scanStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.85rem;
+}
+
+.scanStatCard {
+  border-radius: 0.8rem;
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.scanStatValue {
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.scanStatLabel {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+.methodBar {
+  display: flex;
+  overflow: hidden;
+  border-radius: 9999px;
+  height: 0.65rem;
+  background: rgba(99, 102, 241, 0.2);
+  margin-bottom: 0.5rem;
+}
+
+.methodBarBarcode {
+  background: var(--primary);
+  border-radius: 9999px;
+  min-width: 0;
+  transition: width 0.4s ease;
+}
+
+.methodLabel {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -576,7 +622,8 @@
   .profileHero,
   .summaryGrid,
   .statusSummaryGrid,
-  .recentGrid {
+  .recentGrid,
+  .scanStatsGrid {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -589,8 +636,9 @@
   .profileHero,
   .summaryGrid,
   .statusSummaryGrid,
-  .recentGrid {
-    grid-template-columns: 1fr;
+  .recentGrid,
+  .scanStatsGrid {
+    grid-template-columns: 1fr 1fr;
   }
 
   .profileIdentity {
