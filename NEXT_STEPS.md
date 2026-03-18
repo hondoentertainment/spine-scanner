@@ -27,55 +27,22 @@ Added a **Scan statistics panel** to `ProfileSettings.tsx`. It uses `useAnalytic
 
 The panel is hidden when `totalScans === 0` to avoid cluttering new installs. Responsive grid collapses to 2 columns on narrow viewports.
 
-### 3. Phase 25 — Scan Accuracy Hardening (in progress)
+### 3. ~~Phase 25 — Scan Accuracy Hardening~~ ✅ Complete
 
-Progress within Phase 25:
+1. **Confidence scoring** ✅ `ScanConfidenceBand` surfaced in Scanner UI via `scanHealthCard` panel.
+2. **Regression fixture test suite** ✅ `scanRegressionFixtures.test.ts` — dim-light, glossy, partial barcode, rotated spine, low-res, confidence bands.
+3. **OCR diagnostics panel** ✅ `DebugPanel.tsx` — live telemetry + timestamped logs.
+4. **Device benchmark runner** ✅ `scripts/benchmark-scan.mjs` — runs fixtures via Vitest, appends pass/fail/duration to `benchmark-results.csv` with git SHA for tracking regressions over time.
 
-1. **Confidence scoring** ✅ Already done — `ScanConfidenceBand` (`low` / `medium` / `high`) computed in `useScanPipeline` and surfaced in the Scanner UI via the `scanHealthCard` panel. Tests existed in `useScanPipeline.test.ts`.
-2. **Regression fixture test suite** ✅ Added — `src/hooks/__tests__/scanRegressionFixtures.test.ts` covers: dim-light capture, glossy/over-exposed cover, partial barcode with checksum-repair, rotated spine (90°/270° pass), low-resolution (move-closer), and confidence band mapping (low/medium/high).
-3. **OCR diagnostics panel** ✅ Already done — `DebugPanel.tsx` exposes live telemetry and timestamped scan logs, toggled by the terminal icon in the scanner toolbar.
-4. **Device benchmark runner** — still pending. A `scripts/benchmark-scan.ts` script that runs the pipeline against the fixture set and outputs a CSV would complete this phase.
+### 4. ~~Phase 26 — Metadata Quality Layer~~ ✅ Complete
 
-### 4. Phase 26 — Metadata Quality Layer (next up)
-
-**What the code currently looks like:**
-
-- `BookEntry` in `src/types.ts` has no `metadataSource` or user-edit tracking fields.
-- `useBookLookup.ts` runs Google Books first, falls back to Open Library, but discards which source won — the result returns a plain `BookMetadata` with no provenance.
-- `BookDetail.tsx` lets users edit `title`, `author`, `isbn`, `pageCount`, `coverImg`, but an overwrite-safe "Refresh metadata" action doesn't exist yet.
-- No conflict detection when Google Books and Open Library disagree.
-
-**Concrete implementation steps:**
-
-1. **Extend `BookEntry` and `BookMetadata`** (`src/types.ts`, `src/hooks/useBookLookup.ts`)
-   ```ts
-   // types.ts
-   export type MetadataSource = 'google_books' | 'open_library' | 'manual' | 'photo';
-   export interface BookEntry {
-     // ... existing fields ...
-     metadataSource?: MetadataSource;
-     userEditedFields?: Array<'title' | 'author' | 'pageCount' | 'coverImg'>;
-   }
-
-   // useBookLookup.ts — add source to return type
-   export interface BookMetadata {
-     // ... existing fields ...
-     source: MetadataSource;
-   }
-   ```
-
-2. **Pass source through the scan flow** (`src/App.tsx` `handleScan()`)
-   - The lookup result already flows through `handleScan()` to `addBook()`. Just thread `metadata.source` onto `metadataSource` when constructing the `BookEntry`.
-
-3. **Source badge in `BookDetail`** (`src/components/BookDetail.tsx`)
-   - Small chip below the cover: "Google Books", "Open Library", or "Manual" — links to no action, just informs the user.
-
-4. **"Refresh metadata" button in `BookDetail`**
-   - Re-runs `lookupByIsbn(book.isbn)` and merges results, but skips fields listed in `userEditedFields`.
-   - After a user saves edits in `BookDetail`, record which fields changed in `userEditedFields`.
-
-5. **Missing-cover recovery** (`src/hooks/useBookLookup.ts`)
-   - If `thumbnail` is empty after both API calls, try Open Library covers API: `https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg`.
+1. **Type extensions** ✅ `src/types.ts` — `MetadataSource`, `UserEditableField`, `metadataSource?`, `userEditedFields?` on `BookEntry`.
+2. **Source threaded through lookup** ✅ `useBookLookup.ts` — `BookMetadata.source` is `'google_books'` or `'open_library'`; threaded through all fallback paths including alternate ISBN format.
+3. **Missing-cover recovery** ✅ `useBookLookup.ts` — if both APIs return no thumbnail, falls back to `https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg`.
+4. **Scan flow** ✅ `App.tsx` `handleScan()` — `metadata.source` forwarded to `BookEntry.metadataSource`; manual/photo paths explicitly set `'manual'`.
+5. **Source badge** ✅ `BookDetail.tsx` — pill chip showing "Google Books", "Open Library", "Manual entry", or "Photo only"; shows count of user-edited fields alongside.
+6. **Refresh metadata button** ✅ `BookDetail.tsx` — re-runs `lookupByIsbn`, merges fresh data but skips any fields in `userEditedFields`; spinner while loading.
+7. **User-edited field tracking** ✅ `BookDetail.tsx` `handleSave()` — diffs draft vs. original and accumulates changed fields into `userEditedFields`; also flips `metadataSource` to `'manual'`.
 
 ### 5. Phase 27 preview — Reading Workflow Expansion
 

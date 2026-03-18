@@ -291,6 +291,7 @@ function App() {
         notes: 'Added from manual ISBN entry. Verify the ISBN and complete the details.',
         dateAdded: new Date().toISOString(),
         shelfIds: [],
+        metadataSource: 'manual',
       };
 
       addBookAndOpen(reviewBook, 'Added for review. Open the book to verify the ISBN and details.', 'manual_review', true);
@@ -313,6 +314,7 @@ function App() {
           notes: '',
           dateAdded: new Date().toISOString(),
           shelfIds: [],
+          metadataSource: metadata.source,
         };
         addBookAndOpen(newBook, `Added "${metadata.title}" to your library.`, options.source === 'manual' ? 'manual' : 'scan', options.source === 'manual');
       } else {
@@ -336,6 +338,7 @@ function App() {
             notes: '',
             dateAdded: new Date().toISOString(),
             shelfIds: [],
+            metadataSource: 'manual',
           };
           addBookAndOpen(newBook, 'Added with ISBN only. You can fill in the details in your library.', options.source === 'manual' ? 'manual_no_metadata' : 'scan_no_metadata', options.source === 'manual');
         } else {

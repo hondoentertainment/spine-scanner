@@ -1,3 +1,9 @@
+/** Which API or flow provided the book's metadata. */
+export type MetadataSource = 'google_books' | 'open_library' | 'manual' | 'photo';
+
+/** Fields the user has explicitly edited, protecting them from metadata refreshes. */
+export type UserEditableField = 'title' | 'author' | 'pageCount' | 'coverImg';
+
 export interface BookEntry {
   id: string;
   isbn: string;
@@ -12,6 +18,10 @@ export interface BookEntry {
   notes: string;
   dateAdded: string;
   shelfIds: string[];
+  /** Which API or flow supplied the current metadata. */
+  metadataSource?: MetadataSource;
+  /** Fields the user has manually edited; metadata refreshes skip these. */
+  userEditedFields?: UserEditableField[];
 }
 
 export interface Shelf {

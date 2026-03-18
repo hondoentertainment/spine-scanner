@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
+import { useBookLookup } from '../hooks/useBookLookup.ts';
 import { useToast } from './Toast.tsx';
 import { useFocusTrap } from '../hooks/useFocusTrap.ts';
-import type { BookEntry } from '../types.ts';
+import type { BookEntry, UserEditableField } from '../types.ts';
 import { generateAmazonLink } from '../utils/amazonLink.ts';
 import { shareBook } from '../utils/shareBook.ts';
 import { isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import {
   X, ExternalLink, BookOpen, CheckCircle, Clock, XCircle,
-  Pencil, Save, Tag, Trash2, Share2
+  Pencil, Save, Tag, Trash2, Share2, RefreshCw
 } from 'lucide-react';
 import styles from './BookDetail.module.css';
 
@@ -31,8 +32,18 @@ const statusIcons: Record<BookEntry['status'], React.ReactNode> = {
   dnf: <XCircle size={16} />,
 };
 
+const sourceLabels: Record<string, string> = {
+  google_books: 'Google Books',
+  open_library: 'Open Library',
+  manual: 'Manual entry',
+  photo: 'Photo only',
+};
+
+const EDITABLE_FIELDS: UserEditableField[] = ['title', 'author', 'pageCount', 'coverImg'];
+
 const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   const { updateBook, updateBookStatus, updateBookNotes, removeBook, shelves, assignShelf, unassignShelf } = useBookStore();
+  const { lookupByIsbn, loading: refreshing } = useBookLookup();
   const { toast, confirm } = useToast();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
   const [editing, setEditing] = useState(false);
@@ -61,6 +72,16 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   };
 
   const handleSave = () => {
+    // Determine which fields the user actually changed
+    const changed: UserEditableField[] = [];
+    if (draft.title.trim() && draft.title.trim() !== book.title) changed.push('title');
+    if (draft.author.trim() && draft.author.trim() !== book.author) changed.push('author');
+    if (draft.pageCount !== book.pageCount) changed.push('pageCount');
+    if (draft.coverImg.trim() !== book.coverImg) changed.push('coverImg');
+
+    const existingEdited = book.userEditedFields ?? [];
+    const merged = Array.from(new Set([...existingEdited, ...changed])) as UserEditableField[];
+
     updateBook(book.id, {
       title: draft.title.trim() || book.title,
       author: draft.author.trim() || book.author,
@@ -68,12 +89,38 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
       pageCount: draft.pageCount || 0,
       coverImg: draft.coverImg.trim(),
       amazonLink: generateAmazonLink(draft.isbn.trim() || book.isbn),
+      metadataSource: 'manual',
+      userEditedFields: merged.length > 0 ? merged : existingEdited,
     });
     setEditing(false);
     toast('Book updated', 'success');
   };
 
   const handleCancel = () => setEditing(false);
+
+  const handleRefreshMetadata = async () => {
+    if (isBookPhotoOnly(book)) {
+      toast('Photo-only books cannot be refreshed via ISBN lookup', 'info');
+      return;
+    }
+    const freshData = await lookupByIsbn(book.isbn);
+    if (!freshData) {
+      toast('Could not find updated metadata for this ISBN', 'error');
+      return;
+    }
+
+    const protected_ = book.userEditedFields ?? [];
+    const updates: Partial<Omit<BookEntry, 'id'>> = {
+      metadataSource: freshData.source,
+    };
+    if (!protected_.includes('title')) updates.title = freshData.title;
+    if (!protected_.includes('author')) updates.author = freshData.authors.join(', ');
+    if (!protected_.includes('pageCount') && freshData.pageCount > 0) updates.pageCount = freshData.pageCount;
+    if (!protected_.includes('coverImg') && freshData.thumbnail) updates.coverImg = freshData.thumbnail;
+
+    updateBook(book.id, updates);
+    toast('Metadata refreshed', 'success');
+  };
 
   const handleRemove = async () => {
     const yes = await confirm({
@@ -100,6 +147,8 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
     }
   };
 
+  const protectedFields = book.userEditedFields ?? [];
+
   return (
     <div className={styles.overlay} onClick={onClose} role="dialog" aria-modal="true" aria-label={`Details for ${book.title}`}>
       <div ref={focusTrapRef} className={styles.modal} onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
@@ -118,14 +167,18 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
           <div className={styles.meta}>
             {editing ? (
               <div className={styles.editFields}>
-                <label className={styles.label}>Title</label>
+                <label className={styles.label}>
+                  Title {protectedFields.includes('title') && <span className={styles.editedBadge}>edited</span>}
+                </label>
                 <input
                   className={styles.input}
                   value={draft.title}
                   onChange={(e) => setDraft({ ...draft, title: e.target.value })}
                   autoFocus
                 />
-                <label className={styles.label}>Author</label>
+                <label className={styles.label}>
+                  Author {protectedFields.includes('author') && <span className={styles.editedBadge}>edited</span>}
+                </label>
                 <input
                   className={styles.input}
                   value={draft.author}
@@ -141,7 +194,9 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                     />
                   </div>
                   <div style={{ width: '90px' }}>
-                    <label className={styles.label}>Pages</label>
+                    <label className={styles.label}>
+                      Pages {protectedFields.includes('pageCount') && <span className={styles.editedBadge}>edited</span>}
+                    </label>
                     <input
                       className={styles.input}
                       type="number"
@@ -151,7 +206,9 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                     />
                   </div>
                 </div>
-                <label className={styles.label}>Cover URL</label>
+                <label className={styles.label}>
+                  Cover URL {protectedFields.includes('coverImg') && <span className={styles.editedBadge}>edited</span>}
+                </label>
                 <input
                   className={styles.input}
                   type="url"
@@ -177,6 +234,14 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                   {book.pageCount > 0 && <span>{book.pageCount} pages</span>}
                   <span>Added {new Date(book.dateAdded).toLocaleDateString()}</span>
                 </div>
+                {book.metadataSource && (
+                  <div className={styles.sourceBadge}>
+                    {sourceLabels[book.metadataSource] ?? book.metadataSource}
+                    {protectedFields.length > 0 && (
+                      <span className={styles.sourceBadgeEdited}> · {protectedFields.length} field{protectedFields.length > 1 ? 's' : ''} edited</span>
+                    )}
+                  </div>
+                )}
                 <div className={styles.linkRow}>
                   {generateAmazonLink(book.isbn) && (
                     <a
@@ -270,11 +335,24 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
 
         {/* Actions */}
         <div className={styles.actions}>
-          {!editing && (
-            <button onClick={handleEdit} className={styles.editBtn}>
-              <Pencil size={14} /> Edit Details
-            </button>
-          )}
+          <div className={styles.actionsLeft}>
+            {!editing && (
+              <button onClick={handleEdit} className={styles.editBtn}>
+                <Pencil size={14} /> Edit Details
+              </button>
+            )}
+            {!editing && !isBookPhotoOnly(book) && (
+              <button
+                onClick={handleRefreshMetadata}
+                className={styles.refreshBtn}
+                disabled={refreshing}
+                aria-label="Refresh metadata from API"
+              >
+                <RefreshCw size={14} className={refreshing ? styles.spinning : undefined} />
+                {refreshing ? 'Refreshing…' : 'Refresh'}
+              </button>
+            )}
+          </div>
           <button onClick={handleRemove} className={styles.removeBtn}>
             <Trash2 size={14} /> Remove
           </button>
@@ -284,4 +362,6 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   );
 };
 
+// Re-export for use in tests
+export { EDITABLE_FIELDS };
 export default BookDetail;

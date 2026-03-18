@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { isbn13To10, isbn10To13 } from '../utils/isbnValidation.ts';
+import type { MetadataSource } from '../types.ts';
 
 export interface BookMetadata {
     title: string;
@@ -7,6 +8,8 @@ export interface BookMetadata {
     pageCount: number;
     thumbnail: string;
     isbn: string;
+    /** Which API provided this metadata. */
+    source: MetadataSource;
 }
 
 const cache = new Map<string, BookMetadata>();
@@ -48,6 +51,7 @@ const lookupGoogleBooks = async (isbn: string): Promise<BookMetadata | null> => 
         pageCount: volumeInfo.pageCount || 0,
         thumbnail: volumeInfo.imageLinks?.thumbnail || '',
         isbn,
+        source: 'google_books',
     };
 };
 
@@ -65,7 +69,16 @@ const lookupOpenLibrary = async (isbn: string): Promise<BookMetadata | null> => 
         pageCount: entry.number_of_pages || 0,
         thumbnail: entry.cover?.medium || entry.cover?.small || '',
         isbn,
+        source: 'open_library',
     };
+};
+
+/**
+ * Attempt to recover a missing cover image from the Open Library covers CDN.
+ * Returns the CDN URL if the image loads, otherwise empty string.
+ */
+const recoverCoverImage = (isbn: string): string => {
+    return `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
 };
 
 export const useBookLookup = () => {
@@ -110,6 +123,11 @@ export const useBookLookup = () => {
             if (!result) {
                 setError('No book found with this ISBN');
                 return null;
+            }
+
+            // If both APIs returned no cover image, try the Open Library covers CDN
+            if (!result.thumbnail) {
+                result = { ...result, thumbnail: recoverCoverImage(isbn) };
             }
 
             cache.set(isbn, result);
