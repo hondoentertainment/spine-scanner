@@ -4,6 +4,46 @@ Status of recommended improvements. Items marked completed are implemented.
 
 ---
 
+## Recommended Immediate Actions
+
+These are the highest-value, lowest-risk improvements based on the current codebase audit.
+
+### 1. Fix remaining mobile touch target issues (Quick win, ~1 hour)
+
+The MOBILE_UX_AUDIT identified two pending items that affect real-device usability:
+
+- Add `min-height: 44px; min-width: 44px` to `.navBtn` in `App.module.css` to meet Apple HIG / WCAG 2.5.5 touch target minimums on small phones (320px viewport).
+- Add `touch-action: manipulation` to all buttons and links in `index.css` to eliminate the 300ms tap delay on mobile browsers that do not apply it automatically.
+
+### 2. Build the analytics dashboard UI (~2–4 hours)
+
+`useAnalyticsStore` already tracks aggregate data (scans, lookups, exports, errors). The display panel was deferred. Add a "Stats" or "Insights" subsection in the Profile view that surfaces:
+
+- Total books scanned and success rate
+- Most-used scan method (barcode vs OCR)
+- Export counts by format
+
+This is low-risk (read-only from existing store) and gives users immediate value from data already being collected.
+
+### 3. Phase 25 — Scan Accuracy Hardening (1–2 sprints)
+
+This is the next formal roadmap phase and the highest-leverage investment before adding new features. Recommended sequencing within Phase 25:
+
+1. **Confidence scoring** — surface a per-scan confidence band (`ScanConfidenceBand` already defined in `useScanPipeline`) in the UI so users know when a result is uncertain.
+2. **Regression fixture library** — add test images to `src/test/fixtures/` covering: glossy covers, partial barcodes, rotated spines, dim-light captures. Use these in Vitest integration tests.
+3. **OCR diagnostics modal** — expose raw OCR text, detected words, and confidence scores in a collapsible debug panel behind a dev/verbose flag so contributors can diagnose failures without adding noise to the production UI.
+4. **Device benchmark runner** — a lightweight script (`scripts/benchmark-scan.ts`) that runs the pipeline against the fixture set and outputs a CSV of success rates, useful for comparing changes before shipping.
+
+### 4. Phase 26 — Metadata Quality Layer (follow-on)
+
+Once scan accuracy is solid, focus on data trust. Priority items:
+
+- Store `metadataSource` (`google_books` | `open_library` | `manual`) per book entry.
+- Show a source badge in `BookDetail` and flag entries where Google Books and Open Library disagree on author or page count.
+- Add a "Refresh metadata" action per book that re-queries APIs but never overwrites user-edited fields (check a `userEdited` flag per field).
+
+---
+
 ## Completed
 
 | # | Item | Status |
