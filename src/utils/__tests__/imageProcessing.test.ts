@@ -78,7 +78,7 @@ describe('applyOtsuBinarization', () => {
 
 describe('applyAdaptiveThreshold', () => {
   it('produces binary output', () => {
-    const img = createImageData(30, 30, (x, y) => 80 + (x % 5) * 20);
+    const img = createImageData(30, 30, (x, _y) => 80 + (x % 5) * 20);
     applyAdaptiveThreshold(img, 15);
     for (let i = 0; i < img.data.length; i += 4) {
       expect([0, 255]).toContain(img.data[i]);

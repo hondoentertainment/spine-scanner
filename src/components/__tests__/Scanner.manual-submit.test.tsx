@@ -11,12 +11,11 @@ class MockImage {
   onload: (() => void) | null = null;
   onerror: ((err: Error) => void) | null = null;
   constructor() {
-    const self = this;
     return new Proxy(this, {
       set(target, prop, value) {
         (target as Record<string, unknown>)[prop] = value;
-        if (prop === 'src' && value && self.onload) {
-          Promise.resolve().then(() => self.onload?.());
+        if (prop === 'src' && value && (target as MockImage).onload) {
+          Promise.resolve().then(() => (target as MockImage).onload?.());
         }
         return true;
       },
