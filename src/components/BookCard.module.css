@@ -2,6 +2,35 @@
 .card {
   animation: fadeIn 0.2s ease-out;
   cursor: pointer;
+  position: relative;
+}
+
+.cardSelected {
+  outline: 2px solid var(--accent-blue);
+  background: rgba(56, 189, 248, 0.06);
+}
+
+.selectDot {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  transition: all 0.15s;
+}
+
+.selectDotOn {
+  border-color: var(--accent-blue);
+  background: var(--accent-blue);
+  color: white;
 }
 
 .cardInner {

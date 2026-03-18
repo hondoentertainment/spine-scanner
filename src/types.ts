@@ -30,6 +30,29 @@ export interface BookEntry {
   progressPages?: number;
 }
 
+/** Fields that a smart shelf rule can evaluate. */
+export type SmartShelfField = 'status' | 'title' | 'author' | 'pageCount' | 'dateAdded' | 'hasProgress';
+
+/** Comparison operators for smart shelf rules. */
+export type SmartShelfOp = 'eq' | 'neq' | 'contains' | 'gt' | 'lt' | 'within_days';
+
+export interface SmartShelfRule {
+  field: SmartShelfField;
+  op: SmartShelfOp;
+  /** Serialized value — numbers and booleans are stored as strings. */
+  value: string;
+}
+
+/** A rule-based shelf that auto-matches books without manual assignment. */
+export interface SmartShelf {
+  id: string;
+  name: string;
+  color: string;
+  rules: SmartShelfRule[];
+  /** 'all' = every rule must match; 'any' = at least one rule must match. */
+  match: 'all' | 'any';
+}
+
 export interface Shelf {
   id: string;
   name: string;

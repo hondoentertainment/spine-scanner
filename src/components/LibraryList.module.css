@@ -431,6 +431,137 @@
   font-weight: 600;
 }
 
+/* ---- Smart shelf filter button ---- */
+.smartShelfBtn {
+  font-style: italic;
+}
+
+/* ---- Bulk action bar ---- */
+.bulkBar {
+  position: fixed;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: 9999px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  flex-wrap: wrap;
+  max-width: calc(100vw - 2rem);
+}
+
+.bulkCount {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-right: 1px solid var(--glass-border);
+  padding-right: 0.75rem;
+}
+
+.bulkLink {
+  font-size: 0.75rem;
+  color: var(--accent-blue);
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.bulkActions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.bulkStatusBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 0;
+}
+
+.bulkActionBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.bulkActionBtn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-main);
+}
+
+.bulkShelfDrop {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 0;
+  padding: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 130px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+}
+
+.bulkShelfItem {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 0.4rem;
+  text-align: left;
+}
+
+.bulkShelfDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.bulkRemoveBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+  min-height: 0;
+  padding: 0;
+}
+
+.bulkRemoveBtn:hover {
+  background: rgba(248, 113, 113, 0.2);
+}
+
 @media (max-width: 900px) {
   .hero {
     grid-template-columns: 1fr;

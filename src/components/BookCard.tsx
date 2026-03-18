@@ -11,9 +11,11 @@ import s from './BookCard.module.css';
 interface BookCardProps {
     book: BookEntry;
     onClick?: () => void;
+    selected?: boolean;
+    selectMode?: boolean;
 }
 
-const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
+const BookCard: React.FC<BookCardProps> = ({ book, onClick, selected, selectMode }) => {
     const { updateBook, updateBookStatus, updateBookNotes, removeBook, shelves, assignShelf, unassignShelf } = useBookStore();
     const { toast, confirm } = useToast();
     const [editing, setEditing] = useState(false);
@@ -138,8 +140,15 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
     }
 
     return (
-        <div className={`book-card glass ${s.card}`} onClick={onClick} role="button" tabIndex={0}
+        <div className={`book-card glass ${s.card} ${selected ? s.cardSelected : ''}`}
+             onClick={onClick} role="button" tabIndex={0}
+             aria-pressed={selectMode ? selected : undefined}
              onKeyDown={(e) => { if (e.key === 'Enter') onClick?.(); }}>
+            {selectMode && (
+                <div className={`${s.selectDot} ${selected ? s.selectDotOn : ''}`} aria-hidden="true">
+                    {selected && <CheckCircle size={14} />}
+                </div>
+            )}
             <div className={s.cardInner}>
                 <img
                     src={getBookCoverSrc(book.coverImg)}

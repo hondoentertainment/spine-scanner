@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { BookEntry, Shelf } from '../types.ts';
+import type { BookEntry, Shelf, SmartShelf } from '../types.ts';
 
 interface BookStore {
   books: BookEntry[];
   shelves: Shelf[];
+  smartShelves: SmartShelf[];
   addBook: (book: BookEntry) => void;
   removeBook: (id: string) => void;
   updateBook: (id: string, updates: Partial<Omit<BookEntry, 'id'>>) => void;
@@ -17,6 +18,9 @@ interface BookStore {
   setShelves: (shelves: Shelf[]) => void;
   assignShelf: (bookId: string, shelfId: string) => void;
   unassignShelf: (bookId: string, shelfId: string) => void;
+  addSmartShelf: (shelf: SmartShelf) => void;
+  updateSmartShelf: (id: string, updates: Partial<Omit<SmartShelf, 'id'>>) => void;
+  removeSmartShelf: (id: string) => void;
 }
 
 export const useBookStore = create<BookStore>()(
@@ -24,6 +28,7 @@ export const useBookStore = create<BookStore>()(
     (set) => ({
       books: [],
       shelves: [],
+      smartShelves: [],
       addBook: (book) => set((state) => ({ books: [book, ...state.books] })),
       removeBook: (id) => set((state) => ({ books: state.books.filter((b) => b.id !== id) })),
       updateBook: (id, updates) =>
@@ -79,6 +84,14 @@ export const useBookStore = create<BookStore>()(
               : b
           ),
         })),
+      addSmartShelf: (shelf) =>
+        set((state) => ({ smartShelves: [...state.smartShelves, shelf] })),
+      updateSmartShelf: (id, updates) =>
+        set((state) => ({
+          smartShelves: state.smartShelves.map((s) => (s.id === id ? { ...s, ...updates } : s)),
+        })),
+      removeSmartShelf: (id) =>
+        set((state) => ({ smartShelves: state.smartShelves.filter((s) => s.id !== id) })),
     }),
     {
       name: 'spine-scanner-storage',

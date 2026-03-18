@@ -44,25 +44,32 @@ The panel is hidden when `totalScans === 0` to avoid cluttering new installs. Re
 6. **Refresh metadata button** ✅ `BookDetail.tsx` — re-runs `lookupByIsbn`, merges fresh data but skips any fields in `userEditedFields`; spinner while loading.
 7. **User-edited field tracking** ✅ `BookDetail.tsx` `handleSave()` — diffs draft vs. original and accumulates changed fields into `userEditedFields`; also flips `metadataSource` to `'manual'`.
 
-### 5. Phase 27 preview — Reading Workflow Expansion
+### 5. ~~Phase 27 — Reading Workflow Expansion~~ ✅ Complete
 
-Once Phase 26 is done, the highest-value next feature is lightweight reading progress tracking. No new infrastructure is needed — it extends `BookEntry`:
+1. **Type extensions** ✅ `src/types.ts` — `startedAt?`, `finishedAt?`, `progressPages?` on `BookEntry`.
+2. **Auto-timestamps** ✅ `useBookStore.ts` `updateBookStatus` — sets `startedAt` on first transition to `'reading'`, `finishedAt` on first transition to `'read'`.
+3. **Progress panel** ✅ `BookDetail.tsx` — page input + gradient progress bar when `status === 'reading'`; finished badge with days-to-complete when `status === 'read'`.
+4. **Progress bar on card** ✅ `BookCard.tsx` — mini 4px progress bar + "X / Y pages" label for in-progress books with `progressPages > 0`.
+5. **Profile stats** ✅ `ProfileSettings.tsx` — "This year" stat card counting books finished in the current calendar year and their total pages.
 
-```ts
-// types.ts additions
-export interface BookEntry {
-  // ... existing ...
-  startedAt?: string;   // ISO date when status changed to 'reading'
-  finishedAt?: string;  // ISO date when status changed to 'read'
-  progressPages?: number; // user-entered current page
-}
-```
+### 6. ~~Phase 28 — Collections and Smart Shelves~~ ✅ Complete
 
-- Record `startedAt` automatically when `updateBookStatus(id, 'reading')` is called.
-- Record `finishedAt` automatically when `updateBookStatus(id, 'read')` is called.
-- Add a page-progress input in `BookDetail` for books with `status === 'reading'`.
-- Surface a simple "X of Y pages" bar in `BookCard` for in-progress books.
-- Extend the Profile stats panel with pages-read this year using `finishedAt`.
+1. **Smart shelf types** ✅ `src/types.ts` — `SmartShelf`, `SmartShelfRule`, `SmartShelfField`, `SmartShelfOp`.
+2. **Rule evaluation** ✅ `src/utils/smartShelf.ts` — `matchesSmartShelf()` evaluates rules for status, title, author, page count, date added, and has-progress fields.
+3. **Store** ✅ `useBookStore.ts` — `smartShelves[]` persisted to localStorage; `addSmartShelf`, `updateSmartShelf`, `removeSmartShelf`.
+4. **Smart shelf filter** ✅ `LibraryList.tsx` — smart shelves appear alongside manual shelves in the filter bar (⚡ icon + italic style); `smartShelfFilter` computes matches on-the-fly.
+5. **Smart shelf builder** ✅ `ShelfManager.tsx` — rule builder with field/op/value rows, match mode (all/any), live preview count, create/edit/delete.
+6. **Multi-select bulk actions** ✅ `LibraryList.tsx` — ☑ select mode toggle in header; clicking cards in select mode toggles selection; floating bulk bar (set status × 4, add to shelf, remove).
+7. **Selection UI** ✅ `BookCard.tsx` — `selected`/`selectMode` props; checkmark dot overlay on selected cards.
+
+### 7. Phase 29 preview — Social and Household Sharing
+
+Book lending and shared library access across trusted users. Key building blocks:
+
+- A `lends` table / local array: `{ bookId, lentTo, lentAt, returnedAt? }`.
+- "Lend this book" action in `BookDetail` that captures who it was lent to.
+- Due-date reminder via `finishedAt`-style timestamp + notification badge.
+- Shared shelf URLs that let a household member view (but not edit) your library.
 
 ---
 

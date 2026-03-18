@@ -7,10 +7,13 @@ import ShelfManager from './ShelfManager.tsx';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   Search, Settings, ArrowUpDown, Filter, BookOpen, Clock, CheckCircle, XCircle,
-  BarChart3, Tag, LayoutGrid, List, Sparkles, RotateCcw, ScanLine, LibraryBig
+  BarChart3, Tag, LayoutGrid, List, Sparkles, RotateCcw, ScanLine, LibraryBig,
+  Zap, CheckSquare, Trash2
 } from 'lucide-react';
 import type { BookEntry } from '../types.ts';
 import { getActiveLibraryFilterLabels, getBookCoverSrc, getLibraryInsights } from '../utils/bookPresentation.ts';
+import { matchesSmartShelf } from '../utils/smartShelf.ts';
+import { useToast } from './Toast.tsx';
 import s from './LibraryList.module.css';
 
 type SortField = 'title' | 'author' | 'dateAdded' | 'pageCount';
@@ -25,8 +28,9 @@ interface LibraryListProps {
 }
 
 const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning, initialOpenIsbn, onOpenComplete }) => {
-    const { books, shelves, updateBookStatus } = useBookStore();
+    const { books, shelves, smartShelves, updateBookStatus, removeBook, assignShelf } = useBookStore();
     const { preferences, updatePreferences } = useProfileStore();
+    const { toast, confirm } = useToast();
     const [searchTerm, setSearchTerm] = useState('');
     const sortBy = preferences.librarySortBy;
     const sortAsc = preferences.librarySortAsc;
@@ -35,7 +39,11 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
     const showStats = preferences.showStatsDefault;
     const showShelves = preferences.showShelvesDefault;
     const [shelfFilter, setShelfFilter] = useState<string | null>(null);
+    const [smartShelfFilter, setSmartShelfFilter] = useState<string | null>(null);
     const [selectedBook, setSelectedBook] = useState<BookEntry | null>(null);
+    const [selectMode, setSelectMode] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [bulkShelfOpen, setBulkShelfOpen] = useState(false);
 
     const setSortBy = useCallback((v: SortField) => updatePreferences({ librarySortBy: v }), [updatePreferences]);
     const setSortAsc = useCallback((v: boolean) => updatePreferences({ librarySortAsc: v }), [updatePreferences]);
@@ -62,6 +70,21 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
 
     const insights = useMemo(() => getLibraryInsights(books), [books]);
 
+    const toggleSelect = useCallback((id: string) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }, []);
+
+    const exitSelectMode = useCallback(() => {
+        setSelectMode(false);
+        setSelectedIds(new Set());
+        setBulkShelfOpen(false);
+    }, []);
+
     const filteredAndSorted = useMemo(() => {
         let result = books.filter(book =>
             book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -71,6 +94,10 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
 
         if (statusFilter !== 'all') result = result.filter(b => b.status === statusFilter);
         if (shelfFilter) result = result.filter(b => (b.shelfIds || []).includes(shelfFilter));
+        if (smartShelfFilter) {
+            const ss = smartShelves.find((s) => s.id === smartShelfFilter);
+            if (ss) result = result.filter((b) => matchesSmartShelf(b, ss));
+        }
 
         result.sort((a, b) => {
             let cmp = 0;
@@ -84,7 +111,7 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
         });
 
         return result;
-    }, [books, searchTerm, statusFilter, shelfFilter, sortBy, sortAsc]);
+    }, [books, searchTerm, statusFilter, shelfFilter, smartShelfFilter, smartShelves, sortBy, sortAsc]);
 
     const selectedShelf = shelves.find((shelf) => shelf.id === shelfFilter) ?? null;
     const activeFilters = useMemo(() => getActiveLibraryFilterLabels({
@@ -98,7 +125,33 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
         setSearchTerm('');
         setStatusFilter('all');
         setShelfFilter(null);
+        setSmartShelfFilter(null);
     }, [setStatusFilter]);
+
+    const bulkSetStatus = useCallback((status: BookEntry['status']) => {
+        selectedIds.forEach((id) => updateBookStatus(id, status));
+        toast(`Updated ${selectedIds.size} book${selectedIds.size !== 1 ? 's' : ''}`, 'success');
+        exitSelectMode();
+    }, [selectedIds, updateBookStatus, toast, exitSelectMode]);
+
+    const bulkAssignShelf = useCallback((shelfId: string) => {
+        selectedIds.forEach((id) => assignShelf(id, shelfId));
+        toast(`Added ${selectedIds.size} book${selectedIds.size !== 1 ? 's' : ''} to shelf`, 'success');
+        exitSelectMode();
+    }, [selectedIds, assignShelf, toast, exitSelectMode]);
+
+    const bulkRemove = useCallback(async () => {
+        const yes = await confirm({
+            title: 'Remove Books',
+            message: `Remove ${selectedIds.size} book${selectedIds.size !== 1 ? 's' : ''}? This cannot be undone.`,
+            confirmLabel: 'Remove',
+            danger: true,
+        });
+        if (!yes) return;
+        selectedIds.forEach((id) => removeBook(id));
+        toast(`Removed ${selectedIds.size} book${selectedIds.size !== 1 ? 's' : ''}`, 'info');
+        exitSelectMode();
+    }, [selectedIds, removeBook, confirm, toast, exitSelectMode]);
 
     const virtualizer = useVirtualizer({
         count: filteredAndSorted.length,
@@ -210,6 +263,15 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
                     </p>
                 </div>
                 <div className={s.headerActions}>
+                    <button onClick={() => { setSelectMode(!selectMode); if (selectMode) exitSelectMode(); }}
+                        className={`glass ${s.iconBtn}`}
+                        aria-label={selectMode ? 'Exit select mode' : 'Enter select mode'}
+                        style={{
+                            color: selectMode ? 'var(--accent-blue)' : 'var(--text-muted)',
+                            background: selectMode ? 'rgba(56, 189, 248, 0.1)' : undefined,
+                        }}>
+                        <CheckSquare size={20} />
+                    </button>
                     <button onClick={() => setShowShelves(!showShelves)} className={`glass ${s.iconBtn}`}
                         aria-label="Toggle shelf manager"
                         style={{
@@ -314,16 +376,17 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
                 ))}
             </div>
 
-            {shelves.length > 0 && (
+            {(shelves.length > 0 || smartShelves.length > 0) && (
                 <div className={s.filterRow}>
                     <Tag size={16} style={{ color: 'var(--text-muted)' }} />
-                    <button onClick={() => setShelfFilter(null)} className={`glass ${s.filterBtn}`}
-                        style={{ opacity: shelfFilter === null ? 1 : 0.6 }}>
+                    <button onClick={() => { setShelfFilter(null); setSmartShelfFilter(null); }}
+                        className={`glass ${s.filterBtn}`}
+                        style={{ opacity: shelfFilter === null && smartShelfFilter === null ? 1 : 0.6 }}>
                         All Shelves
                     </button>
                     {shelves.map(shelf => (
                         <button key={shelf.id}
-                            onClick={() => setShelfFilter(shelfFilter === shelf.id ? null : shelf.id)}
+                            onClick={() => { setSmartShelfFilter(null); setShelfFilter(shelfFilter === shelf.id ? null : shelf.id); }}
                             className={`glass ${s.filterBtn}`}
                             style={{
                                 color: shelfFilter === shelf.id ? shelf.color : 'var(--text-muted)',
@@ -331,6 +394,22 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
                                 borderLeft: `3px solid ${shelf.color}`,
                             }}>
                             {shelf.name} <span className={s.filterCount}>({countBooksOnShelf(shelf.id)})</span>
+                        </button>
+                    ))}
+                    {smartShelves.map(ss => (
+                        <button key={ss.id}
+                            onClick={() => { setShelfFilter(null); setSmartShelfFilter(smartShelfFilter === ss.id ? null : ss.id); }}
+                            className={`glass ${s.filterBtn} ${s.smartShelfBtn}`}
+                            style={{
+                                color: smartShelfFilter === ss.id ? ss.color : 'var(--text-muted)',
+                                background: smartShelfFilter === ss.id ? `${ss.color}20` : undefined,
+                                borderLeft: `3px solid ${ss.color}`,
+                            }}>
+                            <Zap size={11} />
+                            {ss.name}
+                            <span className={s.filterCount}>
+                                ({books.filter((b) => matchesSmartShelf(b, ss)).length})
+                            </span>
                         </button>
                     ))}
                 </div>
@@ -409,7 +488,10 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
                                     }}>
                                     <div className={s.gridRow}>
                                         {rowBooks.map((book) => (
-                                            <BookCard key={book.id} book={book} onClick={() => openDetail(book)} />
+                                            <BookCard key={book.id} book={book}
+                                                onClick={() => selectMode ? toggleSelect(book.id) : openDetail(book)}
+                                                selected={selectMode && selectedIds.has(book.id)}
+                                                selectMode={selectMode} />
                                         ))}
                                     </div>
                                 </div>
@@ -432,7 +514,9 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
                                         width: '100%',
                                         transform: `translateY(${vRow.start}px)`,
                                     }}>
-                                    <div className={s.listRow} onClick={() => openDetail(book)}
+                                    <div className={s.listRow}
+                                         onClick={() => selectMode ? toggleSelect(book.id) : openDetail(book)}
+                                         style={selectMode && selectedIds.has(book.id) ? { outline: '2px solid var(--accent-blue)', background: 'rgba(56,189,248,0.06)' } : undefined}
                                          role="button" tabIndex={0}
                                          onKeyDown={(e) => { if (e.key === 'Enter') openDetail(book); }}>
                                         <img src={getBookCoverSrc(book.coverImg)}
@@ -461,8 +545,65 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
                 </div>
             )}
 
-            {freshSelectedBook && (
+            {freshSelectedBook && !selectMode && (
                 <BookDetail book={freshSelectedBook} onClose={closeDetail} />
+            )}
+
+            {selectMode && (
+                <div className={s.bulkBar} role="toolbar" aria-label="Bulk actions">
+                    <div className={s.bulkCount}>
+                        <span>{selectedIds.size} selected</span>
+                        <button className={s.bulkLink}
+                            onClick={() => setSelectedIds(new Set(filteredAndSorted.map((b) => b.id)))}>
+                            All
+                        </button>
+                        <button className={s.bulkLink} onClick={() => setSelectedIds(new Set())}>
+                            None
+                        </button>
+                        <button className={s.bulkLink} onClick={exitSelectMode}>
+                            Cancel
+                        </button>
+                    </div>
+                    {selectedIds.size > 0 && (
+                        <div className={s.bulkActions}>
+                            {statusFilters.filter(f => f.value !== 'all').map((f) => (
+                                <button key={f.value}
+                                    onClick={() => bulkSetStatus(f.value as BookEntry['status'])}
+                                    className={s.bulkStatusBtn}
+                                    style={{ color: f.color, background: `${f.color}15` }}
+                                    title={`Mark as ${f.label}`}
+                                    aria-label={`Mark selected as ${f.label}`}>
+                                    {f.icon}
+                                </button>
+                            ))}
+                            {shelves.length > 0 && (
+                                <div style={{ position: 'relative' }}>
+                                    <button onClick={() => setBulkShelfOpen(!bulkShelfOpen)}
+                                        className={s.bulkActionBtn}
+                                        aria-label="Add selected to shelf">
+                                        <Tag size={14} /> Shelf
+                                    </button>
+                                    {bulkShelfOpen && (
+                                        <div className={s.bulkShelfDrop}>
+                                            {shelves.map((sh) => (
+                                                <button key={sh.id}
+                                                    onClick={() => bulkAssignShelf(sh.id)}
+                                                    className={s.bulkShelfItem}
+                                                    style={{ color: sh.color }}>
+                                                    <span className={s.bulkShelfDot} style={{ background: sh.color }} />
+                                                    {sh.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            <button onClick={bulkRemove} className={s.bulkRemoveBtn} aria-label="Remove selected books">
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
+                    )}
+                </div>
             )}
         </div>
     );
