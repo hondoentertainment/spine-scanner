@@ -36,13 +36,66 @@ Progress within Phase 25:
 3. **OCR diagnostics panel** ✅ Already done — `DebugPanel.tsx` exposes live telemetry and timestamped scan logs, toggled by the terminal icon in the scanner toolbar.
 4. **Device benchmark runner** — still pending. A `scripts/benchmark-scan.ts` script that runs the pipeline against the fixture set and outputs a CSV would complete this phase.
 
-### 4. Phase 26 — Metadata Quality Layer (follow-on)
+### 4. Phase 26 — Metadata Quality Layer (next up)
 
-Once scan accuracy is solid, focus on data trust. Priority items:
+**What the code currently looks like:**
 
-- Store `metadataSource` (`google_books` | `open_library` | `manual`) per book entry.
-- Show a source badge in `BookDetail` and flag entries where Google Books and Open Library disagree on author or page count.
-- Add a "Refresh metadata" action per book that re-queries APIs but never overwrites user-edited fields (check a `userEdited` flag per field).
+- `BookEntry` in `src/types.ts` has no `metadataSource` or user-edit tracking fields.
+- `useBookLookup.ts` runs Google Books first, falls back to Open Library, but discards which source won — the result returns a plain `BookMetadata` with no provenance.
+- `BookDetail.tsx` lets users edit `title`, `author`, `isbn`, `pageCount`, `coverImg`, but an overwrite-safe "Refresh metadata" action doesn't exist yet.
+- No conflict detection when Google Books and Open Library disagree.
+
+**Concrete implementation steps:**
+
+1. **Extend `BookEntry` and `BookMetadata`** (`src/types.ts`, `src/hooks/useBookLookup.ts`)
+   ```ts
+   // types.ts
+   export type MetadataSource = 'google_books' | 'open_library' | 'manual' | 'photo';
+   export interface BookEntry {
+     // ... existing fields ...
+     metadataSource?: MetadataSource;
+     userEditedFields?: Array<'title' | 'author' | 'pageCount' | 'coverImg'>;
+   }
+
+   // useBookLookup.ts — add source to return type
+   export interface BookMetadata {
+     // ... existing fields ...
+     source: MetadataSource;
+   }
+   ```
+
+2. **Pass source through the scan flow** (`src/App.tsx` `handleScan()`)
+   - The lookup result already flows through `handleScan()` to `addBook()`. Just thread `metadata.source` onto `metadataSource` when constructing the `BookEntry`.
+
+3. **Source badge in `BookDetail`** (`src/components/BookDetail.tsx`)
+   - Small chip below the cover: "Google Books", "Open Library", or "Manual" — links to no action, just informs the user.
+
+4. **"Refresh metadata" button in `BookDetail`**
+   - Re-runs `lookupByIsbn(book.isbn)` and merges results, but skips fields listed in `userEditedFields`.
+   - After a user saves edits in `BookDetail`, record which fields changed in `userEditedFields`.
+
+5. **Missing-cover recovery** (`src/hooks/useBookLookup.ts`)
+   - If `thumbnail` is empty after both API calls, try Open Library covers API: `https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg`.
+
+### 5. Phase 27 preview — Reading Workflow Expansion
+
+Once Phase 26 is done, the highest-value next feature is lightweight reading progress tracking. No new infrastructure is needed — it extends `BookEntry`:
+
+```ts
+// types.ts additions
+export interface BookEntry {
+  // ... existing ...
+  startedAt?: string;   // ISO date when status changed to 'reading'
+  finishedAt?: string;  // ISO date when status changed to 'read'
+  progressPages?: number; // user-entered current page
+}
+```
+
+- Record `startedAt` automatically when `updateBookStatus(id, 'reading')` is called.
+- Record `finishedAt` automatically when `updateBookStatus(id, 'read')` is called.
+- Add a page-progress input in `BookDetail` for books with `status === 'reading'`.
+- Surface a simple "X of Y pages" bar in `BookCard` for in-progress books.
+- Extend the Profile stats panel with pages-read this year using `finishedAt`.
 
 ---
 
