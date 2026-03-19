@@ -8,11 +8,12 @@ import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
 import {
   X, User, Sun, Moon, Monitor, LayoutGrid, List, ArrowUpDown,
-  CheckCircle, Layers, BarChart3, Tag, BookOpen, Clock3, Bookmark, Flame, ScanLine,
+  CheckCircle, Layers, BarChart3, Tag, BookOpen, Clock3, Bookmark, Flame, ScanLine, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import type { ProfilePreferences } from '../types.ts';
 import s from './ProfileSettings.module.css';
 import PrivacyPolicy from './PrivacyPolicy.tsx';
+import ReadingInsights from './ReadingInsights.tsx';
 
 interface ProfileSettingsProps {
   onClose?: () => void;
@@ -54,6 +55,7 @@ const statusSummary = [
 
 const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = false }) => {
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
+  const [showInsights, setShowInsights] = useState(false);
   const { user, profile } = useAuthStore();
   const { books, shelves } = useBookStore();
   const { preferences, updatePreferences } = useProfileStore();
@@ -324,6 +326,25 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           )}
         </div>
       )}
+
+      <div className={s.letterboxdPanel}>
+        <button
+          type="button"
+          className={s.panelHeader}
+          style={{ width: '100%', background: 'none', cursor: 'pointer', textAlign: 'left' }}
+          onClick={() => setShowInsights((v) => !v)}
+          aria-expanded={showInsights}
+        >
+          <div>
+            <h3 className={s.panelTitle}>Reading insights</h3>
+            <p className={s.panelSubtitle}>Books per month, pace, top authors and streaks.</p>
+          </div>
+          <div className={s.panelIcon}>
+            {showInsights ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </div>
+        </button>
+        {showInsights && <ReadingInsights />}
+      </div>
 
       <div className={s.section}>
         <h3 className={s.sectionTitle}>Theme</h3>
