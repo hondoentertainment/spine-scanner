@@ -4,6 +4,7 @@ import { useSyncQueue } from '../store/useSyncQueue.ts';
 import { useBookStore } from '../store/useBookStore.ts';
 import { formatRelativeTime } from '../utils/formatRelativeTime.ts';
 import styles from './SyncStatusBanner.module.css';
+import SyncConflictModal from './SyncConflictModal.tsx';
 
 interface SyncStatusBannerProps {
   online: boolean;
@@ -12,29 +13,25 @@ interface SyncStatusBannerProps {
 }
 
 const SyncStatusBanner: React.FC<SyncStatusBannerProps> = ({ online, syncing, onSyncNow }) => {
-  const { pendingChanges, lastSyncedAt, lastSyncFailedAt } = useSyncQueue();
+  const { pendingChanges, lastSyncedAt, lastSyncFailedAt, conflicts } = useSyncQueue();
   const storageNearLimit = useBookStore((s) => s.storageNearLimit);
 
   const syncFailedRecently =
-    lastSyncFailedAt != null && Date.now() - lastSyncFailedAt < 5 * 60 * 1000; // 5 min
+    lastSyncFailedAt != null && Date.now() - lastSyncFailedAt < 5 * 60 * 1000;
 
-  // Storage quota warning takes highest priority
+  const hasConflicts = conflicts.length > 0;
+
+  let banner: React.ReactNode = null;
+
   if (storageNearLimit) {
-    return (
+    banner = (
       <div className={`${styles.banner} ${styles.warning}`} role="alert">
         <AlertTriangle size={14} />
         <span>Storage is nearly full. Export your library or remove old books to free space.</span>
       </div>
     );
-  }
-
-  // Not signed in — no sync banner needed
-  if (pendingChanges === 0 && !lastSyncedAt && !syncFailedRecently && !syncing) {
-    return null;
-  }
-
-  if (!online) {
-    return (
+  } else if (!online) {
+    banner = (
       <div className={`${styles.banner} ${styles.offline}`} role="status">
         <CloudOff size={14} />
         <span>
@@ -42,10 +39,8 @@ const SyncStatusBanner: React.FC<SyncStatusBannerProps> = ({ online, syncing, on
         </span>
       </div>
     );
-  }
-
-  if (syncFailedRecently) {
-    return (
+  } else if (syncFailedRecently) {
+    banner = (
       <div className={`${styles.banner} ${styles.error}`} role="alert">
         <AlertTriangle size={14} />
         <span>Sync failed</span>
@@ -60,19 +55,15 @@ const SyncStatusBanner: React.FC<SyncStatusBannerProps> = ({ online, syncing, on
         </button>
       </div>
     );
-  }
-
-  if (syncing) {
-    return (
+  } else if (syncing) {
+    banner = (
       <div className={`${styles.banner} ${styles.syncing}`} role="status" aria-live="polite">
         <RefreshCw size={14} className={styles.spin} />
         <span>Syncing…</span>
       </div>
     );
-  }
-
-  if (pendingChanges > 0) {
-    return (
+  } else if (pendingChanges > 0) {
+    banner = (
       <div className={`${styles.banner} ${styles.pending}`} role="status">
         <Cloud size={14} />
         <span>{pendingChanges} unsaved change{pendingChanges !== 1 ? 's' : ''}</span>
@@ -86,10 +77,8 @@ const SyncStatusBanner: React.FC<SyncStatusBannerProps> = ({ online, syncing, on
         </button>
       </div>
     );
-  }
-
-  if (lastSyncedAt) {
-    return (
+  } else if (lastSyncedAt) {
+    banner = (
       <div className={`${styles.banner} ${styles.synced}`} role="status">
         <CheckCircle2 size={14} />
         <span>Synced {formatRelativeTime(lastSyncedAt)}</span>
@@ -97,7 +86,14 @@ const SyncStatusBanner: React.FC<SyncStatusBannerProps> = ({ online, syncing, on
     );
   }
 
-  return null;
+  if (!banner && !hasConflicts) return null;
+
+  return (
+    <>
+      {banner}
+      {hasConflicts && <SyncConflictModal />}
+    </>
+  );
 };
 
 export default SyncStatusBanner;
