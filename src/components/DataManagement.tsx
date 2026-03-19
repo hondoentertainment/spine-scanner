@@ -8,7 +8,8 @@ import { normalizeToIsbn13 } from '../utils/isbnValidation.ts';
 import { isbnExistsInLibrary, isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { exportToGoodreadsCSV } from '../utils/goodreadsExport.ts';
 import { exportToJSON, importFromJSON, exportToLibraryThingTSV, exportToStoryGraphCSV } from '../utils/exportFormats.ts';
-import { Download, Upload, Trash2, Globe, CheckCircle, Loader2, X } from 'lucide-react';
+import { Download, Upload, Trash2, Globe, CheckCircle, Loader2, X, RotateCcw, ChevronDown, ChevronRight } from 'lucide-react';
+import { formatRelativeTime } from '../utils/formatRelativeTime.ts';
 import type { BookEntry } from '../types.ts';
 import s from './DataManagement.module.css';
 
@@ -19,7 +20,7 @@ interface DataManagementProps {
 type ExportFormat = 'json' | 'goodreads' | 'librarything' | 'storygraph';
 
 const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
-    const { books, shelves, addBook, removeBook, setShelves } = useBookStore();
+    const { books, shelves, addBook, removeBook, restoreBook, purgeDeletedBooks, hardDeleteBook, setShelves } = useBookStore();
     const { lookupByIsbn } = useBookLookup();
     const { toast } = useToast();
 
@@ -31,6 +32,11 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
     const [exportFormat, setExportFormat] = useState<ExportFormat>('json');
     const [deleteConfirmStep, setDeleteConfirmStep] = useState<'idle' | 'confirm'>('idle');
     const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+    const [trashOpen, setTrashOpen] = useState(false);
+    const [emptyTrashConfirm, setEmptyTrashConfirm] = useState(false);
+    const [hardDeleteConfirmId, setHardDeleteConfirmId] = useState<string | null>(null);
+
+    const trashedBooks = books.filter((b) => b.deletedAt);
 
     const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -267,6 +273,129 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                     </ul>
                 </div>
             )}
+
+            {/* Trash / Recovery */}
+            <section className={s.sectionBorder} aria-label="Trash: recover or permanently delete books">
+                <button
+                    className={s.trashToggle}
+                    onClick={() => setTrashOpen((o) => !o)}
+                    aria-expanded={trashOpen}
+                >
+                    {trashOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <Trash2 size={18} style={{ color: '#f87171' }} />
+                    <span>
+                        Trash{trashedBooks.length > 0 && (
+                            <span className={s.trashBadge}>{trashedBooks.length}</span>
+                        )}
+                    </span>
+                </button>
+
+                {trashOpen && (
+                    <div className={s.trashBody}>
+                        {trashedBooks.length === 0 ? (
+                            <p className={s.sectionDesc}>Trash is empty.</p>
+                        ) : (
+                            <>
+                                {/* Empty trash */}
+                                {emptyTrashConfirm ? (
+                                    <div className={s.trashConfirmBox}>
+                                        <p className={s.deleteConfirmMsg}>
+                                            This cannot be undone. Permanently delete all {trashedBooks.length} trashed book{trashedBooks.length !== 1 ? 's' : ''}?
+                                        </p>
+                                        <div className={s.deleteConfirmActions}>
+                                            <button
+                                                onClick={() => setEmptyTrashConfirm(false)}
+                                                className={s.dangerCancelBtn}
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    purgeDeletedBooks();
+                                                    setEmptyTrashConfirm(false);
+                                                    toast('Trash emptied', 'info');
+                                                }}
+                                                className={s.dangerBtn}
+                                                aria-label="Confirm empty trash permanently"
+                                            >
+                                                <Trash2 size={14} /> Empty trash
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        className={s.dangerBtn}
+                                        style={{ marginBottom: '1rem' }}
+                                        onClick={() => setEmptyTrashConfirm(true)}
+                                        aria-label="Empty all trash permanently"
+                                    >
+                                        <Trash2 size={14} /> Empty trash
+                                    </button>
+                                )}
+
+                                {/* Trashed book list */}
+                                <ul className={s.trashList}>
+                                    {trashedBooks.map((book) => (
+                                        <li key={book.id} className={s.trashItem}>
+                                            <div className={s.trashItemInfo}>
+                                                <span className={s.trashItemTitle}>{book.title}</span>
+                                                {book.author && (
+                                                    <span className={s.trashItemAuthor}>{book.author}</span>
+                                                )}
+                                                <span className={s.trashItemDate}>
+                                                    Deleted {formatRelativeTime(book.deletedAt ?? null)}
+                                                </span>
+                                            </div>
+                                            <div className={s.trashItemActions}>
+                                                <button
+                                                    className={s.restoreBtn}
+                                                    aria-label={`Restore "${book.title}"`}
+                                                    onClick={() => {
+                                                        restoreBook(book.id);
+                                                        toast(`"${book.title}" restored`, 'success');
+                                                    }}
+                                                >
+                                                    <RotateCcw size={14} /> Restore
+                                                </button>
+                                                {hardDeleteConfirmId === book.id ? (
+                                                    <div className={s.trashInlineConfirm}>
+                                                        <span className={s.trashConfirmText}>This cannot be undone.</span>
+                                                        <button
+                                                            className={s.dangerCancelBtn}
+                                                            onClick={() => setHardDeleteConfirmId(null)}
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            className={s.dangerBtn}
+                                                            aria-label={`Permanently delete "${book.title}"`}
+                                                            onClick={() => {
+                                                                hardDeleteBook(book.id);
+                                                                setHardDeleteConfirmId(null);
+                                                                toast(`"${book.title}" permanently deleted`, 'info');
+                                                            }}
+                                                        >
+                                                            Delete forever
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        className={s.dangerBtn}
+                                                        aria-label={`Delete "${book.title}" forever`}
+                                                        onClick={() => setHardDeleteConfirmId(book.id)}
+                                                    >
+                                                        Delete forever
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
+                    </div>
+                )}
+            </section>
 
             {/* Danger zone */}
             <section className={s.dangerSection} aria-label="Danger zone: delete all">

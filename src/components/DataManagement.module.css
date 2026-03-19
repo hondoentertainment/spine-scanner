@@ -144,6 +144,124 @@
   list-style: none;
 }
 
+/* ---- Trash / Recovery ---- */
+.trashToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  color: var(--text-main);
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.trashBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.4rem;
+  background: #f87171;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 9999px;
+  padding: 0.1em 0.55em;
+  line-height: 1.4;
+}
+
+.trashBody {
+  margin-top: 1rem;
+}
+
+.trashList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.trashItem {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba(239, 68, 68, 0.04);
+  border: 1px solid rgba(239, 68, 68, 0.12);
+  border-radius: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.trashItemInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.trashItemTitle {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trashItemAuthor {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.trashItemDate {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.trashItemActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.restoreBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.75rem;
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.trashConfirmBox {
+  padding: 1rem;
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.trashInlineConfirm {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.trashConfirmText {
+  font-size: 0.78rem;
+  color: #f87171;
+}
+
 /* ---- Danger zone ---- */
 .dangerSection {
   border-top: 1px solid rgba(239, 68, 68, 0.2);

@@ -39,8 +39,10 @@ interface BookStore {
   storageNearLimit: boolean;
   addBook: (book: BookEntry) => void;
   removeBook: (id: string) => void;
-  /** Permanently delete all soft-deleted books older than 30 days. */
+  /** Permanently delete all soft-deleted books (regardless of age). */
   purgeDeletedBooks: () => void;
+  /** Permanently hard-delete a single book by id, bypassing soft-delete. */
+  hardDeleteBook: (id: string) => void;
   /** Restore a soft-deleted book within the undo window. */
   restoreBook: (id: string) => void;
   updateBook: (id: string, updates: Partial<Omit<BookEntry, 'id'>>) => void;
@@ -84,7 +86,12 @@ export const useBookStore = create<BookStore>()(
 
       purgeDeletedBooks: () =>
         set((state) => ({
-          books: state.books.filter((b) => !isPurgeCandidate(b)),
+          books: state.books.filter((b) => !b.deletedAt),
+        })),
+
+      hardDeleteBook: (id) =>
+        set((state) => ({
+          books: state.books.filter((b) => b.id !== id),
         })),
 
       restoreBook: (id) =>
@@ -178,7 +185,7 @@ export const useBookStore = create<BookStore>()(
           set({ storageNearLimit: nearLimit });
         }
         // Also purge 30-day-old tombstones on quota check
-        get().purgeDeletedBooks();
+        set((state) => ({ books: state.books.filter((b) => !isPurgeCandidate(b)) }));
       },
     }),
     {
