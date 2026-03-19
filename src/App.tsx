@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense, useDeferredValue, useMemo } from 'react';
+import OnboardingModal from './components/OnboardingModal.tsx';
 import type { ReactNode } from 'react';
 import AuthPanel from './components/AuthPanel.tsx';
 import ThemeToggle from './components/ThemeToggle.tsx';
@@ -57,6 +58,22 @@ function App() {
   const { track } = useAnalyticsStore();
   const [openBookIsbn, setOpenBookIsbn] = useState<string | null>(null);
   const [srAnnouncement, setSrAnnouncement] = useState('');
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    try {
+      return localStorage.getItem('onboarding_v1') !== 'done';
+    } catch {
+      return true;
+    }
+  });
+
+  const handleOnboardingClose = useCallback(() => {
+    try {
+      localStorage.setItem('onboarding_v1', 'done');
+    } catch {
+      // ignore
+    }
+    setShowOnboarding(false);
+  }, []);
   const batchMode = preferences.batchModeDefault;
   const insights = useMemo(() => getLibraryInsights(books), [books]);
 
@@ -601,6 +618,10 @@ function App() {
         <Suspense fallback={null}>
           <PasswordReset onComplete={() => useAuthStore.setState({ recoveryMode: false })} />
         </Suspense>
+      )}
+
+      {showOnboarding && (
+        <OnboardingModal onClose={handleOnboardingClose} />
       )}
 
       <style>{`
