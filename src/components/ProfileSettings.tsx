@@ -413,6 +413,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           type="button"
           onClick={() => updatePreferences({ batchModeDefault: !preferences.batchModeDefault })}
           className={`${s.toggleRow} ${preferences.batchModeDefault ? s.toggleRowActive : ''}`}
+          aria-pressed={preferences.batchModeDefault}
         >
           <Layers size={18} />
           <div className={s.toggleLabel}>
@@ -429,6 +430,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           type="button"
           onClick={() => updatePreferences({ showStatsDefault: !preferences.showStatsDefault })}
           className={`${s.toggleRow} ${preferences.showStatsDefault ? s.toggleRowActive : ''}`}
+          aria-pressed={preferences.showStatsDefault}
         >
           <BarChart3 size={18} />
           <div className={s.toggleLabel}>
@@ -440,6 +442,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           type="button"
           onClick={() => updatePreferences({ showShelvesDefault: !preferences.showShelvesDefault })}
           className={`${s.toggleRow} ${preferences.showShelvesDefault ? s.toggleRowActive : ''}`}
+          aria-pressed={preferences.showShelvesDefault}
         >
           <Tag size={18} />
           <div className={s.toggleLabel}>

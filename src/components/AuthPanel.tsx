@@ -232,14 +232,16 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSyncedAt,
         </div>
 
         {error && (
-          <div className={s.errorBox}>
+          <div id="forgot-error" className={s.errorBox} role="alert">
             <AlertCircle size={14} /> {error}
           </div>
         )}
 
         <form onSubmit={handleForgotPassword} className={s.form}>
-          <input type="email" placeholder="Email address" value={resetEmail || email}
-            onChange={(e) => setResetEmail(e.target.value)} required className={s.formInput} autoFocus />
+          <label htmlFor="forgot-email" className="sr-only">Email address</label>
+          <input id="forgot-email" type="email" placeholder="Email address" value={resetEmail || email}
+            onChange={(e) => setResetEmail(e.target.value)} required className={s.formInput} autoFocus
+            aria-describedby={error ? 'forgot-error' : undefined} />
           <button type="submit" disabled={loading || !online}
             className={s.submitBtn}
             style={{
@@ -280,7 +282,7 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSyncedAt,
       )}
 
       {error && (
-        <div className={s.errorBox}>
+        <div id="auth-error" className={s.errorBox} role="alert">
           <AlertCircle size={14} /> {error}
         </div>
       )}
@@ -310,14 +312,21 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSyncedAt,
         </button>
         <div className={s.formDivider}>or</div>
         {mode === 'signup' && (
-          <input type="text" placeholder="Username (optional)" value={username}
-            onChange={(e) => setUsername(e.target.value)} autoComplete="username"
-            className={s.formInput} />
+          <>
+            <label htmlFor="auth-username" className="sr-only">Username (optional)</label>
+            <input id="auth-username" type="text" placeholder="Username (optional)" value={username}
+              onChange={(e) => setUsername(e.target.value)} autoComplete="username"
+              className={s.formInput} />
+          </>
         )}
-        <input type="email" placeholder="Email" value={email}
-          onChange={(e) => setEmail(e.target.value)} required className={s.formInput} />
-        <input type="password" placeholder="Password (min 6 characters)" value={password}
-          onChange={(e) => setPassword(e.target.value)} required minLength={6} className={s.formInput} />
+        <label htmlFor="auth-email" className="sr-only">Email address</label>
+        <input id="auth-email" type="email" placeholder="Email" value={email}
+          onChange={(e) => setEmail(e.target.value)} required className={s.formInput}
+          aria-describedby={error ? 'auth-error' : undefined} />
+        <label htmlFor="auth-password" className="sr-only">Password</label>
+        <input id="auth-password" type="password" placeholder="Password (min 6 characters)" value={password}
+          onChange={(e) => setPassword(e.target.value)} required minLength={6} className={s.formInput}
+          aria-describedby={error ? 'auth-error' : undefined} />
         <button type="submit" disabled={loading || !online}
           className={s.submitBtn}
           style={{
