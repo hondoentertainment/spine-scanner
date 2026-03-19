@@ -9,7 +9,7 @@ import { isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { getSeriesBooks } from '../utils/seriesDetection.ts';
 import {
   X, ExternalLink, BookOpen, CheckCircle, Clock, XCircle,
-  Pencil, Save, Tag, Trash2, Share2
+  Pencil, Save, Tag, Trash2, Share2, Send, RotateCcw
 } from 'lucide-react';
 import styles from './BookDetail.module.css';
 
@@ -33,11 +33,14 @@ const statusIcons: Record<BookEntry['status'], React.ReactNode> = {
 };
 
 const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
-  const { updateBook, updateBookStatus, updateBookNotes, removeBook, restoreBook, shelves, assignShelf, unassignShelf, books } = useBookStore();
+  const { updateBook, updateBookStatus, updateBookNotes, removeBook, restoreBook, shelves, assignShelf, unassignShelf, books, lendBook, returnBook } = useBookStore();
   const { toast, confirm } = useToast();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
   const [editing, setEditing] = useState(false);
   const [showShelfPicker, setShowShelfPicker] = useState(false);
+  const [showLendForm, setShowLendForm] = useState(false);
+  const [lendBorrower, setLendBorrower] = useState('');
+  const [lendDue, setLendDue] = useState('');
   const [draft, setDraft] = useState({
     title: book.title,
     author: book.author,
@@ -288,6 +291,85 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
           onChange={(e) => updateBookNotes(book.id, e.target.value)}
           className={styles.notes}
         />
+
+        {/* Lending */}
+        {book.lentTo ? (
+          <div className={`glass ${styles.loanCard}`}>
+            <div className={styles.loanHeader}>
+              <Send size={14} />
+              <span className={styles.loanTitle}>On Loan</span>
+              {book.lentDue && new Date(book.lentDue) < new Date() && (
+                <span className={styles.overdueTag}>Overdue</span>
+              )}
+            </div>
+            <div className={styles.loanInfo}>
+              <span><strong>Borrower:</strong> {book.lentTo}</span>
+              {book.lentAt && (
+                <span><strong>Lent:</strong> {new Date(book.lentAt).toLocaleDateString()}</span>
+              )}
+              {book.lentDue && (
+                <span><strong>Due:</strong> {new Date(book.lentDue).toLocaleDateString()}</span>
+              )}
+            </div>
+            <button
+              className={styles.returnBtn}
+              onClick={() => {
+                returnBook(book.id);
+                toast(`"${book.title}" marked as returned`, 'success');
+              }}
+            >
+              <RotateCcw size={14} /> Mark Returned
+            </button>
+          </div>
+        ) : (
+          <div className={styles.lendSection}>
+            {!showLendForm ? (
+              <button
+                className={styles.lendToggleBtn}
+                onClick={() => { setShowLendForm(true); setLendBorrower(''); setLendDue(''); }}
+              >
+                <Send size={14} /> Lend this book
+              </button>
+            ) : (
+              <div className={`glass ${styles.lendForm}`}>
+                <div className={styles.lendFormHeader}>
+                  <span className={styles.lendFormTitle}>Lend this book</span>
+                  <button className={styles.lendCancelBtn} onClick={() => setShowLendForm(false)}>
+                    <X size={14} />
+                  </button>
+                </div>
+                <label className={styles.label}>Borrower name</label>
+                <input
+                  className={styles.input}
+                  type="text"
+                  placeholder="Who are you lending to?"
+                  value={lendBorrower}
+                  onChange={(e) => setLendBorrower(e.target.value)}
+                  autoFocus
+                />
+                <label className={styles.label}>Due date (optional)</label>
+                <input
+                  className={styles.input}
+                  type="date"
+                  value={lendDue}
+                  onChange={(e) => setLendDue(e.target.value)}
+                />
+                <button
+                  className={styles.lendSubmitBtn}
+                  disabled={!lendBorrower.trim()}
+                  onClick={() => {
+                    if (!lendBorrower.trim()) return;
+                    lendBook(book.id, lendBorrower.trim(), lendDue ? new Date(lendDue).toISOString() : undefined);
+                    setShowLendForm(false);
+                    toast(`Lent to ${lendBorrower.trim()}`, 'success');
+                  }}
+                >
+                  <Send size={14} /> Lend
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Actions */}
         <div className={styles.actions}>

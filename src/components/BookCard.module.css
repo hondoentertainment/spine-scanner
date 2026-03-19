@@ -348,6 +348,25 @@
   opacity: 0.8;
 }
 
+/* ---- On Loan badge ---- */
+.loanBadge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  margin-bottom: 0.4rem;
+  align-self: flex-start;
+}
+
+.loanBadgeOverdue {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

@@ -36,6 +36,14 @@ export interface BookEntry {
   series?: string;
   /** Numeric position within the series (1-based). */
   seriesNumber?: number;
+  /** Name of the person the book is currently lent to. */
+  lentTo?: string;
+  /** ISO date when the book was lent out. */
+  lentAt?: string;
+  /** ISO date when the book is due back. Undefined = no due date set. */
+  lentDue?: string;
+  /** ISO date when the book was returned. Set when marking returned. */
+  returnedAt?: string;
 }
 
 /** Fields that a smart shelf rule can evaluate. */

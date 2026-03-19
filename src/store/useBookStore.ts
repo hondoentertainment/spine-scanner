@@ -59,6 +59,10 @@ interface BookStore {
   updateSmartShelf: (id: string, updates: Partial<Omit<SmartShelf, 'id'>>) => void;
   removeSmartShelf: (id: string) => void;
   checkQuota: () => Promise<void>;
+  /** Mark a book as lent out to borrowerName, optionally with a dueDate (ISO string). */
+  lendBook: (id: string, borrowerName: string, dueDate?: string) => void;
+  /** Mark a lent book as returned; clears lentTo/lentAt/lentDue, returnedAt is set. */
+  returnBook: (id: string) => void;
 }
 
 const now = () => new Date().toISOString();
@@ -187,6 +191,35 @@ export const useBookStore = create<BookStore>()(
         // Also purge 30-day-old tombstones on quota check
         set((state) => ({ books: state.books.filter((b) => !isPurgeCandidate(b)) }));
       },
+
+      lendBook: (id, borrowerName, dueDate) =>
+        set((state) => ({
+          books: state.books.map((b) =>
+            b.id === id
+              ? {
+                  ...b,
+                  lentTo: borrowerName,
+                  lentAt: new Date().toISOString(),
+                  lentDue: dueDate,
+                  returnedAt: undefined,
+                }
+              : b
+          ),
+        })),
+      returnBook: (id) =>
+        set((state) => ({
+          books: state.books.map((b) =>
+            b.id === id
+              ? {
+                  ...b,
+                  returnedAt: new Date().toISOString(),
+                  lentTo: undefined,
+                  lentAt: undefined,
+                  lentDue: undefined,
+                }
+              : b
+          ),
+        })),
     }),
     {
       name: 'spine-scanner-storage',

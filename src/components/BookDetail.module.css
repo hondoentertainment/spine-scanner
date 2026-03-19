@@ -551,6 +551,142 @@
 .spinning {
   animation: spin 0.8s linear infinite;
 }
+/* ---- Lending ---- */
+.lendSection {
+  display: flex;
+  flex-direction: column;
+}
+
+.lendToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  padding: 0.45rem 0.9rem;
+  border-radius: 0.6rem;
+  align-self: flex-start;
+  transition: background 0.15s;
+}
+
+.lendToggleBtn:hover {
+  background: rgba(245, 158, 11, 0.2);
+}
+
+.lendForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.85rem;
+}
+
+.lendFormHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+
+.lendFormTitle {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #f59e0b;
+}
+
+.lendCancelBtn {
+  background: none;
+  color: var(--text-muted);
+  padding: 0.2rem;
+  display: flex;
+  border-radius: 0.4rem;
+}
+
+.lendCancelBtn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.lendSubmitBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.15);
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.5rem;
+  align-self: flex-start;
+  transition: background 0.15s;
+}
+
+.lendSubmitBtn:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.25);
+}
+
+.lendSubmitBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.loanCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.85rem;
+}
+
+.loanHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #f59e0b;
+}
+
+.loanTitle {
+  font-size: 0.85rem;
+  font-weight: 700;
+  flex: 1;
+}
+
+.overdueTag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+  padding: 0.15rem 0.45rem;
+  border-radius: 9999px;
+}
+
+.loanInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.returnBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.5rem;
+  align-self: flex-start;
+  transition: background 0.15s;
+}
+
+.returnBtn:hover {
+  background: rgba(34, 197, 94, 0.22);
+}
 
 @keyframes fadeIn {
   from { opacity: 0; }

@@ -143,6 +143,8 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick, selected, selectMode
         );
     }
 
+    const isOverdue = book.lentDue ? new Date(book.lentDue) < new Date() : false;
+
     return (
         <div className={`book-card glass ${s.card} ${selected ? s.cardSelected : ''}`}
              onClick={onClick} role="button" tabIndex={0}
@@ -152,6 +154,11 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick, selected, selectMode
                 <div className={`${s.selectDot} ${selected ? s.selectDotOn : ''}`} aria-hidden="true">
                     {selected && <CheckCircle size={14} />}
                 </div>
+            )}
+            {book.lentTo && (
+                <span className={`${s.loanBadge} ${isOverdue ? s.loanBadgeOverdue : ''}`}>
+                    {isOverdue ? 'Overdue' : 'On Loan'}
+                </span>
             )}
             <div className={s.cardInner}>
                 <img
