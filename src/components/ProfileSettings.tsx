@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAuthStore } from '../store/useAuthStore.ts';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useProfileStore } from '../store/useProfileStore.ts';
@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { ProfilePreferences } from '../types.ts';
 import s from './ProfileSettings.module.css';
+import PrivacyPolicy from './PrivacyPolicy.tsx';
 
 interface ProfileSettingsProps {
   onClose?: () => void;
@@ -52,6 +53,7 @@ const statusSummary = [
 ] as const;
 
 const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = false }) => {
+  const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const { user, profile } = useAuthStore();
   const { books, shelves } = useBookStore();
   const { preferences, updatePreferences } = useProfileStore();
@@ -446,6 +448,20 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           {preferences.showShelvesDefault && <CheckCircle size={18} className={s.check} />}
         </button>
       </div>
+
+      <div className={s.footerLinks}>
+        <button
+          type="button"
+          onClick={() => setShowPrivacyPolicy(true)}
+          className={s.footerLink}
+        >
+          Privacy Policy
+        </button>
+      </div>
+
+      {showPrivacyPolicy && (
+        <PrivacyPolicy onClose={() => setShowPrivacyPolicy(false)} />
+      )}
     </div>
   );
 

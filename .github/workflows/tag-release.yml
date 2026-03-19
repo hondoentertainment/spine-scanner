@@ -1,0 +1,40 @@
+name: Tag Release
+
+on:
+  workflow_run:
+    workflows: ["Deploy static content to Pages"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  tag:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute next version tag
+        id: version
+        run: |
+          # Get the latest vX.Y.Z tag, increment patch
+          LATEST=$(git tag --list 'v*.*.*' --sort=-version:refname | head -1)
+          if [ -z "$LATEST" ]; then
+            NEXT="v1.0.0"
+          else
+            # Increment patch version
+            NEXT=$(echo "$LATEST" | awk -F. '{$NF = $NF + 1; print}' OFS=.)
+          fi
+          echo "tag=$NEXT" >> $GITHUB_OUTPUT
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ steps.version.outputs.tag }}
+          git push origin ${{ steps.version.outputs.tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
