@@ -18,6 +18,7 @@ export const isbnExistsInLibrary = (isbn: string, books: BookEntry[]): boolean =
   if (isPhotoId(isbn)) return false;
   const canonical = normalizeToIsbn13(isbn);
   return books.some((b) => {
+    if (b.deletedAt) return false;
     if (b.isPhotoOnly || isPhotoId(b.isbn)) return false;
     return normalizeToIsbn13(b.isbn) === canonical;
   });

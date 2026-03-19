@@ -97,18 +97,23 @@ describe('Duplicate Scan Detection', () => {
     expect(isbnExistsInLibrary('9781234567890')).toBe(false);
   });
 
-  it('works correctly after a book is removed', () => {
+  it('works correctly after a book is removed (soft-delete)', () => {
     useBookStore.getState().addBook(makeBook({ id: 'b1', isbn: '9780141036144' }));
     expect(isbnExistsInLibrary('9780141036144')).toBe(true);
 
-    // Remove the book
+    // Soft-delete the book — deletedAt is stamped, book stays in array
     useBookStore.getState().removeBook('b1');
+    // isbnExistsInLibrary skips tombstoned books
     expect(isbnExistsInLibrary('9780141036144')).toBe(false);
 
-    // Now it can be re-added
+    // Now it can be re-added; the tombstone and the new entry coexist
     useBookStore.getState().addBook(makeBook({ id: 'b2', isbn: '9780141036144' }));
-    expect(useBookStore.getState().books).toHaveLength(1);
-    expect(useBookStore.getState().books[0].id).toBe('b2');
+    const books = useBookStore.getState().books;
+    const activeBook = books.find((b) => b.id === 'b2');
+    expect(activeBook).toBeDefined();
+    expect(activeBook?.deletedAt).toBeUndefined();
+    // ISBN is now found again (the new live entry)
+    expect(isbnExistsInLibrary('9780141036144')).toBe(true);
   });
 
   it('treats ISBN-10 and ISBN-13 for the same book as duplicates (canonical comparison)', () => {

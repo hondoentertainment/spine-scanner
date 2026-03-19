@@ -49,12 +49,43 @@ describe('useBookStore', () => {
     expect(useBookStore.getState().books[1].title).toBe('First');
   });
 
-  it('removes a book by id', () => {
+  // ─── soft-delete (removeBook / restoreBook / purgeDeletedBooks) ───
+  it('removeBook stamps deletedAt on the book (tombstone, still in array)', () => {
     useBookStore.getState().addBook(makeBook({ id: '1' }));
     useBookStore.getState().addBook(makeBook({ id: '2' }));
     useBookStore.getState().removeBook('1');
-    expect(useBookStore.getState().books).toHaveLength(1);
-    expect(useBookStore.getState().books[0].id).toBe('2');
+    const books = useBookStore.getState().books;
+    // Both books are still present
+    expect(books).toHaveLength(2);
+    const removed = books.find((b) => b.id === '1');
+    expect(removed).toBeDefined();
+    expect(removed?.deletedAt).toBeDefined();
+    expect(typeof removed?.deletedAt).toBe('string');
+    // The other book is untouched
+    expect(books.find((b) => b.id === '2')?.deletedAt).toBeUndefined();
+  });
+
+  it('restoreBook clears deletedAt', () => {
+    useBookStore.getState().addBook(makeBook({ id: '1' }));
+    useBookStore.getState().removeBook('1');
+    expect(useBookStore.getState().books[0].deletedAt).toBeDefined();
+    useBookStore.getState().restoreBook('1');
+    expect(useBookStore.getState().books[0].deletedAt).toBeUndefined();
+  });
+
+  it('purgeDeletedBooks removes all tombstones (regardless of age)', () => {
+    const thirtyOneDaysAgo = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+    useBookStore.getState().addBook(makeBook({ id: 'old', deletedAt: thirtyOneDaysAgo }));
+    useBookStore.getState().addBook(makeBook({ id: 'recent' }));
+    useBookStore.getState().removeBook('recent'); // deletedAt = now
+    useBookStore.getState().addBook(makeBook({ id: 'alive' }));
+    useBookStore.getState().purgeDeletedBooks();
+    const books = useBookStore.getState().books;
+    // Both deleted books are purged
+    expect(books.find((b) => b.id === 'old')).toBeUndefined();
+    expect(books.find((b) => b.id === 'recent')).toBeUndefined();
+    // Non-deleted book survives
+    expect(books.find((b) => b.id === 'alive')).toBeDefined();
   });
 
   it('updates book status', () => {
@@ -91,6 +122,39 @@ describe('useBookStore', () => {
     useBookStore.getState().addBook(makeBook({ id: '2', title: 'Book 2' }));
     useBookStore.getState().updateBook('1', { title: 'Updated' });
     expect(useBookStore.getState().books.find(b => b.id === '2')?.title).toBe('Book 2');
+  });
+
+  // ─── updatedAt stamping ───────────────────────────────────────
+  it('addBook stamps updatedAt', () => {
+    const before = new Date().toISOString();
+    useBookStore.getState().addBook(makeBook({ id: '1' }));
+    const after = new Date().toISOString();
+    const book = useBookStore.getState().books[0];
+    expect(book.updatedAt).toBeDefined();
+    expect(book.updatedAt! >= before).toBe(true);
+    expect(book.updatedAt! <= after).toBe(true);
+  });
+
+  it('updateBook stamps updatedAt', () => {
+    useBookStore.getState().addBook(makeBook({ id: '1', title: 'Old' }));
+    const before = new Date().toISOString();
+    useBookStore.getState().updateBook('1', { title: 'New' });
+    const after = new Date().toISOString();
+    const book = useBookStore.getState().books[0];
+    expect(book.updatedAt).toBeDefined();
+    expect(book.updatedAt! >= before).toBe(true);
+    expect(book.updatedAt! <= after).toBe(true);
+  });
+
+  it('updateBookStatus stamps updatedAt', () => {
+    useBookStore.getState().addBook(makeBook({ id: '1', status: 'to-read' }));
+    const before = new Date().toISOString();
+    useBookStore.getState().updateBookStatus('1', 'read');
+    const after = new Date().toISOString();
+    const book = useBookStore.getState().books[0];
+    expect(book.updatedAt).toBeDefined();
+    expect(book.updatedAt! >= before).toBe(true);
+    expect(book.updatedAt! <= after).toBe(true);
   });
 
   // ─── setBooks (bulk replace) ──────────────────────────────────
