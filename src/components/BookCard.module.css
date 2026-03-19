@@ -58,6 +58,15 @@
   text-overflow: ellipsis;
 }
 
+.seriesLabel {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .bookAuthor {
   font-size: 0.875rem;
   color: var(--text-muted);

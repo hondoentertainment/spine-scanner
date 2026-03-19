@@ -6,6 +6,7 @@ import type { BookEntry } from '../types.ts';
 import { generateAmazonLink } from '../utils/amazonLink.ts';
 import { shareBook } from '../utils/shareBook.ts';
 import { isBookPhotoOnly } from '../utils/libraryUtils.ts';
+import { getSeriesBooks } from '../utils/seriesDetection.ts';
 import {
   X, ExternalLink, BookOpen, CheckCircle, Clock, XCircle,
   Pencil, Save, Tag, Trash2, Share2
@@ -32,7 +33,7 @@ const statusIcons: Record<BookEntry['status'], React.ReactNode> = {
 };
 
 const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
-  const { updateBook, updateBookStatus, updateBookNotes, removeBook, restoreBook, shelves, assignShelf, unassignShelf } = useBookStore();
+  const { updateBook, updateBookStatus, updateBookNotes, removeBook, restoreBook, shelves, assignShelf, unassignShelf, books } = useBookStore();
   const { toast, confirm } = useToast();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
   const [editing, setEditing] = useState(false);
@@ -48,6 +49,10 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   const bookShelfIds = book.shelfIds || [];
   const bookShelves = shelves.filter((s) => bookShelfIds.includes(s.id));
   const availableShelves = shelves.filter((s) => !bookShelfIds.includes(s.id));
+
+  const seriesCompanions = book.series
+    ? getSeriesBooks(books, book.series).filter((b) => b.id !== book.id)
+    : [];
 
   const handleEdit = () => {
     setDraft({
@@ -172,6 +177,22 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
               <>
                 <h2 className={styles.title}>{book.title}</h2>
                 <p className={styles.author}>{book.author}</p>
+                {book.series && (
+                  <p className={styles.seriesLine}>
+                    Part {book.seriesNumber != null ? book.seriesNumber : '?'} of{' '}
+                    <span className={styles.seriesName}>{book.series}</span>
+                  </p>
+                )}
+                {seriesCompanions.length > 0 && (
+                  <div className={styles.alsoInSeries}>
+                    <span className={styles.alsoInSeriesLabel}>Also in series:</span>
+                    {seriesCompanions.map((b) => (
+                      <span key={b.id} className={styles.seriesCompanion}>
+                        {b.seriesNumber != null ? `#${b.seriesNumber} ` : ''}{b.title}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className={styles.details}>
                   {!isBookPhotoOnly(book) && <span>ISBN: {book.isbn}</span>}
                   {book.pageCount > 0 && <span>{book.pageCount} pages</span>}

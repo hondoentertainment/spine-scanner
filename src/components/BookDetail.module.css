@@ -81,6 +81,42 @@
   margin-bottom: 0.75rem;
 }
 
+.seriesLine {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+}
+
+.seriesName {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.alsoInSeries {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.alsoInSeriesLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.seriesCompanion {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  padding: 0.1rem 0.5rem;
+}
+
 .details {
   display: flex;
   flex-direction: column;

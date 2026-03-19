@@ -163,6 +163,11 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick, selected, selectMode
                 />
                 <div className={s.info}>
                     <h3 className={s.bookTitle}>{book.title}</h3>
+                    {book.series && (
+                        <p className={s.seriesLabel}>
+                            {book.series}{book.seriesNumber != null ? ` #${book.seriesNumber}` : ''}
+                        </p>
+                    )}
                     <p className={s.bookAuthor}>{book.author}</p>
                     <div className={s.links}>
                         {generateAmazonLink(book.isbn) && (

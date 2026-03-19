@@ -318,6 +318,7 @@ function App() {
           dateAdded: new Date().toISOString(),
           shelfIds: [],
           metadataSource: metadata.source,
+          ...(metadata.series ? { series: metadata.series, seriesNumber: metadata.seriesNumber } : {}),
         };
         addBookAndOpen(newBook, `Added "${metadata.title}" to your library.`, options.source === 'manual' ? 'manual' : 'scan', options.source === 'manual');
       } else {

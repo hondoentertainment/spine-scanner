@@ -32,6 +32,10 @@ export interface BookEntry {
   updatedAt?: string;
   /** ISO timestamp when soft-deleted; undefined means not deleted. */
   deletedAt?: string;
+  /** Detected or user-confirmed series name (e.g. "Kingkiller Chronicle"). */
+  series?: string;
+  /** Numeric position within the series (1-based). */
+  seriesNumber?: number;
 }
 
 /** Fields that a smart shelf rule can evaluate. */

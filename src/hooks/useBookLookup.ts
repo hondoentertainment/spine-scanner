@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { isbn13To10, isbn10To13 } from '../utils/isbnValidation.ts';
 import type { MetadataSource } from '../types.ts';
+import { detectSeries } from '../utils/seriesDetection.ts';
 
 export interface BookMetadata {
     title: string;
@@ -10,6 +11,8 @@ export interface BookMetadata {
     isbn: string;
     /** Which API provided this metadata. */
     source: MetadataSource;
+    series?: string;
+    seriesNumber?: number;
 }
 
 const cache = new Map<string, BookMetadata>();
@@ -166,6 +169,12 @@ export const useBookLookup = () => {
             // If both APIs returned no cover image, try the Open Library covers CDN
             if (!result.thumbnail) {
                 result = { ...result, thumbnail: recoverCoverImage(isbn) };
+            }
+
+            // Detect series information from the title
+            const seriesInfo = detectSeries(result.title);
+            if (seriesInfo) {
+                result = { ...result, series: seriesInfo.series, seriesNumber: seriesInfo.seriesNumber };
             }
 
             cache.set(isbn, result);
