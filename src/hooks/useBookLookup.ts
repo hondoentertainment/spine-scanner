@@ -16,11 +16,49 @@ const cache = new Map<string, BookMetadata>();
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// ─── Sliding-window rate limiter ─────────────────────────────────────────────
+// Max 10 requests per 10-second window across both APIs combined.
+const RATE_LIMIT_WINDOW_MS = 10_000;
+const RATE_LIMIT_MAX = 10;
+const requestTimestamps: number[] = [];
+
+/** Returns ms to wait before the next request is allowed, or 0 if not limited. */
+function getRateLimitDelay(): number {
+    const now = Date.now();
+    // Evict timestamps older than the window
+    while (requestTimestamps.length > 0 && now - requestTimestamps[0] > RATE_LIMIT_WINDOW_MS) {
+        requestTimestamps.shift();
+    }
+    if (requestTimestamps.length >= RATE_LIMIT_MAX) {
+        // Wait until the oldest request falls out of the window
+        return RATE_LIMIT_WINDOW_MS - (now - requestTimestamps[0]) + 50;
+    }
+    return 0;
+}
+
+function recordRequest() {
+    requestTimestamps.push(Date.now());
+}
+
 const fetchWithRetry = async (url: string, retries = 2): Promise<Response> => {
+    // Enforce rate limit before issuing the request
+    const waitMs = getRateLimitDelay();
+    if (waitMs > 0) {
+        await delay(waitMs);
+    }
+    recordRequest();
+
     for (let attempt = 0; attempt <= retries; attempt++) {
         try {
             const response = await fetch(url);
             if (response.ok) return response;
+            // Honour Retry-After header on 429
+            if (response.status === 429) {
+                const retryAfter = response.headers.get('Retry-After');
+                const backoff = retryAfter ? parseInt(retryAfter, 10) * 1000 : 5000;
+                if (attempt < retries) { await delay(backoff); continue; }
+                return response;
+            }
             if (response.status >= 500 && attempt < retries) {
                 await delay(1000 * 2 ** attempt);
                 continue;
@@ -132,8 +170,9 @@ export const useBookLookup = () => {
 
             cache.set(isbn, result);
             return result;
-        } catch {
-            setError('Failed to fetch book metadata');
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : '';
+            setError(msg.includes('rate') ? 'Too many lookups — please wait a moment and try again.' : 'Failed to fetch book metadata');
             return null;
         } finally {
             setLoading(false);

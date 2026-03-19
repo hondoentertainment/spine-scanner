@@ -28,6 +28,10 @@ export interface BookEntry {
   finishedAt?: string;
   /** User-entered current page for in-progress books. */
   progressPages?: number;
+  /** ISO timestamp of the last local update; used for conflict resolution during sync. */
+  updatedAt?: string;
+  /** ISO timestamp when soft-deleted; undefined means not deleted. */
+  deletedAt?: string;
 }
 
 /** Fields that a smart shelf rule can evaluate. */

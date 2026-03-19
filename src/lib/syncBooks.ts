@@ -16,6 +16,7 @@ interface BookRow {
   date_added: string;
   shelf_ids: string[];
   updated_at: string;
+  deleted_at: string | null;
 }
 
 /** Row shape in the Supabase `shelves` table */
@@ -41,10 +42,12 @@ export function toBookEntry(row: BookRow): BookEntry {
     notes: row.notes,
     dateAdded: row.date_added,
     shelfIds: row.shelf_ids || [],
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at ?? undefined,
   };
 }
 
-export function toBookRow(book: BookEntry, userId: string): Omit<BookRow, 'updated_at'> {
+export function toBookRow(book: BookEntry, userId: string): BookRow {
   return {
     id: book.id,
     user_id: userId,
@@ -58,6 +61,8 @@ export function toBookRow(book: BookEntry, userId: string): Omit<BookRow, 'updat
     notes: book.notes,
     date_added: book.dateAdded,
     shelf_ids: book.shelfIds || [],
+    updated_at: book.updatedAt ?? new Date().toISOString(),
+    deleted_at: book.deletedAt ?? null,
   };
 }
 
@@ -72,7 +77,7 @@ function toShelfRow(shelf: Shelf, userId: string): ShelfRow {
 // ─── Sync operations ────────────────────────────────────────────
 
 /**
- * Pull the user's full book library from Supabase.
+ * Pull the user's full book library from Supabase (including soft-deleted).
  * Returns null if Supabase is not configured or there's an error.
  */
 export async function pullBooks(userId: string): Promise<BookEntry[] | null> {
@@ -111,17 +116,12 @@ export async function pullShelves(userId: string): Promise<Shelf[] | null> {
 
 /**
  * Push the full local library to Supabase (upsert strategy).
- * This overwrites the remote library with whatever is local — simple & conflict-free.
  */
 export async function pushBooks(userId: string, books: BookEntry[]): Promise<boolean> {
   if (!supabase) return false;
 
-  const rows = books.map((b) => ({
-    ...toBookRow(b, userId),
-    updated_at: new Date().toISOString(),
-  }));
+  const rows = books.map((b) => toBookRow(b, userId));
 
-  // Upsert all books (insert or update on conflict by primary key `id`)
   if (rows.length > 0) {
     const { error } = await supabase
       .from('books')
@@ -129,34 +129,6 @@ export async function pushBooks(userId: string, books: BookEntry[]): Promise<boo
 
     if (error) {
       console.error('[sync] Error pushing books:', error.message);
-      return false;
-    }
-  }
-
-  // Delete remote books that are no longer in local library
-  const localIds = books.map((b) => b.id);
-
-  const { data: remoteBooks, error: fetchError } = await supabase
-    .from('books')
-    .select('id')
-    .eq('user_id', userId);
-
-  if (fetchError) {
-    console.error('[sync] Error fetching remote IDs:', fetchError.message);
-    return false;
-  }
-
-  const remoteIds = (remoteBooks as { id: string }[]).map((r) => r.id);
-  const toDelete = remoteIds.filter((id) => !localIds.includes(id));
-
-  if (toDelete.length > 0) {
-    const { error: deleteError } = await supabase
-      .from('books')
-      .delete()
-      .in('id', toDelete);
-
-    if (deleteError) {
-      console.error('[sync] Error deleting stale books:', deleteError.message);
       return false;
     }
   }
@@ -181,7 +153,7 @@ export async function pushShelves(userId: string, shelves: Shelf[]): Promise<boo
     }
   }
 
-  // Delete stale remote shelves
+  // Delete stale remote shelves (only hard-delete shelves — they have no soft-delete)
   const localIds = shelves.map((s) => s.id);
 
   const { data: remoteShelves, error: fetchError } = await supabase
@@ -213,7 +185,9 @@ export async function pushShelves(userId: string, shelves: Shelf[]): Promise<boo
 }
 
 /**
- * Merge two book lists: combine all unique IDs, local wins on conflict.
+ * Merge two book lists using last-writer-wins based on `updatedAt` timestamps.
+ * Books with a `deletedAt` tombstone are preserved for 30 days then purged by the store.
+ *
  * This is a pure function — useful for testing independently of Supabase.
  */
 export function mergeBooksLists(localBooks: BookEntry[], remoteBooks: BookEntry[]): BookEntry[] {
@@ -227,7 +201,12 @@ export function mergeBooksLists(localBooks: BookEntry[], remoteBooks: BookEntry[
     const local = localMap.get(id);
     const remote = remoteMap.get(id);
 
-    if (local) {
+    if (local && remote) {
+      // Last-write-wins: pick whichever has the newer updatedAt
+      const localTs = local.updatedAt ? Date.parse(local.updatedAt) : 0;
+      const remoteTs = remote.updatedAt ? Date.parse(remote.updatedAt) : 0;
+      merged.push(localTs >= remoteTs ? local : remote);
+    } else if (local) {
       merged.push(local);
     } else if (remote) {
       merged.push(remote);
@@ -249,19 +228,68 @@ export function mergeShelvesLists(localShelves: Shelf[], remoteShelves: Shelf[])
   for (const id of allIds) {
     const local = localMap.get(id);
     const remote = remoteMap.get(id);
-
-    if (local) {
-      merged.push(local);
-    } else if (remote) {
-      merged.push(remote);
-    }
+    merged.push(local ?? remote!);
   }
 
   return merged;
 }
 
+// ─── Reconnect backoff ──────────────────────────────────────────
+
+let reconnectAttempt = 0;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleReconnect(onReconnect: () => void) {
+  if (reconnectTimer) return; // already scheduled
+  const backoff = Math.min(1000 * 2 ** reconnectAttempt, 30_000);
+  reconnectAttempt++;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    onReconnect();
+  }, backoff);
+}
+
+export function resetReconnectBackoff() {
+  reconnectAttempt = 0;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+}
+
 /**
- * Smart merge: pulls remote, merges with local (local wins on conflict),
+ * Subscribe to Supabase realtime for the user's books table.
+ * Automatically reconnects with exponential backoff on channel error.
+ * Returns an unsubscribe function.
+ */
+export function subscribeToBooks(
+  userId: string,
+  onUpdate: () => void,
+): () => void {
+  if (!supabase) return () => {};
+
+  let channel = supabase
+    .channel(`books:user_id=eq.${userId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'books', filter: `user_id=eq.${userId}` }, () => {
+      resetReconnectBackoff();
+      onUpdate();
+    })
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR') {
+        scheduleReconnect(() => subscribeToBooks(userId, onUpdate));
+      } else if (status === 'SUBSCRIBED') {
+        resetReconnectBackoff();
+      }
+    });
+
+  return () => {
+    resetReconnectBackoff();
+    void supabase?.removeChannel(channel);
+  };
+}
+
+/**
+ * Smart merge: pulls remote, merges with local (last-write-wins on updatedAt),
  * then pushes merged result back.
  */
 export async function mergeSync(

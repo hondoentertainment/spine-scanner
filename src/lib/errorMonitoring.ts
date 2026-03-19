@@ -4,11 +4,24 @@
  * When VITE_SENTRY_DSN is set, initializes Sentry for automatic error
  * reporting, performance monitoring, and breadcrumb tracking.
  * When no DSN is configured, all exports are no-ops — zero runtime cost.
+ *
+ * Production gate: if MODE is "production" and DSN is absent, a console.warn
+ * is emitted once so ops teams know monitoring is dark.
  */
 
 /** Whether Sentry is enabled (DSN is present in env). */
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN as string | undefined;
+const IS_PROD = import.meta.env.MODE === 'production';
 const IS_ENABLED = !!SENTRY_DSN;
+
+if (!IS_ENABLED && IS_PROD) {
+  // Intentionally using console.warn so this appears in production logs / Vercel output.
+  // Set VITE_SENTRY_DSN in your deployment environment to silence this.
+  console.warn(
+    '[ErrorMonitoring] VITE_SENTRY_DSN is not set — production errors will not be reported. ' +
+    'Create a project at https://sentry.io and set VITE_SENTRY_DSN in your deployment env vars.'
+  );
+}
 
 /** Lazily loaded Sentry module (only imported when DSN is present). */
 let sentryModule: typeof import('@sentry/react') | null = null;
@@ -25,8 +38,8 @@ export async function initErrorMonitoring(): Promise<void> {
     sentryModule.init({
       dsn: SENTRY_DSN,
       environment: import.meta.env.MODE,
-      // Sample 10% of transactions for performance monitoring
-      tracesSampleRate: 0.1,
+      // Use 5% in production to keep costs low; 100% in other envs for full visibility
+      tracesSampleRate: IS_PROD ? 0.05 : 1.0,
       // Only send errors, not warnings
       beforeSend(event) {
         // Strip PII from breadcrumbs

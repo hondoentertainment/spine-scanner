@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /api/
+Disallow: /.well-known/
+Allow: /
+
+# Sitemap
+Sitemap: https://hondoentertainment.github.io/spine-scanner/sitemap.xml

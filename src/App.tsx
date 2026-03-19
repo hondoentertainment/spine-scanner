@@ -15,8 +15,10 @@ import { mergeSync, pushBooks } from './lib/syncBooks.ts';
 import { formatRelativeTime } from './utils/formatRelativeTime.ts';
 import type { BookEntry } from './types.ts';
 import { BookOpen, Library, Scan, AlertCircle, Database, Layers, User, Sparkles, Cloud, BookMarked, ChevronRight } from 'lucide-react';
+import SyncStatusBanner from './components/SyncStatusBanner.tsx';
 import { generateAmazonLink } from './utils/amazonLink.ts';
 import { isValidIsbn, normalizeToIsbn13 } from './utils/isbnValidation.ts';
+import { flags } from './utils/featureFlags.ts';
 import { isbnExistsInLibrary } from './utils/libraryUtils.ts';
 import { useAnalyticsStore } from './store/useAnalyticsStore.ts';
 import { getLibraryInsights } from './utils/bookPresentation.ts';
@@ -42,7 +44,7 @@ function App() {
   const [view, setView] = useState<'scan' | 'library' | 'data' | 'profile'>('scan');
   const deferredView = useDeferredValue(view);
   const { lookupByIsbn, loading, error } = useBookLookup();
-  const { addBook, books, setBooks, shelves, setShelves } = useBookStore();
+  const { addBook, books, setBooks, shelves, setShelves, checkQuota } = useBookStore();
   const { user, recoveryMode, initialize: initAuth } = useAuthStore();
   const { preferences, loadFromCloud, saveToCloud, updatePreferences } = useProfileStore();
   const { pendingChanges, markDirty, markSynced, markSyncFailed, flushing, setFlushing } = useSyncQueue();
@@ -65,7 +67,8 @@ function App() {
 
   useEffect(() => {
     initAuth();
-  }, [initAuth]);
+    void checkQuota();
+  }, [initAuth, checkQuota]);
 
   useEffect(() => {
     try {
@@ -376,6 +379,14 @@ function App() {
       <div className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">
         {srAnnouncement}
       </div>
+
+      {user && flags.cloudSync && (
+        <SyncStatusBanner
+          online={online}
+          syncing={flushing}
+          onSyncNow={handleSyncNow}
+        />
+      )}
 
       <header className={styles.header}>
         <div className={styles.headerTop}>

@@ -16,7 +16,7 @@ interface BookCardProps {
 }
 
 const BookCard: React.FC<BookCardProps> = ({ book, onClick, selected, selectMode }) => {
-    const { updateBook, updateBookStatus, updateBookNotes, removeBook, shelves, assignShelf, unassignShelf } = useBookStore();
+    const { updateBook, updateBookStatus, updateBookNotes, removeBook, restoreBook, shelves, assignShelf, unassignShelf } = useBookStore();
     const { toast, confirm } = useToast();
     const [editing, setEditing] = useState(false);
     const [showShelfPicker, setShowShelfPicker] = useState(false);
@@ -75,8 +75,12 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick, selected, selectMode
             danger: true,
         });
         if (yes) {
+            // Soft-delete: stamps deletedAt so the book can be restored within 10s
             removeBook(book.id);
-            toast('Book removed', 'info');
+            toast('Book removed', 'info', 10000, undefined, {
+                label: 'Undo',
+                onClick: () => restoreBook(book.id),
+            });
         }
     };
 
@@ -154,6 +158,8 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick, selected, selectMode
                     src={getBookCoverSrc(book.coverImg)}
                     alt={book.title}
                     className={s.coverImg}
+                    loading="lazy"
+                    decoding="async"
                 />
                 <div className={s.info}>
                     <h3 className={s.bookTitle}>{book.title}</h3>

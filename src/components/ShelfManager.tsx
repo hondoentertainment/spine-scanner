@@ -238,7 +238,7 @@ const ShelfManager: React.FC = () => {
     };
 
     const previewCount = showSmartCreate
-        ? countSmartShelfMatches(books, { id: '', name: '', color: '', ...smartDraft })
+        ? countSmartShelfMatches(books, { id: '', color: '', ...smartDraft })
         : 0;
 
     return (

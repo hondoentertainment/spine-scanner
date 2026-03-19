@@ -28,7 +28,7 @@ interface LibraryListProps {
 }
 
 const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning, initialOpenIsbn, onOpenComplete }) => {
-    const { books, shelves, smartShelves, updateBookStatus, removeBook, assignShelf } = useBookStore();
+    const { books, shelves, smartShelves, updateBookStatus, removeBook, restoreBook, assignShelf } = useBookStore();
     const { preferences, updatePreferences } = useProfileStore();
     const { toast, confirm } = useToast();
     const [searchTerm, setSearchTerm] = useState('');
@@ -87,9 +87,11 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
 
     const filteredAndSorted = useMemo(() => {
         let result = books.filter(book =>
-            book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            book.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            book.isbn.includes(searchTerm)
+            !book.deletedAt && (
+                book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                book.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                book.isbn.includes(searchTerm)
+            )
         );
 
         if (statusFilter !== 'all') result = result.filter(b => b.status === statusFilter);
@@ -143,15 +145,19 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
     const bulkRemove = useCallback(async () => {
         const yes = await confirm({
             title: 'Remove Books',
-            message: `Remove ${selectedIds.size} book${selectedIds.size !== 1 ? 's' : ''}? This cannot be undone.`,
+            message: `Remove ${selectedIds.size} book${selectedIds.size !== 1 ? 's' : ''}?`,
             confirmLabel: 'Remove',
             danger: true,
         });
         if (!yes) return;
-        selectedIds.forEach((id) => removeBook(id));
-        toast(`Removed ${selectedIds.size} book${selectedIds.size !== 1 ? 's' : ''}`, 'info');
+        const removedIds = Array.from(selectedIds);
+        removedIds.forEach((id) => removeBook(id));
+        toast(`Removed ${removedIds.length} book${removedIds.length !== 1 ? 's' : ''}`, 'info', 10000, undefined, {
+            label: 'Undo',
+            onClick: () => removedIds.forEach((id) => restoreBook(id)),
+        });
         exitSelectMode();
-    }, [selectedIds, removeBook, confirm, toast, exitSelectMode]);
+    }, [selectedIds, removeBook, restoreBook, confirm, toast, exitSelectMode]);
 
     const virtualizer = useVirtualizer({
         count: filteredAndSorted.length,
@@ -324,7 +330,7 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
                     <div className={s.recentGrid}>
                         {insights.recentlyAdded.map((book) => (
                             <button key={book.id} type="button" className={`glass ${s.recentCard}`} onClick={() => openDetail(book)}>
-                                <img src={getBookCoverSrc(book.coverImg)} alt={book.title} className={s.recentCover} />
+                                <img src={getBookCoverSrc(book.coverImg)} alt={book.title} className={s.recentCover} loading="lazy" decoding="async" />
                                 <div className={s.recentMeta}>
                                     <strong>{book.title}</strong>
                                     <span>{book.author}</span>
@@ -520,7 +526,8 @@ const LibraryList: React.FC<LibraryListProps> = ({ onManageData, onStartScanning
                                          role="button" tabIndex={0}
                                          onKeyDown={(e) => { if (e.key === 'Enter') openDetail(book); }}>
                                         <img src={getBookCoverSrc(book.coverImg)}
-                                             alt={book.title} className={s.listCover} />
+                                             alt={book.title} className={s.listCover}
+                                             loading="lazy" decoding="async" />
                                         <div className={s.listInfo}>
                                             <div className={s.listTitle}>{book.title}</div>
                                             <div className={s.listAuthor}>{book.author}</div>

@@ -1,0 +1,88 @@
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-bottom: 1px solid transparent;
+}
+
+.banner svg {
+  flex-shrink: 0;
+}
+
+/* Colour variants */
+.offline {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-muted, #94a3b8);
+  border-bottom-color: rgba(148, 163, 184, 0.15);
+}
+
+.pending {
+  background: rgba(56, 189, 248, 0.08);
+  color: #38bdf8;
+  border-bottom-color: rgba(56, 189, 248, 0.15);
+}
+
+.syncing {
+  background: rgba(168, 85, 247, 0.08);
+  color: #a855f7;
+  border-bottom-color: rgba(168, 85, 247, 0.15);
+}
+
+.synced {
+  background: rgba(34, 197, 94, 0.07);
+  color: #22c55e;
+  border-bottom-color: rgba(34, 197, 94, 0.12);
+}
+
+.error {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-bottom-color: rgba(239, 68, 68, 0.2);
+}
+
+.warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+  border-bottom-color: rgba(245, 158, 11, 0.2);
+}
+
+.action {
+  margin-left: auto;
+  background: none;
+  border: 1px solid currentColor;
+  color: inherit;
+  border-radius: 4px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: opacity 0.15s;
+}
+
+.action:hover {
+  opacity: 0.8;
+}
+
+.action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin { animation: none; }
+}
