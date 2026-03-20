@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
+import { useBookLookup } from '../hooks/useBookLookup.ts';
 import { useToast } from './Toast.tsx';
 import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import type { BookEntry } from '../types.ts';
@@ -8,7 +9,7 @@ import { shareBook } from '../utils/shareBook.ts';
 import { isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import {
   X, ExternalLink, BookOpen, CheckCircle, Clock, XCircle,
-  Pencil, Save, Tag, Trash2, Share2
+  Pencil, Save, Tag, Trash2, Share2, RefreshCw
 } from 'lucide-react';
 import styles from './BookDetail.module.css';
 
@@ -31,8 +32,16 @@ const statusIcons: Record<BookEntry['status'], React.ReactNode> = {
   dnf: <XCircle size={16} />,
 };
 
+const sourceLabels: Record<NonNullable<BookEntry['metadataSource']>, string> = {
+  google_books: 'Google Books',
+  open_library: 'Open Library',
+  manual: 'Manual',
+  import: 'Import',
+};
+
 const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   const { updateBook, updateBookStatus, updateBookNotes, removeBook, shelves, assignShelf, unassignShelf } = useBookStore();
+  const { refreshMetadata, loading: refreshing } = useBookLookup();
   const { toast, confirm } = useToast();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
   const [editing, setEditing] = useState(false);
@@ -61,6 +70,14 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   };
 
   const handleSave = () => {
+    const editedFields: string[] = [...(book.userEditedFields || [])];
+    if (draft.title.trim() !== book.title) editedFields.push('title');
+    if (draft.author.trim() !== book.author) editedFields.push('author');
+    if (draft.isbn.trim() !== book.isbn) editedFields.push('isbn');
+    if (draft.pageCount !== book.pageCount) editedFields.push('pageCount');
+    if (draft.coverImg.trim() !== book.coverImg) editedFields.push('coverImg');
+    const uniqueFields = [...new Set(editedFields)];
+
     updateBook(book.id, {
       title: draft.title.trim() || book.title,
       author: draft.author.trim() || book.author,
@@ -68,12 +85,31 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
       pageCount: draft.pageCount || 0,
       coverImg: draft.coverImg.trim(),
       amazonLink: generateAmazonLink(draft.isbn.trim() || book.isbn),
+      metadataSource: 'manual',
+      userEditedFields: uniqueFields,
     });
     setEditing(false);
     toast('Book updated', 'success');
   };
 
   const handleCancel = () => setEditing(false);
+
+  const handleRefreshMetadata = async () => {
+    if (isBookPhotoOnly(book)) return;
+    const result = await refreshMetadata(book.isbn, book.userEditedFields);
+    if (!result) {
+      toast('Could not find updated metadata', 'error');
+      return;
+    }
+    const userEdited = book.userEditedFields || [];
+    const updates: Partial<BookEntry> = { metadataSource: result.source };
+    if (!userEdited.includes('title')) updates.title = result.title;
+    if (!userEdited.includes('author')) updates.author = result.authors.join(', ');
+    if (!userEdited.includes('pageCount')) updates.pageCount = result.pageCount;
+    if (!userEdited.includes('coverImg') && result.thumbnail) updates.coverImg = result.thumbnail;
+    updateBook(book.id, updates);
+    toast('Metadata refreshed', 'success');
+  };
 
   const handleRemove = async () => {
     const yes = await confirm({
@@ -200,6 +236,27 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                     <Share2 size={12} /> Share
                   </button>
                 </div>
+                {(book.metadataSource || !isBookPhotoOnly(book)) && (
+                  <div className={styles.sourceRow}>
+                    {book.metadataSource && (
+                      <span className={`${styles.sourceBadge} ${styles[`sourceBadge_${book.metadataSource}`] || ''}`}>
+                        {sourceLabels[book.metadataSource]}
+                      </span>
+                    )}
+                    {!isBookPhotoOnly(book) && (
+                      <button
+                        type="button"
+                        onClick={handleRefreshMetadata}
+                        disabled={refreshing}
+                        className={styles.refreshBtn}
+                        aria-label="Refresh metadata"
+                      >
+                        <RefreshCw size={12} className={refreshing ? styles.refreshSpinner : ''} />
+                        {refreshing ? 'Refreshing…' : 'Refresh'}
+                      </button>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>

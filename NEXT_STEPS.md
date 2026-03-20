@@ -27,22 +27,32 @@ Added a **Scan statistics panel** to `ProfileSettings.tsx`. It uses `useAnalytic
 
 The panel is hidden when `totalScans === 0` to avoid cluttering new installs. Responsive grid collapses to 2 columns on narrow viewports.
 
-### 3. Phase 25 — Scan Accuracy Hardening (in progress)
+### 3. ~~Phase 25 — Scan Accuracy Hardening~~ ✅ Complete
 
 Progress within Phase 25:
 
 1. **Confidence scoring** ✅ Already done — `ScanConfidenceBand` (`low` / `medium` / `high`) computed in `useScanPipeline` and surfaced in the Scanner UI via the `scanHealthCard` panel. Tests existed in `useScanPipeline.test.ts`.
 2. **Regression fixture test suite** ✅ Added — `src/hooks/__tests__/scanRegressionFixtures.test.ts` covers: dim-light capture, glossy/over-exposed cover, partial barcode with checksum-repair, rotated spine (90°/270° pass), low-resolution (move-closer), and confidence band mapping (low/medium/high).
 3. **OCR diagnostics panel** ✅ Already done — `DebugPanel.tsx` exposes live telemetry and timestamped scan logs, toggled by the terminal icon in the scanner toolbar.
-4. **Device benchmark runner** — still pending. A `scripts/benchmark-scan.ts` script that runs the pipeline against the fixture set and outputs a CSV would complete this phase.
+4. **Device benchmark runner** ✅ Added — `scripts/benchmark-scan.mjs` runs the scan pipeline against fixture images and outputs a CSV with timing, success, and extracted ISBN. Run via `npm run benchmark`.
 
-### 4. Phase 26 — Metadata Quality Layer (follow-on)
+### 4. ~~Phase 26 — Metadata Quality Layer~~ ✅ Complete (core)
 
-Once scan accuracy is solid, focus on data trust. Priority items:
+Metadata quality tracking is now implemented:
 
-- Store `metadataSource` (`google_books` | `open_library` | `manual`) per book entry.
-- Show a source badge in `BookDetail` and flag entries where Google Books and Open Library disagree on author or page count.
-- Add a "Refresh metadata" action per book that re-queries APIs but never overwrites user-edited fields (check a `userEdited` flag per field).
+- ✅ `metadataSource` field (`google_books` | `open_library` | `manual` | `import`) stored per book entry in `BookEntry` type.
+- ✅ `userEditedFields` array tracks which fields the user has manually edited.
+- ✅ Source badge displayed in `BookDetail` with color-coded pills (Google Books = blue, Open Library = green, Manual = amber, Import = purple).
+- ✅ "Refresh metadata" button in `BookDetail` re-queries APIs but never overwrites user-edited fields.
+- ✅ All book creation sites in `App.tsx` and `DataManagement.tsx` set `metadataSource` appropriately.
+- ✅ `useBookLookup` hook returns `source` field and exposes `refreshMetadata` function.
+- ✅ 25 new tests across 4 test files covering metadata source tracking, refresh logic, store persistence, and export compatibility.
+
+Remaining Phase 26 items for future work:
+- Conflict resolution UI when Google Books and Open Library disagree on author or page count.
+- Edition-aware matching.
+- Bulk metadata refresh.
+- Missing-cover recovery flow.
 
 ---
 

@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "test:integration": "cross-env RUN_OCR_INTEGRATION=1 vitest run",
     "test:all": "vitest run && cross-env RUN_OCR_INTEGRATION=1 vitest run",
+    "benchmark": "node scripts/benchmark-scan.mjs",
     "generate-ocr-fixture": "node scripts/generate-ocr-fixture.mjs",
     "test:e2e": "node scripts/generate-ocr-fixture.mjs && npm run build && playwright test",
     "test:e2e:ui": "playwright test --ui",

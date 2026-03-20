@@ -199,6 +199,81 @@
   gap: 0.3rem;
 }
 
+/* ---- Source badge & refresh ---- */
+.sourceBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.sourceBadge_google_books {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.12);
+}
+
+.sourceBadge_open_library {
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.12);
+}
+
+.sourceBadge_manual {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.sourceBadge_import {
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.12);
+}
+
+.refreshBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent-blue);
+  background: rgba(56, 189, 248, 0.1);
+  padding: 0.25rem 0.55rem;
+  border-radius: 0.5rem;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.refreshBtn:hover {
+  background: rgba(56, 189, 248, 0.2);
+}
+
+.refreshBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.refreshSpinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.sourceRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 /* ---- Status row ---- */
 .statusRow {
   display: flex;

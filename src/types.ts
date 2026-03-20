@@ -12,6 +12,10 @@ export interface BookEntry {
   notes: string;
   dateAdded: string;
   shelfIds: string[];
+  /** Where the metadata was fetched from */
+  metadataSource?: 'google_books' | 'open_library' | 'manual' | 'import';
+  /** Fields that the user has manually edited */
+  userEditedFields?: string[];
 }
 
 export interface Shelf {

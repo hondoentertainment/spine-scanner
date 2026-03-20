@@ -131,6 +131,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                     notes: entry.notes || '',
                     dateAdded: new Date().toISOString(),
                     shelfIds: [],
+                    metadataSource: metadata.source,
                 };
                 addBook(newBook);
                 addedInThisImport.push(newBook);

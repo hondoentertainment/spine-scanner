@@ -7,6 +7,7 @@ export interface BookMetadata {
     pageCount: number;
     thumbnail: string;
     isbn: string;
+    source: 'google_books' | 'open_library';
 }
 
 const cache = new Map<string, BookMetadata>();
@@ -48,6 +49,7 @@ const lookupGoogleBooks = async (isbn: string): Promise<BookMetadata | null> => 
         pageCount: volumeInfo.pageCount || 0,
         thumbnail: volumeInfo.imageLinks?.thumbnail || '',
         isbn,
+        source: 'google_books',
     };
 };
 
@@ -65,6 +67,7 @@ const lookupOpenLibrary = async (isbn: string): Promise<BookMetadata | null> => 
         pageCount: entry.number_of_pages || 0,
         thumbnail: entry.cover?.medium || entry.cover?.small || '',
         isbn,
+        source: 'open_library',
     };
 };
 
@@ -122,5 +125,39 @@ export const useBookLookup = () => {
         }
     };
 
-    return { lookupByIsbn, loading, error };
+    const refreshMetadata = async (isbn: string, _userEditedFields: string[] = []): Promise<BookMetadata | null> => {
+        // Remove from cache to force fresh fetch
+        cache.delete(isbn);
+
+        setLoading(true);
+        setError(null);
+        try {
+            let result = await lookupGoogleBooks(isbn);
+            if (!result) result = await lookupOpenLibrary(isbn);
+
+            if (!result) {
+                // Try alternate ISBN
+                const alt = isbn.length === 13 ? isbn13To10(isbn) : isbn10To13(isbn);
+                if (alt) {
+                    result = await lookupGoogleBooks(alt) ?? await lookupOpenLibrary(alt);
+                    if (result) result = { ...result, isbn };
+                }
+            }
+
+            if (!result) {
+                setError('No metadata found for refresh');
+                return null;
+            }
+
+            cache.set(isbn, result);
+            return result;
+        } catch {
+            setError('Failed to refresh metadata');
+            return null;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return { lookupByIsbn, refreshMetadata, loading, error };
 };
