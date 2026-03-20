@@ -1,0 +1,190 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.dialog {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  max-width: 600px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 0.25rem;
+}
+
+.subtitle {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+/* ---- Bulk actions ---- */
+.bulkActions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.bulkBtn {
+  padding: 0.45rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  color: var(--accent-blue);
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  cursor: pointer;
+}
+
+.bulkBtn:hover {
+  background: rgba(96, 165, 250, 0.18);
+}
+
+/* ---- Conflict list ---- */
+.conflictList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.conflictCard {
+  border: 1px solid var(--glass-border);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.conflictHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.fieldLabel {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.bookId {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+
+/* ---- Value options ---- */
+.values {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.valueOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.35rem;
+  cursor: pointer;
+}
+
+.valueOption:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.valueOption input[type='radio'] {
+  margin-top: 0.15rem;
+  accent-color: var(--accent-blue);
+}
+
+.valueContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.valueLabel {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.valueText {
+  font-size: 0.8rem;
+  color: var(--text-main);
+  word-break: break-word;
+}
+
+.manualInput {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 0.35rem;
+  outline: none;
+  width: 100%;
+}
+
+.manualInput:focus {
+  border-color: var(--accent-blue);
+}
+
+/* ---- Dialog actions ---- */
+.dialogActions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.applyBtn {
+  flex: 1;
+  padding: 0.65rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: white;
+  background: var(--accent-blue);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.applyBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.cancelBtn {
+  padding: 0.65rem 1.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.cancelBtn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}

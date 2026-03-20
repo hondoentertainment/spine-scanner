@@ -1,0 +1,195 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.lendBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border: 1px dashed var(--glass-border);
+  border-radius: 0.75rem;
+  background: transparent;
+  color: var(--accent-blue, #3b82f6);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.lendBtn:hover {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: var(--accent-blue, #3b82f6);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
+}
+
+.formTitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.input {
+  padding: 0.5rem 0.6rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.5rem;
+  color: var(--text-main);
+  font-size: 0.85rem;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--accent-blue, #3b82f6);
+}
+
+.formRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.formActions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.submitBtn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: var(--accent-blue, #3b82f6);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.submitBtn:hover {
+  opacity: 0.9;
+}
+
+.cancelBtn {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.cancelBtn:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.activeLoan {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 0.75rem;
+}
+
+.activeLoanHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.activeLoanTitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent-blue, #3b82f6);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.returnBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.65rem;
+  border: none;
+  border-radius: 0.4rem;
+  background: #22c55e;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.returnBtn:hover {
+  opacity: 0.9;
+}
+
+.loanDetail {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.overdueBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 1rem;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.historySection {
+  margin-top: 0.25rem;
+}
+
+.historyTitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0 0 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.historyList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.historyItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.historyBorrower {
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.historyDate {
+  font-size: 0.72rem;
+  opacity: 0.7;
+}

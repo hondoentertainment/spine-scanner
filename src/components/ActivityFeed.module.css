@@ -1,0 +1,106 @@
+.feed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.feedTitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.25rem;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 0.5rem;
+  transition: background 0.15s;
+}
+.entry:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+}
+
+.icon_book_added {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+}
+.icon_book_finished {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+}
+.icon_book_lent {
+  background: rgba(168, 85, 247, 0.12);
+  color: #a855f7;
+}
+.icon_book_returned {
+  background: rgba(20, 184, 166, 0.12);
+  color: #14b8a6;
+}
+.icon_status_changed {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+}
+.icon_rating_added {
+  background: rgba(244, 63, 94, 0.12);
+  color: #f43f5e;
+}
+
+.entryBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.entryText {
+  font-size: 0.82rem;
+  color: var(--text-main);
+  line-height: 1.4;
+}
+
+.entryBookTitle {
+  font-weight: 600;
+}
+
+.entryDetail {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.1rem;
+}
+
+.entryTime {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  opacity: 0.7;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.empty {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 1.5rem 0;
+}

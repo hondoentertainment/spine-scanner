@@ -1,0 +1,246 @@
+.panel {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  border-radius: 1rem;
+  padding: 1.1rem;
+}
+
+.panelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.panelTitle {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.panelSubtitle {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-top: 0.2rem;
+}
+
+.panelIcon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  color: var(--accent-blue);
+  background: rgba(56, 189, 248, 0.12);
+}
+
+/* ---- Goal progress ---- */
+.goalSection {
+  margin-bottom: 1rem;
+}
+
+.goalRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.goalBarTrack {
+  flex: 1;
+  height: 0.65rem;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.goalBarFill {
+  height: 100%;
+  border-radius: 9999px;
+  background: #22c55e;
+  transition: width 0.4s ease;
+  min-width: 0;
+}
+
+.goalLabel {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.4rem;
+}
+
+.goalValue {
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* ---- Stats grid ---- */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.statCard {
+  border-radius: 0.8rem;
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.statValue {
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.statLabel {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+/* ---- Monthly chart ---- */
+.chartSection {
+  margin-bottom: 1rem;
+}
+
+.chartTitle {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-bottom: 0.6rem;
+}
+
+.chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+  height: 80px;
+}
+
+.chartCol {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.chartBar {
+  width: 100%;
+  min-height: 2px;
+  background: var(--accent-blue);
+  border-radius: 0.25rem 0.25rem 0 0;
+  transition: height 0.3s ease;
+}
+
+.chartLabel {
+  font-size: 0.55rem;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.chartCount {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* ---- Rating distribution ---- */
+.ratingSection {
+  margin-bottom: 1rem;
+}
+
+.ratingTitle {
+  composes: chartTitle;
+}
+
+.ratingRows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.ratingRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ratingStars {
+  font-size: 0.7rem;
+  color: #f59e0b;
+  white-space: nowrap;
+  min-width: 3.5rem;
+}
+
+.ratingBarTrack {
+  flex: 1;
+  height: 0.4rem;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.ratingBarFill {
+  height: 100%;
+  border-radius: 9999px;
+  background: #f59e0b;
+  min-width: 0;
+  transition: width 0.3s ease;
+}
+
+.ratingCount {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  min-width: 1.5rem;
+  text-align: right;
+}
+
+/* ---- Streak ---- */
+.streakRow {
+  display: flex;
+  gap: 0.65rem;
+}
+
+.streakCard {
+  flex: 1;
+  border-radius: 0.8rem;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: center;
+}
+
+.streakValue {
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.streakLabel {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+/* ---- Empty state ---- */
+.emptyState {
+  border-radius: 0.85rem;
+  padding: 1rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .statsGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

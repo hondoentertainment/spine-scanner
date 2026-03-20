@@ -11,6 +11,9 @@ import {
   CheckCircle, Layers, BarChart3, Tag, BookOpen, Clock3, Bookmark, Flame, ScanLine,
 } from 'lucide-react';
 import type { ProfilePreferences } from '../types.ts';
+import ReadingStatsPanel from './ReadingStatsPanel.tsx';
+import InsightsPanel from './InsightsPanel.tsx';
+import YearInBooks from './YearInBooks.tsx';
 import s from './ProfileSettings.module.css';
 
 interface ProfileSettingsProps {
@@ -225,6 +228,8 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
         </div>
       </div>
 
+      <ReadingStatsPanel books={books} />
+
       <div className={s.letterboxdPanel}>
         <div className={s.panelHeader}>
           <div>
@@ -306,6 +311,10 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           )}
         </div>
       )}
+
+      <InsightsPanel books={books} />
+
+      <YearInBooks books={books} />
 
       <div className={s.section}>
         <h3 className={s.sectionTitle}>Theme</h3>

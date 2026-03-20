@@ -1,0 +1,157 @@
+.container {
+  padding: 1.25rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* ---- Badge ---- */
+.badge {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.badgeSynced {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.badgePending {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.badgeFailed {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+/* ---- Stats ---- */
+.stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.statRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+}
+
+.statLabel {
+  color: var(--text-muted);
+}
+
+.statValue {
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+.failedValue {
+  color: #ef4444;
+}
+
+/* ---- Actions ---- */
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.syncNowBtn {
+  width: 100%;
+  padding: 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: white;
+  background: var(--accent-blue);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.syncNowBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.discardBtn {
+  width: 100%;
+  padding: 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #f87171;
+  background: none;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.discardBtn:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.discardBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---- Confirm ---- */
+.confirmBox {
+  padding: 0.65rem;
+  background: rgba(248, 113, 113, 0.05);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.confirmMsg {
+  font-size: 0.78rem;
+  color: var(--text-main);
+  flex: 1;
+}
+
+.confirmYes {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: #ef4444;
+  color: white;
+  border-radius: 0.4rem;
+  cursor: pointer;
+}
+
+.confirmNo {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--glass-bg);
+  color: var(--text-main);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.4rem;
+  cursor: pointer;
+}

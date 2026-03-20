@@ -1,0 +1,352 @@
+.insightsPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  border-radius: 1rem;
+  padding: 1.1rem;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.cardTitle {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.cardSubtitle {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-top: 0.2rem;
+}
+
+.cardIcon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.cardIconBlue {
+  composes: cardIcon;
+  color: var(--accent-blue);
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.cardIconPurple {
+  composes: cardIcon;
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.12);
+}
+
+.cardIconAmber {
+  composes: cardIcon;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.cardIconRose {
+  composes: cardIcon;
+  color: #f43f5e;
+  background: rgba(244, 63, 94, 0.12);
+}
+
+/* Author bars */
+.authorList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.authorRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.authorName {
+  font-size: 0.85rem;
+  font-weight: 600;
+  width: 140px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.authorBarTrack {
+  flex: 1;
+  height: 0.65rem;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.authorBarFill {
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--accent-blue);
+  transition: width 0.4s ease;
+}
+
+.authorCount {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 700;
+  width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* Backlog analysis */
+.backlogGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.backlogStat {
+  border-radius: 0.8rem;
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.backlogStatValue {
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.backlogStatLabel {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+.estimateLabel {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.estimateLabel strong {
+  color: var(--text-main);
+}
+
+/* Fun facts */
+.factsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.factItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.65rem 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.factBullet {
+  color: var(--accent-blue);
+  font-size: 1rem;
+  flex-shrink: 0;
+  margin-top: 0.05rem;
+}
+
+/* Suggested reads */
+.suggestedGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.8rem;
+}
+
+.suggestedCard {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0.95rem;
+  overflow: hidden;
+}
+
+.suggestedCover {
+  aspect-ratio: 0.75;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.suggestedCover img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.suggestedFallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 800;
+  color: white;
+  background: linear-gradient(135deg, var(--primary), var(--accent-purple, #a855f7));
+}
+
+.suggestedInfo {
+  padding: 0.7rem;
+}
+
+.suggestedTitle {
+  font-weight: 700;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.suggestedAuthor {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.suggestedPages {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+/* Duplicate detection */
+.duplicateGroup {
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0.8rem;
+  margin-bottom: 0.55rem;
+}
+
+.duplicateGroup:last-child {
+  margin-bottom: 0;
+}
+
+.duplicateReason {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  margin-bottom: 0.45rem;
+}
+
+.duplicateBooks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.duplicateBookRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.duplicateBookTitle {
+  font-weight: 600;
+}
+
+.duplicateBookAuthor {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.duplicateConfidence {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+}
+
+.duplicateHint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.55rem;
+  font-style: italic;
+}
+
+/* Completion stats row */
+.completionGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.completionStat {
+  border-radius: 0.8rem;
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: center;
+}
+
+.completionStatValue {
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.completionStatLabel {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+.emptyState {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 0.85rem;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .backlogGrid,
+  .completionGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .suggestedGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .authorName {
+    width: 100px;
+  }
+}

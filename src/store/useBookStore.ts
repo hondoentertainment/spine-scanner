@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { BookEntry, Shelf } from '../types.ts';
+import type { BookEntry, Shelf, SmartShelf } from '../types.ts';
 
 interface BookStore {
   books: BookEntry[];
@@ -17,6 +17,11 @@ interface BookStore {
   setShelves: (shelves: Shelf[]) => void;
   assignShelf: (bookId: string, shelfId: string) => void;
   unassignShelf: (bookId: string, shelfId: string) => void;
+  smartShelves: SmartShelf[];
+  addSmartShelf: (shelf: SmartShelf) => void;
+  updateSmartShelf: (id: string, updates: Partial<Omit<SmartShelf, 'id'>>) => void;
+  removeSmartShelf: (id: string) => void;
+  setSmartShelves: (shelves: SmartShelf[]) => void;
 }
 
 export const useBookStore = create<BookStore>()(
@@ -70,6 +75,20 @@ export const useBookStore = create<BookStore>()(
               : b
           ),
         })),
+      smartShelves: [],
+      addSmartShelf: (shelf) =>
+        set((state) => ({ smartShelves: [...state.smartShelves, shelf] })),
+      updateSmartShelf: (id, updates) =>
+        set((state) => ({
+          smartShelves: state.smartShelves.map((s) =>
+            s.id === id ? { ...s, ...updates } : s
+          ),
+        })),
+      removeSmartShelf: (id) =>
+        set((state) => ({
+          smartShelves: state.smartShelves.filter((s) => s.id !== id),
+        })),
+      setSmartShelves: (smartShelves) => set({ smartShelves }),
     }),
     {
       name: 'spine-scanner-storage',

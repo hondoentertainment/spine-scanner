@@ -54,6 +54,51 @@ Remaining Phase 26 items for future work:
 - Bulk metadata refresh.
 - Missing-cover recovery flow.
 
+### 5. ~~Phase 27 — Reading Workflow Expansion~~ ✅ Complete
+
+- ✅ Reading progress fields added to `BookEntry`: `pagesRead`, `progressPercent`, `startedReading`, `finishedReading`, `rating`
+- ✅ `ReadingProgress` component in `BookDetail` with progress bar, page input, Start Reading / Finish buttons, 1-5 star rating
+- ✅ `ReadingStatsPanel` for `ProfileSettings` with yearly stats, monthly chart, streak tracking, rating distribution
+- ✅ `readingStats.ts` utility: `calculateReadingStats`, `getReadingStreak`, `getMonthlyReadingCounts`
+- ✅ Tests for reading stats and ReadingProgress component
+
+### 6. ~~Phase 28 — Collections and Smart Shelves~~ ✅ Complete
+
+- ✅ `SmartShelf` and `SmartShelfRule` types added with rule-based filtering (status, author, title, pageCount, dateAdded, rating, metadataSource)
+- ✅ `smartShelfEngine.ts`: `bookMatchesSmartShelf`, `getBooksForSmartShelf`, built-in templates
+- ✅ Smart shelves CRUD in `useBookStore` (addSmartShelf, updateSmartShelf, removeSmartShelf)
+- ✅ `SmartShelfEditor` component with rule builder, template picker, live preview
+- ✅ `BulkActions` component for multi-select operations (change status, assign shelf, remove)
+- ✅ Tests for smart shelf engine and SmartShelfEditor component
+
+### 7. ~~Phase 29 — Social and Household Sharing~~ ✅ Complete
+
+- ✅ `LendingRecord` and `ActivityEntry` types for book loans and activity tracking
+- ✅ `useLendingStore`: addRecord, returnBook, getActiveLoans, getOverdueLoans, getBookLendingHistory
+- ✅ `useActivityStore`: addEntry, getRecentEntries (FIFO capped at 500)
+- ✅ `LendingPanel` component for BookDetail: lend form, active loan status, return button, lending history
+- ✅ `ActivityFeed` component: timeline of library events with icons and relative timestamps
+- ✅ `lendingUtils.ts`: isBookLent, getActiveLoan, isOverdue, getDaysUntilDue, getLendingSummary
+- ✅ Tests for lending store, activity store, and lending utils
+
+### 8. ~~Phase 30 — Cloud Sync V2~~ ✅ Complete
+
+- ✅ `useSyncHistoryStore`: sync history tracking with timestamps, status, duration (capped at 100)
+- ✅ Last-good snapshot save/restore for recovery
+- ✅ `syncConflictResolver.ts`: detectConflicts, resolveConflicts, autoResolveConflicts
+- ✅ `SyncHistoryPanel` component: recent sync operations list with status icons and details
+- ✅ `SyncConflictDialog` component: side-by-side conflict resolution with local/remote/manual picks
+- ✅ `OfflineQueueInspector` component: pending changes, sync status, discard/retry actions
+- ✅ Tests for sync conflict resolver and sync history store
+
+### 9. ~~Phase 31 — Insights and Recommendations~~ ✅ Complete
+
+- ✅ `insightsEngine.ts`: favorite authors, backlog analysis, completion rates, fun facts generator, next read suggestions
+- ✅ `duplicateDetector.ts`: ISBN duplicates, similar title detection, Levenshtein similarity, title normalization
+- ✅ `InsightsPanel` component: top authors chart, backlog card, fun facts, suggested reads, duplicate detection
+- ✅ `YearInBooks` component: exportable year-in-review with monthly chart, top authors, share text generation
+- ✅ Tests for insights engine and duplicate detector
+
 ---
 
 ## Completed

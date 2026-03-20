@@ -11,6 +11,7 @@ import {
   X, ExternalLink, BookOpen, CheckCircle, Clock, XCircle,
   Pencil, Save, Tag, Trash2, Share2, RefreshCw
 } from 'lucide-react';
+import ReadingProgress from './ReadingProgress.tsx';
 import styles from './BookDetail.module.css';
 
 interface BookDetailProps {
@@ -276,6 +277,9 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
             </button>
           ))}
         </div>
+
+        {/* Reading progress */}
+        <ReadingProgress book={book} onUpdate={(updates) => updateBook(book.id, updates)} />
 
         {/* Shelf chips */}
         <div className={styles.shelves}>

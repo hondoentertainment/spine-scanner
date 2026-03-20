@@ -1,0 +1,216 @@
+.yearInBooks {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.yearBtn {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+
+.yearBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-main);
+}
+
+.yearBtnActive {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.3);
+  color: var(--accent-blue);
+}
+
+.shareBtn {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: var(--accent-blue);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.15s;
+}
+
+.shareBtn:hover {
+  background: rgba(56, 189, 248, 0.2);
+}
+
+/* Hero stats */
+.heroGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.heroStat {
+  border-radius: 0.8rem;
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: center;
+}
+
+.heroStatValue {
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.heroStatLabel {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+/* Top authors row */
+.topAuthorsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.topAuthorChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.6rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.topAuthorChip strong {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+/* Monthly chart */
+.monthlyChart {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+  height: 120px;
+  padding: 0.5rem 0;
+}
+
+.monthCol {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.monthBar {
+  width: 100%;
+  max-width: 32px;
+  border-radius: 0.35rem 0.35rem 0 0;
+  background: var(--accent-blue);
+  opacity: 0.8;
+  transition: height 0.3s ease, opacity 0.15s;
+  min-height: 2px;
+}
+
+.monthBar:hover {
+  opacity: 1;
+}
+
+.monthLabel {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.monthCount {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+/* Section label */
+.sectionLabel {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  border-radius: 1rem;
+  padding: 1.1rem;
+}
+
+.emptyState {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 0.85rem;
+  text-align: center;
+}
+
+.copiedToast {
+  font-size: 0.78rem;
+  color: #22c55e;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .heroGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .monthlyChart {
+    height: 80px;
+  }
+}
