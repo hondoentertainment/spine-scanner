@@ -24,6 +24,7 @@ concurrency:
 jobs:
   # Single deploy job since we're just deploying
   deploy:
+    timeout-minutes: 45
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -42,7 +43,7 @@ jobs:
         env:
           VITE_SITE_URL: https://${{ github.repository_owner }}.github.io
           VITE_BASE_PATH: /spine-scanner/
-          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL }}
+          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL || 'noreply@example.com' }}
           VITE_ENABLE_SCANNER_DEBUG: "false"
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           VITE_APP_ENV: production
@@ -50,11 +51,12 @@ jobs:
         run: npm run check:production
       - name: Test
         run: npm run test:coverage
+        timeout-minutes: 15
       - name: Build
         env:
           VITE_SITE_URL: https://${{ github.repository_owner }}.github.io
           VITE_BASE_PATH: /spine-scanner/
-          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL }}
+          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL || 'noreply@example.com' }}
           VITE_ENABLE_SCANNER_DEBUG: "false"
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           VITE_APP_ENV: production
@@ -63,10 +65,11 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: E2E tests
+        timeout-minutes: 10
         env:
           VITE_SITE_URL: https://${{ github.repository_owner }}.github.io
           VITE_BASE_PATH: /spine-scanner/
-          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL }}
+          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL || 'noreply@example.com' }}
           VITE_ENABLE_SCANNER_DEBUG: "false"
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           VITE_APP_ENV: production

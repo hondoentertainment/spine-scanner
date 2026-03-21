@@ -12,6 +12,7 @@ jobs:
   test:
     name: Lint, Unit, Build, and Smoke E2E
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -34,9 +35,11 @@ jobs:
         run: npm run lint
       - name: Test with coverage
         run: npm run test:coverage
+        timeout-minutes: 15
       - name: Build
         run: npm run build
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: Smoke E2E tests
         run: npm run test:e2e:release
+        timeout-minutes: 10
