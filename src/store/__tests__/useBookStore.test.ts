@@ -69,6 +69,22 @@ describe('useBookStore', () => {
     expect(useBookStore.getState().books[0].notes).toBe('Great book!');
   });
 
+  it('updates reading progress and moves a book into reading', () => {
+    useBookStore.getState().addBook(makeBook({ id: '1', status: 'to-read', pagesFinished: 0 }));
+    useBookStore.getState().updateReadingProgress('1', 25);
+    const book = useBookStore.getState().books[0];
+    expect(book.pagesFinished).toBe(25);
+    expect(book.status).toBe('reading');
+  });
+
+  it('can explicitly resolve a review flag', () => {
+    useBookStore.getState().addBook(makeBook({ id: '1', needsReview: true, reviewReason: 'Missing metadata' }));
+    useBookStore.getState().markNeedsReview('1', false);
+    const book = useBookStore.getState().books[0];
+    expect(book.needsReview).toBe(false);
+    expect(book.reviewReason).toBe('');
+  });
+
   it('does not affect other books when updating', () => {
     useBookStore.getState().addBook(makeBook({ id: '1', title: 'Book 1' }));
     useBookStore.getState().addBook(makeBook({ id: '2', title: 'Book 2' }));

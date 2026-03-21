@@ -129,7 +129,7 @@ describe('BookCard', () => {
     useBookStore.setState({ books: [book] });
     renderWithToast(<BookCard book={book} />);
 
-    fireEvent.click(screen.getByLabelText('Set status to read'));
+    fireEvent.click(screen.getByLabelText('Set status to Read'));
     expect(useBookStore.getState().books[0].status).toBe('read');
   });
 

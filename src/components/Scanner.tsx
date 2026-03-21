@@ -50,6 +50,8 @@ interface ScannerProps {
     onPhotoCapture?: (imageDataUrl: string) => void;
     isScanning: boolean;
     batchMode?: boolean;
+    onOpenSupport?: () => void;
+    onOpenPrivacy?: () => void;
     onViewLibrary?: (isbn?: string) => void;
 }
 
@@ -66,11 +68,21 @@ const getVideoConstraints = (facing: 'environment' | 'user' = 'environment'): Me
     ...(({ focusMode: { ideal: 'continuous' } }) as any),
 });
 
+const SCANNER_DEBUG_ENABLED = import.meta.env.DEV || import.meta.env.VITE_ENABLE_SCANNER_DEBUG === 'true';
+
 /* ================================================================
  *  Component
  * ================================================================ */
 
-const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, batchMode: batchModeProp = false, onViewLibrary }) => {
+const Scanner: React.FC<ScannerProps> = ({
+    onScan,
+    onPhotoCapture,
+    isScanning,
+    batchMode: batchModeProp = false,
+    onOpenSupport,
+    onOpenPrivacy,
+    onViewLibrary,
+}) => {
     const webcamRef = useRef<Webcam>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -236,7 +248,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
         if (!canvas) { addLog('Error: Missing canvas'); return; }
         if (!video || video.readyState < 2) {
             addLog('Error: Video not ready');
-            setStatus('Camera starting ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â one moment...');
+            setStatus('Camera starting - one moment...');
             return;
         }
 
@@ -309,12 +321,12 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 setShowManual(true);
                 setStatus(autoScan
                     ? 'Searching... adjust position'
-                    : 'We found something ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tap a match below');
+                    : 'We found something - tap a match below');
             } else {
                 setLastScanMeta(null);
                 hapticFailure();
                 if (!autoScan) {
-                    setStatus('Not found ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try moving closer or type the ISBN');
+                    setStatus('Not found - try moving closer or type the ISBN');
                     setShowManual(true);
                     const diag = result.diagnostics;
                     if (diag && (diag.skipReason || diag.quality?.isBlurry || diag.quality?.isDark)) {
@@ -335,14 +347,14 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
             addLog(`SCAN ERROR: ${msg}`);
             const isOcrWorkerError = /timeout|tesseract|worker|module|fallback|one-shot/i.test(msg);
             setStatus(isOcrWorkerError
-                ? 'Scan engine busy ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â upload a photo or type ISBN'
-                : 'Scan didn\'t work ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try again or type ISBN');
+                ? 'Scan engine busy - upload a photo or type ISBN'
+                : 'Scan didn\'t work - try again or type ISBN');
             setShowManual(true);
-            setShowDebug(true);
+            if (SCANNER_DEBUG_ENABLED) setShowDebug(true);
             toastDetail({
                 message: isOcrWorkerError
-                    ? 'Scanner busy ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â upload a photo or enter ISBN'
-                    : 'Scan failed ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try a photo upload or enter ISBN',
+                    ? 'Scanner busy - upload a photo or enter ISBN'
+                    : 'Scan failed - try a photo upload or enter ISBN',
                 type: 'error',
                 details: buildErrorDiagnostics(msg, debugLogs),
             });
@@ -419,11 +431,11 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 setIsbnSuggestions(result.suggestions);
                 setRepairedMap(result.repairedMap ?? {});
                 setShowManual(true);
-                setStatus('We found something ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tap a match below');
+                setStatus('We found something - tap a match below');
             } else {
                 setLastScanMeta(null);
                 hapticFailure();
-                setStatus('Not found ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try a clearer photo or type ISBN');
+                setStatus('Not found - try a clearer photo or type ISBN');
                 setShowManual(true);
                 const diag = result.diagnostics;
                 if (diag && (diag.skipReason || diag.quality?.isBlurry || diag.quality?.isDark)) {
@@ -441,14 +453,14 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
             addLog(`PHOTO SCAN ERROR: ${msg}`);
             const isOcrWorkerError = /timeout|tesseract|worker|module|fallback|one-shot/i.test(msg);
             setStatus(isOcrWorkerError
-                ? 'Scanner busy ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try another photo or type ISBN'
-                : 'Didn\'t work ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try a different photo or type ISBN');
+                ? 'Scanner busy - try another photo or type ISBN'
+                : 'Didn\'t work - try a different photo or type ISBN');
             setShowManual(true);
-            setShowDebug(true);
+            if (SCANNER_DEBUG_ENABLED) setShowDebug(true);
             toastDetail({
                 message: isOcrWorkerError
-                    ? 'Scanner busy ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try another photo or enter ISBN'
-                    : 'Scan failed ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try another photo or enter ISBN',
+                    ? 'Scanner busy - try another photo or enter ISBN'
+                    : 'Scan failed - try another photo or enter ISBN',
                 type: 'error',
                 details: buildErrorDiagnostics(msg, debugLogs),
             });
@@ -456,7 +468,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
             processingRef.current = false;
             setProcessing(false);
         }
-    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, debugLogs, scanMode]);
+    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, debugLogs, scanMode, batchModeProp]);
 
     const handlePhotoOnlyFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -495,7 +507,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
             if (nearMisses.length > 0) {
                 setIsbnSuggestions(nearMisses);
                 setRepairedMap(nearMisses.reduce((acc, m) => ({ ...acc, [m]: cleanIsbn }), {}));
-                setStatus('That doesn\'t look right ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â did you mean one of these?');
+                setStatus('That doesn\'t look right - did you mean one of these?');
                 toast(`Did you mean ${nearMisses[0]}? Tap to use it.`, 'info');
                 return;
             }
@@ -581,10 +593,10 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     }, [zoomRange]);
 
     const getSimpleHint = (): string => {
-        if (liveQualityHint === 'ready') return 'Ready ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tap Scan';
+        if (liveQualityHint === 'ready') return 'Ready - tap Scan';
         if (liveQualityHint === 'blurry') return 'Hold steady...';
-        if (liveQualityHint === 'dark') return hasTorch && !torchOn ? 'Too dark ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tap flashlight' : 'Need more light';
-        if (liveQualityHint === 'blurry-dark') return hasTorch && !torchOn ? 'Hold steady ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tap flashlight' : 'Hold steady, need more light';
+        if (liveQualityHint === 'dark') return hasTorch && !torchOn ? 'Too dark - tap flashlight' : 'Need more light';
+        if (liveQualityHint === 'blurry-dark') return hasTorch && !torchOn ? 'Hold steady - tap flashlight' : 'Hold steady, need more light';
         return 'Center the barcode in the frame';
     };
 
@@ -597,7 +609,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
         return Math.min(100, Math.max(0, ((completedPasses + withinPass) / scanProgress.totalPasses) * 100));
     };
 
-    /* ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Render ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ */
+    /* Render */
 
     const systemStatusLabel = cameraError ? 'Camera Unavailable' : !cameraReady ? 'Initializing' : 'System Ready';
     const systemDotClass = cameraError ? s.systemDotError : !cameraReady ? s.systemDotWarning : '';
@@ -605,7 +617,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     return (
         <div ref={containerRef} className={s.scannerLayout} tabIndex={0} aria-label="Book scanner: press Space or Enter to capture" aria-busy={processing || isScanning}>
 
-            {/* ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â LEFT PANEL: Controls ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â */}
+            {/* Left panel: controls */}
             <div className={s.controlsPanel}>
                 <div className={s.systemStatus} role="status" aria-live="polite">
                     <span className={`${s.systemDot} ${systemDotClass}`} />
@@ -647,7 +659,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
 
                 <div className={s.statusLine} role="status" aria-live="polite" aria-atomic="true">
                     <p className={s.statusHeading} id="status-text">
-                        {processing ? (inOcrPhase ? `Analyzing spine… ${ocrElapsedSec}s` : 'Scanning...') : cameraError ? 'No camera' : 'Ready to scan'}
+                        {processing ? (inOcrPhase ? `Analyzing spine... ${ocrElapsedSec}s` : 'Scanning...') : cameraError ? 'No camera' : 'Ready to scan'}
                     </p>
                     <p className={s.statusText}>{status}</p>
                     {batchModeProp && lastBatchAddIsbn && onViewLibrary && !processing && (
@@ -786,7 +798,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                         <p className={s.suggestionHeader}>
                             {Object.keys(repairedMap).length > 0
                                 ? 'Did you mean one of these?'
-                                : 'Possible matches ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tap to add:'}
+                                : 'Possible matches - tap to add:'}
                         </p>
                         <div className={s.suggestionRow}>
                         {Object.entries(repairedMap).map(([repaired, original], idx) => (
@@ -817,18 +829,18 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 )}
 
                 <div className={s.panelFooter}>
-                    <button type="button" className={s.footerLink} onClick={() => setShowDebug(prev => !prev)}>
+                    <button type="button" className={s.footerLink} onClick={onOpenSupport}>
                         <HelpCircle size={12} style={{ marginRight: '0.25rem', verticalAlign: 'middle' }} />
                         Help Center
                     </button>
-                    <button type="button" className={s.footerLink} onClick={() => setShowDebug(prev => !prev)}>
+                    <button type="button" className={s.footerLink} onClick={onOpenPrivacy}>
                         <Settings size={12} style={{ marginRight: '0.25rem', verticalAlign: 'middle' }} />
-                        Scanner Settings
+                        Privacy & camera
                     </button>
                 </div>
             </div>
 
-            {/* ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â RIGHT PANEL: Camera Feed ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â */}
+            {/* Right panel: camera feed */}
             <div ref={cameraPanelRef} className={s.cameraPanel}>
                 <Webcam
                 audio={false}
@@ -838,7 +850,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 onUserMedia={(stream) => {
                     setCameraError(null);
                     setCameraReady(true);
-                    setStatus('Ready ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â point at a barcode or ISBN');
+                    setStatus('Ready - point at a barcode or ISBN');
                     try {
                         const track = stream.getVideoTracks()[0];
                         if (track) {
@@ -870,7 +882,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 onUserMediaError={(err) => {
                     const msg = err instanceof Error ? err.message : 'Camera access denied';
                     setCameraError(`Can't access camera: ${msg}`);
-                    setStatus('No camera ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â upload a photo or type the ISBN');
+                    setStatus('No camera - upload a photo or type the ISBN');
                     addLog(`Camera error: ${msg}`);
                 }}
                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
@@ -881,7 +893,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                 {!cameraReady && !cameraError && (
                     <div className={s.cameraLoadingOverlay} aria-hidden="true">
                         <div className={s.cameraLoadingSkeleton} />
-                        <p className={s.cameraLoadingText}>Starting cameraÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦</p>
+                        <p className={s.cameraLoadingText}>Starting camera...</p>
                     </div>
                 )}
 
@@ -928,9 +940,11 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                         <button type="button" onClick={toggleFullscreen} className={s.cameraControlBtn} aria-label="Toggle fullscreen">
                             <Maximize2 size={16} />
                         </button>
-                        <button type="button" onClick={() => setShowDebug(prev => !prev)} className={s.cameraControlBtn} aria-label="Toggle debug info">
-                            <X size={16} />
-                        </button>
+                        {SCANNER_DEBUG_ENABLED && (
+                            <button type="button" onClick={() => setShowDebug(prev => !prev)} className={s.cameraControlBtn} aria-label="Toggle scanner diagnostics">
+                                <Settings size={16} />
+                            </button>
+                        )}
                     </div>
                 )}
 
@@ -978,12 +992,14 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                     </div>
                 )}
 
-                <DebugPanel
-                    logs={debugLogs}
-                    telemetry={liveTelemetry}
-                    show={showDebug}
-                    onToggle={() => setShowDebug(prev => !prev)}
-                />
+                {SCANNER_DEBUG_ENABLED && (
+                    <DebugPanel
+                        logs={debugLogs}
+                        telemetry={liveTelemetry}
+                        show={showDebug}
+                        onToggle={() => setShowDebug(prev => !prev)}
+                    />
+                )}
             </div>
         </div>
     );

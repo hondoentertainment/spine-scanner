@@ -9,6 +9,7 @@ export interface LibraryInsights {
   readCount: number;
   toReadCount: number;
   dnfCount: number;
+  reviewCount: number;
   totalPages: number;
   pagesRead: number;
   completionRate: number;
@@ -25,10 +26,10 @@ export function getLibraryInsights(books: BookEntry[]): LibraryInsights {
   const readCount = books.filter((book) => book.status === 'read').length;
   const toReadCount = books.filter((book) => book.status === 'to-read').length;
   const dnfCount = books.filter((book) => book.status === 'dnf').length;
+  const reviewCount = books.filter((book) => book.needsReview).length;
   const totalPages = books.reduce((sum, book) => sum + (book.pageCount || 0), 0);
   const pagesRead = books
-    .filter((book) => book.status === 'read')
-    .reduce((sum, book) => sum + (book.pageCount || 0), 0);
+    .reduce((sum, book) => sum + (book.status === 'read' ? (book.pageCount || 0) : (book.pagesFinished || 0)), 0);
   const recentlyAdded = [...books]
     .sort((a, b) => Date.parse(b.dateAdded) - Date.parse(a.dateAdded))
     .slice(0, 3);
@@ -43,6 +44,7 @@ export function getLibraryInsights(books: BookEntry[]): LibraryInsights {
     readCount,
     toReadCount,
     dnfCount,
+    reviewCount,
     totalPages,
     pagesRead,
     completionRate: books.length ? Math.round((readCount / books.length) * 100) : 0,

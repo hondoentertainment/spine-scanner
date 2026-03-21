@@ -13,6 +13,7 @@ jobs:
   ocr-validation:
     name: OCR integration and E2E
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -27,11 +28,13 @@ jobs:
         run: npm run generate-ocr-fixture
       - name: OCR integration tests
         run: npm run test:integration
+        timeout-minutes: 20
       - name: Build
         run: npm run build
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: OCR E2E test
+        timeout-minutes: 15
         env:
           RUN_OCR_E2E: '1'
         run: npx playwright test e2e/ocr-upload.spec.ts --project=chromium

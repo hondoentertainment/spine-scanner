@@ -12,6 +12,7 @@ jobs:
   test:
     name: Lint, Unit, Build, and Smoke E2E
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -22,13 +23,23 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm install
+      - name: Validate production config shape
+        env:
+          VITE_SITE_URL: https://example.com
+          VITE_BASE_PATH: /spine-scanner/
+          VITE_SUPPORT_EMAIL: support@example.com
+          VITE_APP_ENV: preview
+          VITE_APP_RELEASE: ${{ github.sha }}
+        run: npm run check:production
       - name: Lint
         run: npm run lint
       - name: Test with coverage
         run: npm run test:coverage
+        timeout-minutes: 15
       - name: Build
         run: npm run build
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: Smoke E2E tests
-        run: npx playwright test e2e/app.spec.ts --project=chromium
+        run: npm run test:e2e:release
+        timeout-minutes: 10

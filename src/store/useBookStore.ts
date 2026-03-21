@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { BookEntry, Shelf } from '../types.ts';
+import { normalizeBookEntry, normalizeBooks, updateBookForStatus, updateBookProgress } from '../utils/bookState.ts';
 
 interface BookStore {
   books: BookEntry[];
@@ -10,6 +11,13 @@ interface BookStore {
   updateBook: (id: string, updates: Partial<Omit<BookEntry, 'id'>>) => void;
   updateBookStatus: (id: string, status: BookEntry['status']) => void;
   updateBookNotes: (id: string, notes: string) => void;
+  updateReadingProgress: (id: string, pagesFinished: number) => void;
+  markNeedsReview: (id: string, needsReview: boolean, reason?: string) => void;
+  bulkUpdateBooks: (ids: string[], updates: Partial<Omit<BookEntry, 'id'>>) => void;
+  bulkUpdateStatus: (ids: string[], status: BookEntry['status']) => void;
+  bulkAssignShelf: (ids: string[], shelfId: string) => void;
+  bulkUnassignShelf: (ids: string[], shelfId: string) => void;
+  bulkRemoveBooks: (ids: string[]) => void;
   setBooks: (books: BookEntry[]) => void;
   addShelf: (shelf: Shelf) => void;
   updateShelf: (id: string, updates: Partial<Omit<Shelf, 'id'>>) => void;
@@ -24,21 +32,62 @@ export const useBookStore = create<BookStore>()(
     (set) => ({
       books: [],
       shelves: [],
-      addBook: (book) => set((state) => ({ books: [book, ...state.books] })),
+      addBook: (book) => set((state) => ({ books: [normalizeBookEntry(book), ...state.books] })),
       removeBook: (id) => set((state) => ({ books: state.books.filter((b) => b.id !== id) })),
       updateBook: (id, updates) =>
         set((state) => ({
-          books: state.books.map((b) => (b.id === id ? { ...b, ...updates } : b)),
+          books: state.books.map((b) => (b.id === id ? normalizeBookEntry({ ...b, ...updates }) : b)),
         })),
       updateBookStatus: (id, status) =>
         set((state) => ({
-          books: state.books.map((b) => (b.id === id ? { ...b, status } : b)),
+          books: state.books.map((b) => (b.id === id ? updateBookForStatus(b, status) : b)),
         })),
       updateBookNotes: (id, notes) =>
         set((state) => ({
           books: state.books.map((b) => (b.id === id ? { ...b, notes } : b)),
         })),
-      setBooks: (books) => set({ books }),
+      updateReadingProgress: (id, pagesFinished) =>
+        set((state) => ({
+          books: state.books.map((b) => (b.id === id ? updateBookProgress(b, pagesFinished) : b)),
+        })),
+      markNeedsReview: (id, needsReview, reason = '') =>
+        set((state) => ({
+          books: state.books.map((b) => (
+            b.id === id
+              ? normalizeBookEntry({
+                ...b,
+                needsReview,
+                reviewReason: needsReview ? reason || b.reviewReason : '',
+              })
+              : b
+          )),
+        })),
+      bulkUpdateBooks: (ids, updates) =>
+        set((state) => ({
+          books: state.books.map((b) => (ids.includes(b.id) ? normalizeBookEntry({ ...b, ...updates }) : b)),
+        })),
+      bulkUpdateStatus: (ids, status) =>
+        set((state) => ({
+          books: state.books.map((b) => (ids.includes(b.id) ? updateBookForStatus(b, status) : b)),
+        })),
+      bulkAssignShelf: (ids, shelfId) =>
+        set((state) => ({
+          books: state.books.map((b) =>
+            ids.includes(b.id) && !(b.shelfIds || []).includes(shelfId)
+              ? normalizeBookEntry({ ...b, shelfIds: [...(b.shelfIds || []), shelfId] })
+              : b
+          ),
+        })),
+      bulkUnassignShelf: (ids, shelfId) =>
+        set((state) => ({
+          books: state.books.map((b) =>
+            ids.includes(b.id)
+              ? normalizeBookEntry({ ...b, shelfIds: (b.shelfIds || []).filter((sid) => sid !== shelfId) })
+              : b
+          ),
+        })),
+      bulkRemoveBooks: (ids) => set((state) => ({ books: state.books.filter((b) => !ids.includes(b.id)) })),
+      setBooks: (books) => set({ books: normalizeBooks(books) }),
       addShelf: (shelf) => set((state) => ({ shelves: [...state.shelves, shelf] })),
       updateShelf: (id, updates) =>
         set((state) => ({
@@ -66,13 +115,22 @@ export const useBookStore = create<BookStore>()(
         set((state) => ({
           books: state.books.map((b) =>
             b.id === bookId
-              ? { ...b, shelfIds: (b.shelfIds || []).filter((sid) => sid !== shelfId) }
+              ? normalizeBookEntry({ ...b, shelfIds: (b.shelfIds || []).filter((sid) => sid !== shelfId) })
               : b
           ),
         })),
     }),
     {
       name: 'spine-scanner-storage',
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<BookStore> | undefined;
+        return {
+          ...currentState,
+          ...persisted,
+          books: normalizeBooks(persisted?.books ?? currentState.books),
+          shelves: persisted?.shelves ?? currentState.shelves,
+        };
+      },
     }
   )
 );

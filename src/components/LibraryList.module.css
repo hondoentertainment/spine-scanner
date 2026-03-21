@@ -200,6 +200,34 @@
   gap: 0.85rem;
 }
 
+.reviewSection {
+  margin-bottom: 1.25rem;
+}
+
+.reviewGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.85rem;
+}
+
+.reviewCard {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.reviewMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.reviewMeta span {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
 .recentCard {
   padding: 0.75rem;
   display: flex;
@@ -276,6 +304,72 @@
   margin-bottom: 0.9rem;
 }
 
+.savedTools {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.presetGroup {
+  padding: 1rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.presetRow {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.presetChip {
+  padding: 0.55rem 0.8rem;
+  border-radius: 9999px;
+  font-size: 0.82rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.presetChipActive {
+  color: var(--accent-blue);
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.inlineForm {
+  padding: 0.8rem;
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.inlineInput,
+.pageFilterInput,
+.bulkSelect {
+  min-height: 42px;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  font-family: inherit;
+}
+
+.inlineInput {
+  flex: 1;
+  min-width: 180px;
+}
+
+.pageFilterInput {
+  width: 136px;
+}
+
+.bulkSelect {
+  min-width: 150px;
+}
+
 .activeFilterChip {
   padding: 0.45rem 0.75rem;
   font-size: 0.8rem;
@@ -347,6 +441,7 @@
   position: relative;
   overflow: auto;
   border-radius: 1rem;
+  max-height: min(72vh, 980px);
 }
 
 .virtualInner {
@@ -354,11 +449,26 @@
   width: 100%;
 }
 
+.cardWrap {
+  flex: 1;
+  min-width: 0;
+}
+
 .gridRow {
   display: flex;
   gap: 1rem;
   padding: 0 0 1rem 0;
   flex-wrap: nowrap;
+}
+
+.selectToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.7rem;
+  margin-bottom: 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
 }
 
 .listRow {
@@ -388,6 +498,11 @@
   min-width: 0;
 }
 
+.listSelect {
+  display: flex;
+  align-items: center;
+}
+
 .listTitle {
   font-size: 0.9rem;
   font-weight: 600;
@@ -395,6 +510,14 @@
 
 .listAuthor {
   font-size: 0.8rem;
+}
+
+.listMeta {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
 .listStatus {
@@ -431,6 +554,42 @@
   font-weight: 600;
 }
 
+.reviewBadgeInline {
+  color: #f59e0b;
+}
+
+.bulkBar {
+  padding: 0.9rem 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.bulkSummary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.bulkActions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.bulkBtn {
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.8rem;
+  font-weight: 600;
+}
+
+.bulkDanger {
+  color: #f87171;
+}
+
 @media (max-width: 900px) {
   .hero {
     grid-template-columns: 1fr;
@@ -460,14 +619,28 @@
     grid-template-columns: 1fr;
   }
 
+  .savedTools {
+    grid-template-columns: 1fr;
+  }
+
   .searchRow {
     flex-direction: column;
+  }
+
+  .inlineForm,
+  .bulkBar {
+    align-items: stretch;
   }
 
   .clearBtn,
   .primaryAction,
   .secondaryAction,
   .manageBtn {
+    width: 100%;
+  }
+
+  .pageFilterInput,
+  .bulkSelect {
     width: 100%;
   }
 }

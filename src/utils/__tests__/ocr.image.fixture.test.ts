@@ -32,5 +32,5 @@ describe('OCR image fixture (tesseract)', () => {
       expect(candidates).toContain(expectedIsbn);
       expect(ocrText.length).toBeGreaterThan(0);
     }
-  }, 20000);
+  }, 45000); // Tesseract.recognize can be slow in CI
 });

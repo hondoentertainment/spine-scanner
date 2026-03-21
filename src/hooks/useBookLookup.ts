@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { isbn13To10, isbn10To13 } from '../utils/isbnValidation.ts';
+import { addBreadcrumb, captureException } from '../lib/errorMonitoring.ts';
 
 export interface BookMetadata {
     title: string;
@@ -75,7 +76,10 @@ export const useBookLookup = () => {
 
     const lookupByIsbn = async (isbn: string): Promise<BookMetadata | null> => {
         const cached = cache.get(isbn);
-        if (cached) return cached;
+        if (cached) {
+            addBreadcrumb('metadata', 'Lookup cache hit', { isbnLength: isbn.length });
+            return cached;
+        }
 
         // Debounce: enforce minimum 300ms between API calls
         const now = Date.now();
@@ -88,6 +92,7 @@ export const useBookLookup = () => {
         setLoading(true);
         setError(null);
         try {
+            addBreadcrumb('metadata', 'Lookup started', { isbnLength: isbn.length });
             // Try Google Books first
             let result = await lookupGoogleBooks(isbn);
 
@@ -109,13 +114,20 @@ export const useBookLookup = () => {
 
             if (!result) {
                 setError('No book found with this ISBN');
+                addBreadcrumb('metadata', 'Lookup returned no results', { isbnLength: isbn.length });
                 return null;
             }
 
             cache.set(isbn, result);
+            addBreadcrumb('metadata', 'Lookup succeeded', {
+                isbnLength: isbn.length,
+                pageCount: result.pageCount,
+                authorCount: result.authors.length,
+            });
             return result;
-        } catch {
+        } catch (error) {
             setError('Failed to fetch book metadata');
+            captureException(error, { area: 'useBookLookup.lookupByIsbn', isbnLength: isbn.length });
             return null;
         } finally {
             setLoading(false);

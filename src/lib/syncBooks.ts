@@ -1,11 +1,13 @@
 import { supabase } from './supabase.ts';
 import type { BookEntry, Shelf } from '../types.ts';
+import { addBreadcrumb, captureException } from './errorMonitoring.ts';
 
 /** Row shape in the Supabase `books` table */
 interface BookRow {
   id: string;
   user_id: string;
   isbn: string;
+  is_photo_only?: boolean;
   title: string;
   author: string;
   page_count: number;
@@ -15,6 +17,12 @@ interface BookRow {
   notes: string;
   date_added: string;
   shelf_ids: string[];
+  needs_review?: boolean;
+  review_reason?: string;
+  pages_finished?: number;
+  started_at?: string | null;
+  finished_at?: string | null;
+  last_progress_at?: string | null;
   updated_at: string;
 }
 
@@ -32,6 +40,7 @@ export function toBookEntry(row: BookRow): BookEntry {
   return {
     id: row.id,
     isbn: row.isbn,
+    isPhotoOnly: row.is_photo_only ?? false,
     title: row.title,
     author: row.author,
     pageCount: row.page_count,
@@ -41,6 +50,12 @@ export function toBookEntry(row: BookRow): BookEntry {
     notes: row.notes,
     dateAdded: row.date_added,
     shelfIds: row.shelf_ids || [],
+    needsReview: row.needs_review ?? false,
+    reviewReason: row.review_reason ?? '',
+    pagesFinished: row.pages_finished ?? 0,
+    startedAt: row.started_at ?? null,
+    finishedAt: row.finished_at ?? null,
+    lastProgressAt: row.last_progress_at ?? null,
   };
 }
 
@@ -49,6 +64,7 @@ export function toBookRow(book: BookEntry, userId: string): Omit<BookRow, 'updat
     id: book.id,
     user_id: userId,
     isbn: book.isbn,
+    is_photo_only: book.isPhotoOnly ?? false,
     title: book.title,
     author: book.author,
     page_count: book.pageCount,
@@ -58,6 +74,12 @@ export function toBookRow(book: BookEntry, userId: string): Omit<BookRow, 'updat
     notes: book.notes,
     date_added: book.dateAdded,
     shelf_ids: book.shelfIds || [],
+    needs_review: book.needsReview ?? false,
+    review_reason: book.reviewReason ?? '',
+    pages_finished: book.pagesFinished ?? 0,
+    started_at: book.startedAt ?? null,
+    finished_at: book.finishedAt ?? null,
+    last_progress_at: book.lastProgressAt ?? null,
   };
 }
 
@@ -86,6 +108,7 @@ export async function pullBooks(userId: string): Promise<BookEntry[] | null> {
 
   if (error) {
     console.error('[sync] Error pulling books:', error.message);
+    captureException(error, { area: 'pullBooks', userId });
     return null;
   }
 
@@ -103,6 +126,7 @@ export async function pullShelves(userId: string): Promise<Shelf[] | null> {
 
   if (error) {
     console.error('[sync] Error pulling shelves:', error.message);
+    captureException(error, { area: 'pullShelves', userId });
     return null;
   }
 
@@ -115,6 +139,7 @@ export async function pullShelves(userId: string): Promise<Shelf[] | null> {
  */
 export async function pushBooks(userId: string, books: BookEntry[]): Promise<boolean> {
   if (!supabase) return false;
+  addBreadcrumb('sync', 'Pushing books', { books: books.length });
 
   const rows = books.map((b) => ({
     ...toBookRow(b, userId),
@@ -129,6 +154,7 @@ export async function pushBooks(userId: string, books: BookEntry[]): Promise<boo
 
     if (error) {
       console.error('[sync] Error pushing books:', error.message);
+      captureException(error, { area: 'pushBooks.upsert', userId, bookCount: books.length });
       return false;
     }
   }
@@ -143,6 +169,7 @@ export async function pushBooks(userId: string, books: BookEntry[]): Promise<boo
 
   if (fetchError) {
     console.error('[sync] Error fetching remote IDs:', fetchError.message);
+    captureException(fetchError, { area: 'pushBooks.fetchRemoteIds', userId });
     return false;
   }
 
@@ -157,6 +184,7 @@ export async function pushBooks(userId: string, books: BookEntry[]): Promise<boo
 
     if (deleteError) {
       console.error('[sync] Error deleting stale books:', deleteError.message);
+      captureException(deleteError, { area: 'pushBooks.deleteStale', userId, staleCount: toDelete.length });
       return false;
     }
   }
@@ -167,6 +195,7 @@ export async function pushBooks(userId: string, books: BookEntry[]): Promise<boo
 /** Push shelves to Supabase (upsert + delete stale). */
 export async function pushShelves(userId: string, shelves: Shelf[]): Promise<boolean> {
   if (!supabase) return false;
+  addBreadcrumb('sync', 'Pushing shelves', { shelves: shelves.length });
 
   const rows = shelves.map((s) => toShelfRow(s, userId));
 
@@ -177,6 +206,7 @@ export async function pushShelves(userId: string, shelves: Shelf[]): Promise<boo
 
     if (error) {
       console.error('[sync] Error pushing shelves:', error.message);
+      captureException(error, { area: 'pushShelves.upsert', userId, shelfCount: shelves.length });
       return false;
     }
   }
@@ -191,6 +221,7 @@ export async function pushShelves(userId: string, shelves: Shelf[]): Promise<boo
 
   if (fetchError) {
     console.error('[sync] Error fetching remote shelf IDs:', fetchError.message);
+    captureException(fetchError, { area: 'pushShelves.fetchRemoteIds', userId });
     return false;
   }
 
@@ -205,6 +236,7 @@ export async function pushShelves(userId: string, shelves: Shelf[]): Promise<boo
 
     if (deleteError) {
       console.error('[sync] Error deleting stale shelves:', deleteError.message);
+      captureException(deleteError, { area: 'pushShelves.deleteStale', userId, staleCount: toDeleteIds.length });
       return false;
     }
   }
@@ -270,6 +302,10 @@ export async function mergeSync(
   localShelves: Shelf[] = [],
 ): Promise<{ books: BookEntry[]; shelves: Shelf[] } | null> {
   if (!supabase) return null;
+  addBreadcrumb('sync', 'Merge sync started', {
+    localBooks: localBooks.length,
+    localShelves: localShelves.length,
+  });
 
   const remoteBooks = await pullBooks(userId);
   if (remoteBooks === null) return null;
@@ -283,6 +319,10 @@ export async function mergeSync(
   if (!pushOk) return null;
 
   await pushShelves(userId, mergedShelves);
+  addBreadcrumb('sync', 'Merge sync completed', {
+    mergedBooks: mergedBooks.length,
+    mergedShelves: mergedShelves.length,
+  });
 
   return { books: mergedBooks, shelves: mergedShelves };
 }

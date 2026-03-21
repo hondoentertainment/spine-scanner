@@ -114,6 +114,7 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 |---------|-------------|
 | `npm run dev` | Start development server |
 | `npm run build` | Type-check and build for production |
+| `npm run check:production` | Validate production env/base-path/support config |
 | `npm run preview` | Preview production build |
 | `npm run test` | Run unit tests |
 | `npm run test:watch` | Run tests in watch mode |
@@ -121,6 +122,7 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 | `npm run test:all` | Run unit tests then integration tests |
 | `npm run generate-ocr-fixture` | Generate `e2e/fixtures/book-spine-isbn.png` for E2E OCR tests |
 | `npm run test:e2e` | Generate OCR fixture (if needed) and run Playwright E2E tests |
+| `npm run test:e2e:release` | Build and run the release smoke suite on desktop Chromium |
 | `npm run test:e2e:ui` | Run Playwright with UI |
 | `npm run test:e2e:mobile` | Run mobile Playwright matrix projects |
 | `npm run test:e2e:desktop` | Run desktop Playwright baseline |
@@ -135,6 +137,30 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 ## Deployment
 
 The app auto-deploys to GitHub Pages on push to `main` via GitHub Actions. The workflow installs dependencies, builds, and uploads to Pages.
+
+### Public Launch Configuration
+
+Before treating the site as public-facing, set these optional env vars so metadata, canonical URLs, and support links are complete:
+
+```bash
+VITE_SITE_URL=https://your-public-domain.example
+VITE_BASE_PATH=/
+VITE_SUPPORT_EMAIL=support@example.com
+VITE_ENABLE_SCANNER_DEBUG=false
+VITE_APP_ENV=production
+```
+
+The app now includes footer-linked About, Privacy, Terms, and Support pages, plus social metadata, a share preview image, generated `robots.txt`, and a generated `sitemap.xml`. If you deploy somewhere other than GitHub Pages, keep one canonical public URL, set `VITE_SITE_URL` to it, and set `VITE_BASE_PATH` to the path segment you actually serve from.
+
+For monitoring, `VITE_APP_RELEASE` can be injected by CI so Sentry events can be grouped by deployed revision.
+
+### Launch Planning
+
+- Phased roadmap: `PRODUCTION_PLAN.md`
+- Release checklist: `LAUNCH_CHECKLIST.md`
+
+Run `npm run check:production` before production builds to catch missing or risky public-site configuration.
+Run `npm run test:e2e:release` before launch candidates to verify the current release shell, navigation, and support diagnostics path.
 
 ## Mobile Validation
 

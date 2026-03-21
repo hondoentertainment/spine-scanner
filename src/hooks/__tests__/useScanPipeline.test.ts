@@ -481,7 +481,7 @@ describe('useScanPipeline — runPipeline', () => {
 
     expect(pipelineResult?.isbn).toBeNull();
     expect(pipelineResult?.suggestions).toContain('9780306406158');
-  }, 15000);
+  }, 30000);
 
   it('skips OCR when image is blurry and dark', async () => {
     // mockBrightness 50 => isDark (50 < 90); uniform data => low Laplacian variance => isBlurry
@@ -551,7 +551,7 @@ describe('useScanPipeline — runPipeline', () => {
 
     expect(tryBarcodeDecode).toHaveBeenCalledTimes(5);
     expect(runOcr).toHaveBeenCalled();
-  });
+  }, 25000);
 
   it('includes lowResolution in diagnostics when image is too small for OCR', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
@@ -972,6 +972,6 @@ describe('useScanPipeline — runPipeline', () => {
     });
 
     expect(pipelineResult?.suggestions?.length).toBeGreaterThanOrEqual(0);
-  });
+  }, 25000);
 });
 

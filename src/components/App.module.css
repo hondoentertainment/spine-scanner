@@ -309,6 +309,41 @@
   margin-top: 0.75rem;
 }
 
+.siteFooter {
+  margin-top: 1.5rem;
+  padding: 1rem 1.15rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: start;
+  flex-wrap: wrap;
+}
+
+.footerLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.footerButton {
+  min-height: 40px;
+  padding: 0.65rem 0.9rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.04);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.footerNote {
+  max-width: 56ch;
+  margin-top: 0.3rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
 .skeletonGrid span {
   height: 92px;
   border-radius: 1rem;
@@ -398,5 +433,14 @@
 
   .skeletonGrid {
     grid-template-columns: 1fr;
+  }
+
+  .siteFooter {
+    margin-bottom: 76px;
+  }
+
+  .footerButton {
+    width: 100%;
+    text-align: center;
   }
 }

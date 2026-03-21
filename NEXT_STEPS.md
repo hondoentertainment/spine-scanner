@@ -150,6 +150,9 @@ Once scan accuracy is solid, focus on data trust. Priority items:
 
 ## Still Worth Doing Alongside the Roadmap
 
+- See `PRODUCTION_PLAN.md` for the launch-focused phased plan.
+- See `LAUNCH_CHECKLIST.md` for the release-day checklist.
+
 ### Accessibility
 - Screen reader testing (VoiceOver / NVDA) on real devices
 

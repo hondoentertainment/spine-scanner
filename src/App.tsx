@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense, useDeferredValue, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import AuthPanel from './components/AuthPanel.tsx';
 import ThemeToggle from './components/ThemeToggle.tsx';
@@ -20,6 +20,12 @@ import { isValidIsbn, normalizeToIsbn13 } from './utils/isbnValidation.ts';
 import { isbnExistsInLibrary } from './utils/libraryUtils.ts';
 import { useAnalyticsStore } from './store/useAnalyticsStore.ts';
 import { getLibraryInsights } from './utils/bookPresentation.ts';
+import PublicInfoPage, { type PublicPage } from './components/PublicInfoPage.tsx';
+import OnboardingModal from './components/OnboardingModal.tsx';
+import { DEFAULT_ONBOARDING_STEPS } from './components/onboardingContent.tsx';
+import { addBreadcrumb, captureException, isEnabled as isMonitoringEnabled, setTag, setUser as setMonitoringUser } from './lib/errorMonitoring.ts';
+import { isSupabaseConfigured } from './lib/supabase.ts';
+import { buildSupportDiagnostics } from './utils/supportDiagnostics.ts';
 import styles from './components/App.module.css';
 import { uiContracts } from './testing/uiContracts.ts';
 
@@ -38,9 +44,70 @@ type ScanRequestOptions = {
   source?: 'scan' | 'manual' | 'ocr' | 'barcode' | 'suggestion';
 };
 
+type AppView = 'scan' | 'library' | 'data' | 'profile';
+
+const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL as string | undefined;
+const SITE_URL = (import.meta.env.VITE_SITE_URL as string | undefined)?.replace(/\/$/, '');
+const APP_DESCRIPTION = 'Digitize and manage your personal book library with barcode scanning, OCR fallback, optional cloud sync, and export-friendly ownership.';
+const APP_TITLE = 'SpineScanner';
+const APP_RELEASE = import.meta.env.VITE_APP_RELEASE || 'dev-local';
+const APP_ENV = import.meta.env.VITE_APP_ENV || import.meta.env.MODE;
+
+const PUBLIC_PAGE_META: Record<PublicPage, { title: string; description: string; label: string }> = {
+  about: {
+    title: 'About SpineScanner',
+    description: 'Learn what SpineScanner is for, who it serves, and why it is designed around fast capture and user-owned library data.',
+    label: 'About',
+  },
+  privacy: {
+    title: 'Privacy Policy | SpineScanner',
+    description: 'Understand how SpineScanner handles local storage, optional cloud sync, camera access, third-party ISBN lookups, and operator-configured monitoring.',
+    label: 'Privacy',
+  },
+  terms: {
+    title: 'Terms of Use | SpineScanner',
+    description: 'Read the terms for using SpineScanner, including responsible use, third-party metadata, service availability, and backup expectations.',
+    label: 'Terms',
+  },
+  support: {
+    title: 'Support | SpineScanner',
+    description: 'Get help with scanning, syncing, exports, and recovery workflows for SpineScanner.',
+    label: 'Support',
+  },
+};
+
+function getPublicPageFromHash(hash: string): PublicPage | null {
+  if (hash === 'about' || hash === 'privacy' || hash === 'terms' || hash === 'support') {
+    return hash;
+  }
+
+  return null;
+}
+
+function upsertMetaTag(attribute: 'name' | 'property', key: string, value: string) {
+  let element = document.head.querySelector(`meta[${attribute}="${key}"]`) as HTMLMetaElement | null;
+  if (!element) {
+    element = document.createElement('meta');
+    document.head.appendChild(element);
+  }
+  element.setAttribute(attribute, key);
+  element.content = value;
+}
+
+function upsertStructuredData(id: string, payload: Record<string, unknown>) {
+  let element = document.head.querySelector(`#${id}`) as HTMLScriptElement | null;
+  if (!element) {
+    element = document.createElement('script');
+    element.type = 'application/ld+json';
+    element.id = id;
+    document.head.appendChild(element);
+  }
+  element.textContent = JSON.stringify(payload);
+}
+
 function App() {
-  const [view, setView] = useState<'scan' | 'library' | 'data' | 'profile'>('scan');
-  const deferredView = useDeferredValue(view);
+  const [view, setView] = useState<AppView>('scan');
+  const [publicPage, setPublicPage] = useState<PublicPage | null>(null);
   const { lookupByIsbn, loading, error } = useBookLookup();
   const { addBook, books, setBooks, shelves, setShelves } = useBookStore();
   const { user, recoveryMode, initialize: initAuth } = useAuthStore();
@@ -55,8 +122,29 @@ function App() {
   const { track } = useAnalyticsStore();
   const [openBookIsbn, setOpenBookIsbn] = useState<string | null>(null);
   const [srAnnouncement, setSrAnnouncement] = useState('');
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
   const batchMode = preferences.batchModeDefault;
   const insights = useMemo(() => getLibraryInsights(books), [books]);
+  const diagnostics = useMemo(() => buildSupportDiagnostics({
+    release: APP_RELEASE,
+    environment: APP_ENV,
+    basePath: import.meta.env.BASE_URL,
+    siteUrl: SITE_URL ?? null,
+    online,
+    hasUser: Boolean(user?.id),
+    pendingChanges,
+    lastSyncedAt,
+    lastSyncFailedAt,
+    monitoringEnabled: isMonitoringEnabled(),
+    supabaseConfigured: isSupabaseConfigured(),
+    totalBooks: books.length,
+    totalShelves: shelves.length,
+    reviewCount: insights.reviewCount,
+    currentView: publicPage ?? view,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+    language: typeof navigator !== 'undefined' ? navigator.language : 'unknown',
+  }), [books.length, insights.reviewCount, lastSyncFailedAt, lastSyncedAt, online, pendingChanges, publicPage, shelves.length, user?.id, view]);
 
   const initialSyncDone = useRef(false);
   const prevBooksRef = useRef(books);
@@ -66,6 +154,11 @@ function App() {
   useEffect(() => {
     initAuth();
   }, [initAuth]);
+
+  useEffect(() => {
+    setMonitoringUser(user?.id ?? null);
+    setTag('has_cloud_account', Boolean(user?.id));
+  }, [user?.id]);
 
   useEffect(() => {
     try {
@@ -85,6 +178,12 @@ function App() {
     }
   }, [user?.id, loadFromCloud]);
 
+  useEffect(() => {
+    if (!preferences.onboardingCompleted && books.length > 0) {
+      updatePreferences({ onboardingCompleted: true });
+    }
+  }, [preferences.onboardingCompleted, books.length, updatePreferences]);
+
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     if (!user?.id) return;
@@ -94,15 +193,29 @@ function App() {
   }, [user?.id, preferences, saveToCloud]);
 
   useEffect(() => {
-    const hash = window.location.hash.slice(1);
-    const m = hash.match(/^book-(.+)$/);
-    if (m) {
-      const isbn = decodeURIComponent(m[1]);
-      if (isbn) {
-        setView('library');
-        setOpenBookIsbn(isbn);
+    const syncFromHash = () => {
+      const hash = window.location.hash.slice(1);
+      const matchedPublicPage = getPublicPageFromHash(hash);
+
+      if (matchedPublicPage) {
+        setPublicPage(matchedPublicPage);
+        return;
       }
-    }
+
+      setPublicPage(null);
+      const m = hash.match(/^book-(.+)$/);
+      if (m) {
+        const isbn = decodeURIComponent(m[1]);
+        if (isbn) {
+          setView('library');
+          setOpenBookIsbn(isbn);
+        }
+      }
+    };
+
+    syncFromHash();
+    window.addEventListener('hashchange', syncFromHash);
+    return () => window.removeEventListener('hashchange', syncFromHash);
   }, []);
 
   useEffect(() => {
@@ -163,6 +276,10 @@ function App() {
     if (!user || flushing) return false;
     setFlushing(true);
     try {
+      addBreadcrumb('sync', 'Attempting queue flush', {
+        pendingChanges,
+        hasUser: Boolean(user),
+      });
       const merged = await mergeSync(user.id, books, shelves);
       if (merged) {
         setBooks(merged.books);
@@ -170,17 +287,27 @@ function App() {
         markSynced();
         prevBooksRef.current = merged.books;
         prevShelvesRef.current = merged.shelves;
+        addBreadcrumb('sync', 'Queue flush succeeded', {
+          books: merged.books.length,
+          shelves: merged.shelves.length,
+        });
         return true;
       }
     } catch (err) {
       console.error('[sync] Flush failed:', err);
+      captureException(err, {
+        area: 'flushQueue',
+        pendingChanges,
+        localBookCount: books.length,
+        localShelfCount: shelves.length,
+      });
       markSyncFailed();
       toast('Sync failed. Will retry when online.', 'error');
     } finally {
       setFlushing(false);
     }
     return false;
-  }, [user, flushing, books, shelves, setBooks, setShelves, markSynced, markSyncFailed, setFlushing, toast]);
+  }, [user, flushing, books, shelves, setBooks, setShelves, markSynced, markSyncFailed, setFlushing, toast, pendingChanges]);
 
   useEffect(() => {
     if (!justReconnected) return;
@@ -198,6 +325,32 @@ function App() {
     await flushQueue();
   }, [user, flushQueue]);
 
+  const completeOnboarding = useCallback(() => {
+    setShowOnboarding(false);
+    setOnboardingStep(0);
+    updatePreferences({ onboardingCompleted: true });
+  }, [updatePreferences]);
+
+  const clearPublicHash = useCallback(() => {
+    if (getPublicPageFromHash(window.location.hash.slice(1))) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    }
+  }, []);
+
+  const openPublicPage = useCallback((page: PublicPage) => {
+    setPublicPage(page);
+    setSrAnnouncement(`${PUBLIC_PAGE_META[page].label} page`);
+    if (window.location.hash !== `#${page}`) {
+      window.location.hash = page;
+    }
+  }, []);
+
+  const closePublicPage = useCallback(() => {
+    setPublicPage(null);
+    setSrAnnouncement('Returned to app');
+    clearPublicHash();
+  }, [clearPublicHash]);
+
   const handlePhotoCapture = useCallback((imageDataUrl: string) => {
     const id = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2);
     const photoIsbn = `photo-${id}`;
@@ -214,6 +367,8 @@ function App() {
       notes: '',
       dateAdded: new Date().toISOString(),
       shelfIds: [],
+      needsReview: true,
+      reviewReason: 'Photo-only capture. Add metadata when ready.',
     };
     addBook(newBook);
     track('book_added', { method: 'photo' });
@@ -224,6 +379,17 @@ function App() {
     setOpenBookIsbn(photoIsbn);
     setView('library');
   }, [addBook, books, user, online, toast, track]);
+
+  useEffect(() => {
+    if (publicPage) {
+      setShowOnboarding(false);
+      return;
+    }
+
+    if (!preferences.onboardingCompleted && books.length === 0) {
+      setShowOnboarding(true);
+    }
+  }, [preferences.onboardingCompleted, books.length, publicPage]);
 
   useEffect(() => {
     if (!batchMode) batchBooksAddedRef.current = 0;
@@ -291,6 +457,8 @@ function App() {
         notes: 'Added from manual ISBN entry. Verify the ISBN and complete the details.',
         dateAdded: new Date().toISOString(),
         shelfIds: [],
+        needsReview: true,
+        reviewReason: 'Manual ISBN needs verification.',
       };
 
       addBookAndOpen(reviewBook, 'Added for review. Open the book to verify the ISBN and details.', 'manual_review', true);
@@ -336,6 +504,8 @@ function App() {
             notes: '',
             dateAdded: new Date().toISOString(),
             shelfIds: [],
+            needsReview: true,
+            reviewReason: 'Metadata not found. Add details manually.',
           };
           addBookAndOpen(newBook, 'Added with ISBN only. You can fill in the details in your library.', options.source === 'manual' ? 'manual_no_metadata' : 'scan_no_metadata', options.source === 'manual');
         } else {
@@ -348,18 +518,68 @@ function App() {
     }
   };
 
-  const handleViewChange = useCallback((newView: 'scan' | 'library' | 'data' | 'profile') => {
+  const handleViewChange = useCallback((newView: AppView) => {
     const labels: Record<string, string> = {
       scan: 'Scanner view',
       library: 'Library view',
       data: 'Import and export view',
       profile: 'Profile view',
     };
+    setPublicPage(null);
+    clearPublicHash();
     setView(newView);
     setSrAnnouncement(labels[newView]);
-  }, []);
+    addBreadcrumb('navigation', 'View changed', { view: newView });
+  }, [clearPublicHash]);
 
-  const navItems: Array<{ key: 'scan' | 'library' | 'data' | 'profile'; label: string; icon: ReactNode }> = [
+  useEffect(() => {
+    const title = publicPage ? PUBLIC_PAGE_META[publicPage].title : APP_TITLE;
+    const description = publicPage ? PUBLIC_PAGE_META[publicPage].description : APP_DESCRIPTION;
+    const siteOrigin = SITE_URL ?? window.location.origin;
+    const canonicalHref = publicPage
+      ? `${siteOrigin}${import.meta.env.BASE_URL}#${publicPage}`
+      : `${siteOrigin}${window.location.pathname}${window.location.search}`;
+    const socialImage = `${siteOrigin}${import.meta.env.BASE_URL}social-preview.svg`;
+
+    document.title = title;
+
+    const descriptionMeta = document.head.querySelector('meta[name="description"]') as HTMLMetaElement | null;
+    if (descriptionMeta) {
+      descriptionMeta.content = description;
+    }
+
+    const canonicalLink = document.head.querySelector('#canonical-url') as HTMLLinkElement | null;
+    if (canonicalLink) {
+      canonicalLink.href = canonicalHref;
+    }
+
+    upsertMetaTag('property', 'og:title', title);
+    upsertMetaTag('property', 'og:description', description);
+    upsertMetaTag('property', 'og:url', canonicalHref);
+    upsertMetaTag('property', 'og:image', socialImage);
+    upsertMetaTag('property', 'og:site_name', APP_TITLE);
+    upsertMetaTag('name', 'twitter:title', title);
+    upsertMetaTag('name', 'twitter:description', description);
+    upsertMetaTag('name', 'twitter:image', socialImage);
+
+    upsertStructuredData('app-structured-data', {
+      '@context': 'https://schema.org',
+      '@type': 'SoftwareApplication',
+      name: APP_TITLE,
+      description,
+      applicationCategory: 'UtilitiesApplication',
+      operatingSystem: 'Web',
+      url: canonicalHref,
+      image: socialImage,
+      offers: {
+        '@type': 'Offer',
+        price: '0',
+        priceCurrency: 'USD',
+      },
+    });
+  }, [publicPage]);
+
+  const navItems: Array<{ key: AppView; label: string; icon: ReactNode }> = [
     { key: 'scan', label: 'Add Books', icon: <Scan size={18} /> },
     { key: 'library', label: 'Library', icon: <Library size={18} /> },
     { key: 'data', label: 'Import & Export', icon: <Database size={18} /> },
@@ -493,7 +713,16 @@ function App() {
       </header>
 
       <main id="main-content">
-        {deferredView === 'scan' && (
+        {publicPage && (
+          <PublicInfoPage
+            page={publicPage}
+            supportEmail={SUPPORT_EMAIL}
+            diagnostics={publicPage === 'support' ? diagnostics : null}
+            onClose={closePublicPage}
+          />
+        )}
+
+        {!publicPage && view === 'scan' && (
           <ErrorBoundary>
             <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
               <div className={styles.scanView}>
@@ -535,6 +764,8 @@ function App() {
                   onPhotoCapture={handlePhotoCapture}
                   isScanning={loading}
                   batchMode={batchMode}
+                  onOpenSupport={() => openPublicPage('support')}
+                  onOpenPrivacy={() => openPublicPage('privacy')}
                   onViewLibrary={(isbn) => {
                     if (isbn) setOpenBookIsbn(isbn);
                     handleViewChange('library');
@@ -552,7 +783,7 @@ function App() {
           </ErrorBoundary>
         )}
 
-        {deferredView === 'library' && (
+        {!publicPage && view === 'library' && (
           <ErrorBoundary>
             <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
               <LibraryList
@@ -565,7 +796,7 @@ function App() {
           </ErrorBoundary>
         )}
 
-        {deferredView === 'data' && (
+        {!publicPage && view === 'data' && (
           <ErrorBoundary>
             <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
               <DataManagement onClose={() => handleViewChange('library')} />
@@ -573,7 +804,7 @@ function App() {
           </ErrorBoundary>
         )}
 
-        {deferredView === 'profile' && (
+        {!publicPage && view === 'profile' && (
           <ErrorBoundary>
             <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
               <ProfileSettings inline />
@@ -581,6 +812,42 @@ function App() {
           </ErrorBoundary>
         )}
       </main>
+
+      {showOnboarding && (
+        <OnboardingModal
+          currentStep={onboardingStep}
+          steps={DEFAULT_ONBOARDING_STEPS.map((step) => ({
+            ...step,
+            onCta: step.id === 'scan'
+              ? () => handleViewChange('scan')
+              : step.id === 'review'
+                ? () => handleViewChange('library')
+                : step.id === 'views'
+                  ? () => handleViewChange('library')
+                  : () => handleViewChange('data'),
+          }))}
+          onNext={() => setOnboardingStep((step) => Math.min(step + 1, DEFAULT_ONBOARDING_STEPS.length - 1))}
+          onSkip={completeOnboarding}
+          onComplete={completeOnboarding}
+        />
+      )}
+
+      <footer className={`glass ${styles.siteFooter}`}>
+        <div>
+          <strong>SpineScanner</strong>
+          <p className={styles.footerNote}>Offline-first book tracking with optional sync, exports, and readable trust pages for public visitors.</p>
+          <p className={styles.footerNote}>Release {APP_RELEASE} · {APP_ENV}</p>
+        </div>
+        <div className={styles.footerLinks}>
+          <button type="button" className={styles.footerButton} onClick={() => openPublicPage('about')}>About</button>
+          <button type="button" className={styles.footerButton} onClick={() => openPublicPage('privacy')}>Privacy</button>
+          <button type="button" className={styles.footerButton} onClick={() => openPublicPage('terms')}>Terms</button>
+          <button type="button" className={styles.footerButton} onClick={() => openPublicPage('support')}>Support</button>
+          {SUPPORT_EMAIL && (
+            <a className={styles.footerButton} href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+          )}
+        </div>
+      </footer>
 
       {recoveryMode && (
         <Suspense fallback={null}>

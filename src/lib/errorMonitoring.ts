@@ -8,6 +8,9 @@
 
 /** Whether Sentry is enabled (DSN is present in env). */
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN as string | undefined;
+const APP_RELEASE = import.meta.env.VITE_APP_RELEASE as string | undefined;
+const APP_ENVIRONMENT = (import.meta.env.VITE_APP_ENV as string | undefined) || import.meta.env.MODE;
+const BASE_PATH = (import.meta.env.VITE_BASE_PATH as string | undefined) || import.meta.env.BASE_URL;
 const IS_ENABLED = !!SENTRY_DSN;
 
 /** Lazily loaded Sentry module (only imported when DSN is present). */
@@ -24,7 +27,8 @@ export async function initErrorMonitoring(): Promise<void> {
     sentryModule = await import('@sentry/react');
     sentryModule.init({
       dsn: SENTRY_DSN,
-      environment: import.meta.env.MODE,
+      environment: APP_ENVIRONMENT,
+      release: APP_RELEASE,
       // Sample 10% of transactions for performance monitoring
       tracesSampleRate: 0.1,
       // Only send errors, not warnings
@@ -40,6 +44,11 @@ export async function initErrorMonitoring(): Promise<void> {
         return event;
       },
     });
+    sentryModule.setTag('app_env', APP_ENVIRONMENT);
+    sentryModule.setTag('base_path', BASE_PATH);
+    if (APP_RELEASE) {
+      sentryModule.setTag('app_release', APP_RELEASE);
+    }
     console.log('[ErrorMonitoring] Sentry initialized');
   } catch (err) {
     // Sentry failed to load — continue without monitoring
@@ -78,6 +87,14 @@ export function addBreadcrumb(
 export function setUser(id: string | null): void {
   if (!sentryModule) return;
   sentryModule.setUser(id ? { id } : null);
+}
+
+/**
+ * Set a structured tag for easier filtering in monitoring dashboards.
+ */
+export function setTag(key: string, value: string | number | boolean | null | undefined): void {
+  if (!sentryModule || value == null) return;
+  sentryModule.setTag(key, String(value));
 }
 
 /** Whether error monitoring is active. */

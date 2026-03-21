@@ -214,6 +214,17 @@ describe('BookDetail', () => {
       fireEvent.click(screen.getByLabelText('Set status to Read'));
       expect(useBookStore.getState().books[0].status).toBe('read');
     });
+
+    it('updates progress from the quick action buttons', () => {
+      const book = makeBook({ status: 'to-read', pagesFinished: 0 });
+      useBookStore.setState({ books: [book] });
+      renderWithToast(<BookDetail book={book} onClose={vi.fn()} />);
+
+      fireEvent.click(screen.getByText('+25 pages'));
+      const updated = useBookStore.getState().books[0];
+      expect(updated.pagesFinished).toBe(25);
+      expect(updated.status).toBe('reading');
+    });
   });
 
   /* ── Shelves ─────────────────────────────────────────────── */
