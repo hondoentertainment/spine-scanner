@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { indexedDBStorage } from '../lib/storage.ts';
 
 const SYNC_FAILED_RECENT_MS = 90_000;
 
@@ -54,6 +55,7 @@ export const useSyncQueue = create<SyncQueueStore>()(
     }),
     {
       name: 'spine-scanner-sync-queue',
+      storage: createJSONStorage(() => indexedDBStorage),
       // Only persist pendingChanges and lastSyncedAt, not transient flushing state
       partialize: (state) => ({
         pendingChanges: state.pendingChanges,

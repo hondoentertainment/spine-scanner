@@ -29,6 +29,7 @@
     "@tanstack/react-virtual": "^3.13.22",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
+    "idb-keyval": "^6.2.2",
     "lucide-react": "^0.577.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { BookEntry, Shelf } from '../types.ts';
 import { normalizeBookEntry, normalizeBooks, updateBookForStatus, updateBookProgress } from '../utils/bookState.ts';
+import { indexedDBStorage } from '../lib/storage.ts';
 
 interface BookStore {
   books: BookEntry[];
@@ -122,6 +123,7 @@ export const useBookStore = create<BookStore>()(
     }),
     {
       name: 'spine-scanner-storage',
+      storage: createJSONStorage(() => indexedDBStorage),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<BookStore> | undefined;
         return {
