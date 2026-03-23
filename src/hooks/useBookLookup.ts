@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { isbn13To10, isbn10To13 } from '../utils/isbnValidation.ts';
 import { addBreadcrumb, captureException } from '../lib/errorMonitoring.ts';
+import { createRateLimiter } from '../utils/rateLimiter.ts';
 
 export interface BookMetadata {
     title: string;
@@ -11,6 +12,10 @@ export interface BookMetadata {
 }
 
 const cache = new Map<string, BookMetadata>();
+
+// Rate limiters for external API calls
+const googleBooksLimiter = createRateLimiter(10, 2);  // max 10 tokens, refill 2/sec
+const openLibraryLimiter = createRateLimiter(5, 1);   // max 5 tokens, refill 1/sec
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -36,6 +41,7 @@ const fetchWithRetry = async (url: string, retries = 2): Promise<Response> => {
 };
 
 const lookupGoogleBooks = async (isbn: string): Promise<BookMetadata | null> => {
+    await googleBooksLimiter.waitForToken();
     const response = await fetchWithRetry(
         `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`
     );
@@ -53,6 +59,7 @@ const lookupGoogleBooks = async (isbn: string): Promise<BookMetadata | null> => 
 };
 
 const lookupOpenLibrary = async (isbn: string): Promise<BookMetadata | null> => {
+    await openLibraryLimiter.waitForToken();
     const response = await fetchWithRetry(
         `https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`
     );
