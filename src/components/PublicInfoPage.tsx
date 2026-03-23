@@ -139,31 +139,96 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
         </div>
       )}
 
-      {page === 'privacy' && (
+      {page === ‘privacy’ && (
         <div className={styles.stack}>
           <article className={styles.card}>
-            <h3>What data the app stores</h3>
-            <p>Your library data, shelves, preferences, and local analytics summary are stored in your browser so the app can work offline.</p>
+            <h3>Data collection</h3>
+            <p>
+              When you use the camera to scan barcodes or book spines, all image processing happens
+              on your device. Camera frames are never uploaded or stored on a server. When you scan
+              an ISBN, the app sends that ISBN to Google Books API and Open Library API to look up
+              title, author, and cover information. Those services receive the ISBN and standard
+              web request metadata (IP address, user agent).
+            </p>
           </article>
           <article className={styles.card}>
-            <h3>Camera and photos</h3>
-            <p>Camera access is only used for scanning. Photo uploads stay in your browser unless you explicitly save a photo-only book or enable cloud sync.</p>
+            <h3>Local storage</h3>
+            <p>
+              Your book library, shelves, reading states, preferences, and notes are stored in
+              IndexedDB and localStorage within your browser. This data stays on your device and is
+              fully under your control. The app works offline by default and does not require an
+              internet connection after the initial page load.
+            </p>
           </article>
           <article className={styles.card}>
-            <h3>Optional cloud sync</h3>
-            <p>If Supabase is configured and you sign in, your library data syncs to the connected Supabase project so you can use multiple devices.</p>
+            <h3>Analytics</h3>
+            <p>
+              The app tracks usage events like scan counts, success rates, and import/export
+              activity. These analytics are stored locally in your browser only and are never
+              transmitted to any external service. You can view your analytics summary and clear
+              all analytics data at any time from the app’s data tools.
+            </p>
           </article>
           <article className={styles.card}>
-            <h3>Third-party requests</h3>
-            <p>ISBN lookups can call Google Books and Open Library. Those services may receive the ISBN you search for and standard web request metadata.</p>
+            <h3>Cloud sync (optional)</h3>
+            <p>
+              Cloud sync is off by default. If the site operator has configured Supabase and you
+              choose to create an account and sign in, your book data syncs to a hosted Supabase
+              project so you can access your library across devices. Your data is protected by
+              row-level security, meaning only your authenticated session can read or write your
+              records. You can sign out at any time, and you can delete your account and all
+              associated cloud data through the app’s account settings.
+            </p>
           </article>
           <article className={styles.card}>
-            <h3>Monitoring</h3>
-            <p>Error reporting is optional and only active when the site operator configures it. This deployment strips ISBN breadcrumb data before sending Sentry events.</p>
+            <h3>Error monitoring (optional)</h3>
+            <p>
+              Error reporting is only active when the site operator has configured a Sentry DSN.
+              When enabled, Sentry collects crash reports and performance data to help diagnose
+              issues. Personally identifiable information is stripped from breadcrumbs before
+              events are sent — for example, ISBN values are removed from breadcrumb data.
+              Performance transactions are sampled at 10%, so most page loads are not reported.
+              If no Sentry DSN is configured, no monitoring code runs at all.
+            </p>
           </article>
           <article className={styles.card}>
-            <h3>Your controls</h3>
-            <p>You can export your library, clear local analytics, sign out of sync, or remove local browser storage at any time from the app’s data tools.</p>
+            <h3>Third-party services</h3>
+            <ul className={styles.list}>
+              <li><strong>Google Books API</strong> — ISBN lookups for book metadata and cover images.</li>
+              <li><strong>Open Library API</strong> — fallback ISBN lookups for book metadata.</li>
+              <li><strong>Supabase</strong> (optional) — cloud sync and authentication when configured by the site operator.</li>
+              <li><strong>Sentry</strong> (optional) — error and performance monitoring when configured by the site operator.</li>
+            </ul>
+          </article>
+          <article className={styles.card}>
+            <h3>Data retention</h3>
+            <p>
+              Local data persists in your browser until you delete it, clear your browser storage,
+              or uninstall the app. Cloud data (if sync is enabled) is retained while your account
+              is active and is removed when you delete your account. The site operator does not
+              access your synced library data except as needed for infrastructure maintenance.
+            </p>
+          </article>
+          <article className={styles.card}>
+            <h3>Your rights</h3>
+            <ul className={styles.list}>
+              <li><strong>Export</strong> — download your full library as JSON or CSV at any time from data tools.</li>
+              <li><strong>Delete</strong> — clear local storage, delete your cloud account, or both.</li>
+              <li><strong>Revoke camera access</strong> — remove camera permissions through your browser settings at any time.</li>
+              <li><strong>Clear analytics</strong> — wipe all locally stored usage data with one action.</li>
+            </ul>
+          </article>
+          <article className={styles.card}>
+            <h3>Children</h3>
+            <p>
+              Spine Scanner is not directed at children under 13. We do not knowingly collect
+              personal information from children. If you believe a child has provided data through
+              the app, please contact us and we will remove it promptly.
+            </p>
+          </article>
+          <article className={styles.card}>
+            <h3>Questions</h3>
+            <SupportContact supportEmail={supportEmail} />
           </article>
         </div>
       )}
@@ -171,20 +236,65 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
       {page === 'terms' && (
         <div className={styles.stack}>
           <article className={styles.card}>
+            <h3>No warranty</h3>
+            <p>
+              Spine Scanner is provided &ldquo;as is&rdquo; without warranties of any kind, express or implied.
+              We do not guarantee that the app will be error-free, uninterrupted, or that scan
+              results will always be accurate. Book metadata depends on third-party APIs (Google
+              Books, Open Library) whose accuracy and availability are outside our control.
+            </p>
+          </article>
+          <article className={styles.card}>
+            <h3>Your responsibility for backups</h3>
+            <p>
+              You are responsible for maintaining backups of your library data. The app provides
+              JSON and CSV export tools specifically so your catalog is portable. We strongly
+              recommend exporting a backup before major imports, bulk deletes, device migrations,
+              or clearing browser storage. Data stored only in your browser can be lost if you
+              clear site data or switch devices without exporting first.
+            </p>
+          </article>
+          <article className={styles.card}>
             <h3>Acceptable use</h3>
-            <p>Use the site for lawful library tracking and personal or household organization. Do not abuse sign-in, scraping, or automated traffic limits.</p>
+            <p>
+              Use the site for lawful, personal library tracking and household organization.
+              You agree not to:
+            </p>
+            <ul className={styles.list}>
+              <li>Use automated tools to scrape or flood the app or its connected APIs.</li>
+              <li>Abuse sign-in or authentication systems (e.g., credential stuffing, fake accounts).</li>
+              <li>Attempt to access other users' data or bypass row-level security.</li>
+              <li>Use the app for any unlawful purpose or in violation of any applicable laws.</li>
+            </ul>
+          </article>
+          <article className={styles.card}>
+            <h3>Service modifications</h3>
+            <p>
+              We may update, change, or discontinue features at any time. The app is a small,
+              evolving product and its functionality may shift as scanning technology, APIs, and
+              infrastructure change. We will make reasonable efforts to preserve your ability to
+              export your data before removing core features.
+            </p>
           </article>
           <article className={styles.card}>
             <h3>Third-party content</h3>
-            <p>Book details and cover images may come from external APIs. Accuracy, availability, and licensing for that metadata are controlled by those providers.</p>
+            <p>
+              Book details, cover images, and metadata may come from Google Books API and Open
+              Library API. Accuracy, availability, and licensing for that content are governed by
+              those providers. We do not claim ownership of third-party metadata displayed in
+              your library.
+            </p>
           </article>
           <article className={styles.card}>
-            <h3>Service availability</h3>
-            <p>The app is provided on an as-is basis. Features may change, and scan quality can vary based on device hardware, lighting, and upstream metadata services.</p>
-          </article>
-          <article className={styles.card}>
-            <h3>Your backups matter</h3>
-            <p>Before major imports, deletes, or migrations, export a backup. The product includes export tools specifically so your catalog is portable.</p>
+            <h3>Limitation of liability</h3>
+            <p>
+              To the fullest extent permitted by law, the site operator is not liable for any
+              indirect, incidental, or consequential damages arising from your use of the app.
+              This includes, but is not limited to, data loss, interrupted access, inaccurate
+              metadata, or issues caused by third-party services. Our total liability for any
+              claim related to the app is limited to the amount you paid to use it (which, for
+              free deployments, is zero).
+            </p>
           </article>
           <article className={styles.card}>
             <h3>Questions</h3>
