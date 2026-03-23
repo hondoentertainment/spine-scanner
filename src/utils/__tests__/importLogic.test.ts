@@ -82,6 +82,83 @@ describe('extractISBNs', () => {
   });
 });
 
+describe('parseCSV – Goodreads format', () => {
+  it('parses Goodreads CSV with ISBN and My Review columns', () => {
+    const csv = `Title,Author,ISBN,Bookshelves,My Review
+"The Great Gatsby","F. Scott Fitzgerald","9780141036144","read","Loved it"
+"1984","George Orwell","9780544003415","to-read",""`;
+
+    const result = parseCSV(csv);
+    expect(result).toHaveLength(2);
+    expect(result[0].isbn).toBe('9780141036144');
+    expect(result[0].status).toBe('read');
+    expect(result[0].notes).toBe('Loved it');
+    expect(result[1].status).toBe('to-read');
+    expect(result[1].notes).toBe('');
+  });
+});
+
+describe('parseCSV – LibraryThing format', () => {
+  it('parses LibraryThing CSV using ID column for ISBN', () => {
+    const csv = `ID,Title,Author
+"9780141036144","The Great Gatsby","F. Scott Fitzgerald"
+"9780544003415","1984","George Orwell"`;
+
+    const result = parseCSV(csv);
+    expect(result).toHaveLength(2);
+    expect(result[0].isbn).toBe('9780141036144');
+    expect(result[0].title).toBe('The Great Gatsby');
+  });
+});
+
+describe('parseCSV – edge cases', () => {
+  it('handles empty file', () => {
+    expect(parseCSV('')).toEqual([]);
+  });
+
+  it('handles file with only whitespace lines', () => {
+    expect(parseCSV('  \n  \n  ')).toEqual([]);
+  });
+
+  it('handles malformed rows with missing fields', () => {
+    const csv = `ISBN,Title,Author
+"9780141036144"`;
+
+    const result = parseCSV(csv);
+    // Should still parse the row (missing fields default to empty string)
+    expect(result).toHaveLength(1);
+    expect(result[0].isbn).toBe('9780141036144');
+    expect(result[0].title).toBe('');
+  });
+
+  it('handles rows without ISBN field value', () => {
+    const csv = `ISBN,Title
+"","Some Book"
+"9780141036144","Valid Book"`;
+
+    const result = parseCSV(csv);
+    // Empty ISBN should be filtered out (length < 10)
+    expect(result).toHaveLength(1);
+    expect(result[0].isbn).toBe('9780141036144');
+  });
+
+  it('handles Windows-style CRLF line endings', () => {
+    const csv = `ISBN,Title\r\n"9780141036144","Gatsby"\r\n"9780544003415","1984"`;
+
+    const result = parseCSV(csv);
+    expect(result).toHaveLength(2);
+  });
+
+  it('handles quoted fields containing commas', () => {
+    const csv = `ISBN,Title,Author
+"9780141036144","The Great, Gatsby","Fitzgerald, F. Scott"`;
+
+    const result = parseCSV(csv);
+    expect(result).toHaveLength(1);
+    expect(result[0].isbn).toBe('9780141036144');
+  });
+});
+
 describe('validateFileName', () => {
   it('returns valid for normal files', () => {
     expect(validateFileName('books.csv')).toEqual({ valid: true });

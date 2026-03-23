@@ -103,4 +103,60 @@ describe('exportToStoryGraphCSV', () => {
         const csv = exportToStoryGraphCSV([makeBook({ title: 'A "Great" Book' })]);
         expect(csv).toContain('A ""Great"" Book');
     });
+
+    it('handles empty library', () => {
+        const csv = exportToStoryGraphCSV([]);
+        const lines = csv.split('\n');
+        expect(lines).toHaveLength(1); // headers only
+        expect(lines[0]).toContain('Title');
+    });
+});
+
+describe('exportToJSON – edge cases', () => {
+    it('exports empty library as valid JSON', () => {
+        const json = exportToJSON([]);
+        const parsed = JSON.parse(json);
+        expect(parsed.books).toEqual([]);
+        expect(parsed.version).toBe(2);
+    });
+
+    it('exports and imports shelves', () => {
+        const shelves = [{ id: 's1', name: 'Favorites', color: '#ff0000' }];
+        const json = exportToJSON([makeBook()], shelves);
+        const imported = importFromJSON(json);
+        expect(imported.shelves).toHaveLength(1);
+        expect(imported.shelves[0].name).toBe('Favorites');
+    });
+
+    it('handles books with missing optional fields', () => {
+        const book = makeBook({
+            notes: '',
+            coverImg: '',
+            amazonLink: '',
+            pageCount: 0,
+        });
+        const json = exportToJSON([book]);
+        const imported = importFromJSON(json);
+        expect(imported.books[0].notes).toBe('');
+        expect(imported.books[0].coverImg).toBe('');
+        expect(imported.books[0].pageCount).toBe(0);
+    });
+});
+
+describe('exportToLibraryThingTSV – edge cases', () => {
+    it('handles empty library', () => {
+        const tsv = exportToLibraryThingTSV([]);
+        const lines = tsv.split('\n');
+        expect(lines).toHaveLength(1); // headers only
+    });
+
+    it('handles books with empty notes and missing fields', () => {
+        const book = makeBook({ notes: '', author: '', title: '' });
+        const tsv = exportToLibraryThingTSV([book]);
+        const lines = tsv.split('\n');
+        expect(lines).toHaveLength(2);
+        // Should still have correct number of tab-separated fields
+        const fields = lines[1].split('\t');
+        expect(fields).toHaveLength(7);
+    });
 });
