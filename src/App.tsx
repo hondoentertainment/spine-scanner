@@ -26,6 +26,7 @@ import { DEFAULT_ONBOARDING_STEPS } from './components/onboardingContent.tsx';
 import { addBreadcrumb, captureException, isEnabled as isMonitoringEnabled, setTag, setUser as setMonitoringUser } from './lib/errorMonitoring.ts';
 import { isSupabaseConfigured } from './lib/supabase.ts';
 import { buildSupportDiagnostics } from './utils/supportDiagnostics.ts';
+import UpdateBanner from './components/UpdateBanner.tsx';
 import styles from './components/App.module.css';
 import { uiContracts } from './testing/uiContracts.ts';
 
@@ -588,6 +589,7 @@ function App() {
 
   return (
     <div className="app-container">
+      <UpdateBanner />
       <a href="#main-content" className={styles.skipLink}>Skip to main content</a>
 
       <div className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">

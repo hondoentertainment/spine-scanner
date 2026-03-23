@@ -54,7 +54,7 @@ export default defineConfig({
     react(),
     createSiteAssetsPlugin(base, siteUrl),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['vite.svg', 'icon-192.png', 'icon-512.png'],
       manifest: {
         name: 'SpineScanner',
@@ -73,7 +73,6 @@ export default defineConfig({
       },
       workbox: {
         cleanupOutdatedCaches: true,
-        skipWaiting: true,
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         // Exclude WASM core files from precache because they are large and browser caching is enough.
