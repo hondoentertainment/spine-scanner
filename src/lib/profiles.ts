@@ -1,6 +1,7 @@
 import { supabase } from './supabase.ts';
 import type { ProfilePreferences } from '../types.ts';
 import { DEFAULT_PREFERENCES } from '../types.ts';
+import { logger } from './logger.ts';
 
 /**
  * Profiles table schema: see supabase/migrations/001_profiles.sql
@@ -41,7 +42,7 @@ export async function upsertProfile(
     .upsert(row, { onConflict: 'id' });
 
   if (error) {
-    console.error('[profiles] Error upserting profile:', error.message);
+    logger.error('Error upserting profile', { error: error.message });
     return false;
   }
   return true;
@@ -61,7 +62,7 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 
   if (error) {
     if (error.code === 'PGRST116') return null;
-    console.error('[profiles] Error fetching profile:', error.message);
+    logger.error('Error fetching profile', { error: error.message });
     return null;
   }
   if (!data) return null;

@@ -1,6 +1,7 @@
 import { supabase } from './supabase.ts';
 import type { BookEntry, Shelf } from '../types.ts';
 import { addBreadcrumb, captureException } from './errorMonitoring.ts';
+import { logger } from './logger.ts';
 
 /** Row shape in the Supabase `books` table */
 interface BookRow {
@@ -107,7 +108,7 @@ export async function pullBooks(userId: string): Promise<BookEntry[] | null> {
     .order('date_added', { ascending: false });
 
   if (error) {
-    console.error('[sync] Error pulling books:', error.message);
+    logger.error('Error pulling books', { error: error.message });
     captureException(error, { area: 'pullBooks', userId });
     return null;
   }
@@ -125,7 +126,7 @@ export async function pullShelves(userId: string): Promise<Shelf[] | null> {
     .eq('user_id', userId);
 
   if (error) {
-    console.error('[sync] Error pulling shelves:', error.message);
+    logger.error('Error pulling shelves', { error: error.message });
     captureException(error, { area: 'pullShelves', userId });
     return null;
   }
@@ -153,7 +154,7 @@ export async function pushBooks(userId: string, books: BookEntry[]): Promise<boo
       .upsert(rows, { onConflict: 'id' });
 
     if (error) {
-      console.error('[sync] Error pushing books:', error.message);
+      logger.error('Error pushing books', { error: error.message });
       captureException(error, { area: 'pushBooks.upsert', userId, bookCount: books.length });
       return false;
     }
@@ -168,7 +169,7 @@ export async function pushBooks(userId: string, books: BookEntry[]): Promise<boo
     .eq('user_id', userId);
 
   if (fetchError) {
-    console.error('[sync] Error fetching remote IDs:', fetchError.message);
+    logger.error('Error fetching remote IDs', { error: fetchError.message });
     captureException(fetchError, { area: 'pushBooks.fetchRemoteIds', userId });
     return false;
   }
@@ -183,7 +184,7 @@ export async function pushBooks(userId: string, books: BookEntry[]): Promise<boo
       .in('id', toDelete);
 
     if (deleteError) {
-      console.error('[sync] Error deleting stale books:', deleteError.message);
+      logger.error('Error deleting stale books', { error: deleteError.message });
       captureException(deleteError, { area: 'pushBooks.deleteStale', userId, staleCount: toDelete.length });
       return false;
     }
@@ -205,7 +206,7 @@ export async function pushShelves(userId: string, shelves: Shelf[]): Promise<boo
       .upsert(rows, { onConflict: 'id' });
 
     if (error) {
-      console.error('[sync] Error pushing shelves:', error.message);
+      logger.error('Error pushing shelves', { error: error.message });
       captureException(error, { area: 'pushShelves.upsert', userId, shelfCount: shelves.length });
       return false;
     }
@@ -220,7 +221,7 @@ export async function pushShelves(userId: string, shelves: Shelf[]): Promise<boo
     .eq('user_id', userId);
 
   if (fetchError) {
-    console.error('[sync] Error fetching remote shelf IDs:', fetchError.message);
+    logger.error('Error fetching remote shelf IDs', { error: fetchError.message });
     captureException(fetchError, { area: 'pushShelves.fetchRemoteIds', userId });
     return false;
   }
@@ -235,7 +236,7 @@ export async function pushShelves(userId: string, shelves: Shelf[]): Promise<boo
       .in('id', toDeleteIds);
 
     if (deleteError) {
-      console.error('[sync] Error deleting stale shelves:', deleteError.message);
+      logger.error('Error deleting stale shelves', { error: deleteError.message });
       captureException(deleteError, { area: 'pushShelves.deleteStale', userId, staleCount: toDeleteIds.length });
       return false;
     }

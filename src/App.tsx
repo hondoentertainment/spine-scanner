@@ -24,6 +24,7 @@ import PublicInfoPage, { type PublicPage } from './components/PublicInfoPage.tsx
 import OnboardingModal from './components/OnboardingModal.tsx';
 import { DEFAULT_ONBOARDING_STEPS } from './components/onboardingContent.tsx';
 import { addBreadcrumb, captureException, isEnabled as isMonitoringEnabled, setTag, setUser as setMonitoringUser } from './lib/errorMonitoring.ts';
+import { logger } from './lib/logger.ts';
 import { isSupabaseConfigured } from './lib/supabase.ts';
 import { buildSupportDiagnostics } from './utils/supportDiagnostics.ts';
 import UpdateBanner from './components/UpdateBanner.tsx';
@@ -295,7 +296,7 @@ function App() {
         return true;
       }
     } catch (err) {
-      console.error('[sync] Flush failed:', err);
+      logger.error('Flush failed', { error: String(err) });
       captureException(err, {
         area: 'flushQueue',
         pendingChanges,
@@ -514,7 +515,7 @@ function App() {
         }
       }
     } catch (err) {
-      console.error('[App] Error during scan handler:', err);
+      logger.error('Error during scan handler', { error: String(err) });
       toast('Book lookup failed. Try again or add the ISBN manually.', 'error');
     }
   };
