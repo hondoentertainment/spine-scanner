@@ -148,6 +148,24 @@ Once scan accuracy is solid, focus on data trust. Priority items:
 
 ---
 
+## Prioritized Next Steps (March 2026)
+
+Based on current project state, these are the recommended next actions in priority order:
+
+### Immediate (finish Phase 25)
+1. **Device benchmark runner** — Complete the last Phase 25 deliverable. Create `scripts/benchmark-scan.ts` to run the pipeline against regression fixtures and output CSV metrics. ([#36](https://github.com/hondoentertainment/spine-scanner/issues/36))
+
+### Short-term (Phase 26 — Metadata Quality)
+2. **Metadata source tracking** — Add `metadataSource` field to `BookEntry` and show source badges in BookDetail. Foundation for all other Phase 26 work. ([#37](https://github.com/hondoentertainment/spine-scanner/issues/37))
+3. **Metadata conflict detection** — Query both Google Books and Open Library, surface disagreements to users instead of silently picking one. ([#38](https://github.com/hondoentertainment/spine-scanner/issues/38))
+4. **Safe metadata refresh** — "Refresh metadata" button that never overwrites user-edited fields. Track `userEdited` flag per field. ([#39](https://github.com/hondoentertainment/spine-scanner/issues/39))
+
+### Parallel tracks
+5. **Production launch checklist** — Set real env values, complete pre-launch verification, review legal/privacy copy. ([#40](https://github.com/hondoentertainment/spine-scanner/issues/40))
+6. **Branch coverage improvement** — Raise branch coverage from 54% toward 70% by testing error paths, fallback logic, and edge cases. ([#41](https://github.com/hondoentertainment/spine-scanner/issues/41))
+
+---
+
 ## Still Worth Doing Alongside the Roadmap
 
 - See `PRODUCTION_PLAN.md` for the launch-focused phased plan.
