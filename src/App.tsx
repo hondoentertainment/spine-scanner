@@ -14,7 +14,7 @@ import { useToast } from './components/Toast.tsx';
 import { mergeSync, pushBooks } from './lib/syncBooks.ts';
 import { formatRelativeTime } from './utils/formatRelativeTime.ts';
 import type { BookEntry } from './types.ts';
-import { BookOpen, Library, Scan, AlertCircle, Database, Layers, User, Sparkles, Cloud, BookMarked, ChevronRight } from 'lucide-react';
+import { BookOpen, Library, Scan, AlertCircle, Database, Layers, User, Sparkles, Cloud, BookMarked, ChevronRight, Lightbulb } from 'lucide-react';
 import { generateAmazonLink } from './utils/amazonLink.ts';
 import { isValidIsbn, normalizeToIsbn13 } from './utils/isbnValidation.ts';
 import { isbnExistsInLibrary } from './utils/libraryUtils.ts';
@@ -33,18 +33,34 @@ const Scanner = lazy(() => import('./components/Scanner.tsx'));
 const LibraryList = lazy(() => import('./components/LibraryList.tsx'));
 const DataManagement = lazy(() => import('./components/DataManagement.tsx'));
 const ProfileSettings = lazy(() => import('./components/ProfileSettings.tsx'));
+const NextSteps = lazy(() => import('./components/NextSteps.tsx'));
 const PasswordReset = lazy(() => import('./components/PasswordReset.tsx'));
 const preloadScanner = () => import('./components/Scanner.tsx');
 const preloadLibrary = () => import('./components/LibraryList.tsx');
 const preloadData = () => import('./components/DataManagement.tsx');
 const preloadProfile = () => import('./components/ProfileSettings.tsx');
+const preloadNextSteps = () => import('./components/NextSteps.tsx');
 
 type ScanRequestOptions = {
   allowReview?: boolean;
   source?: 'scan' | 'manual' | 'ocr' | 'barcode' | 'suggestion';
 };
 
-type AppView = 'scan' | 'library' | 'data' | 'profile';
+type AppView = 'scan' | 'library' | 'data' | 'profile' | 'next-steps';
+
+const VIEW_HASHES: Record<AppView, string> = {
+  scan: 'scan',
+  library: 'library',
+  data: 'data',
+  profile: 'profile',
+  'next-steps': 'next-steps',
+};
+
+function getViewFromHash(hash: string): AppView | null {
+  const entries = Object.entries(VIEW_HASHES) as [AppView, string][];
+  const match = entries.find(([, h]) => h === hash);
+  return match ? match[0] : null;
+}
 
 const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL as string | undefined;
 const SITE_URL = (import.meta.env.VITE_SITE_URL as string | undefined)?.replace(/\/$/, '');
@@ -203,6 +219,13 @@ function App() {
       }
 
       setPublicPage(null);
+
+      const matchedView = getViewFromHash(hash);
+      if (matchedView) {
+        setView(matchedView);
+        return;
+      }
+
       const m = hash.match(/^book-(.+)$/);
       if (m) {
         const isbn = decodeURIComponent(m[1]);
@@ -224,6 +247,7 @@ function App() {
       void preloadLibrary();
       void preloadData();
       void preloadProfile();
+      void preloadNextSteps();
     };
     const idleId = typeof requestIdleCallback !== 'undefined'
       ? requestIdleCallback(preloadAll, { timeout: 150 })
@@ -524,10 +548,15 @@ function App() {
       library: 'Library view',
       data: 'Import and export view',
       profile: 'Profile view',
+      'next-steps': 'Next steps view',
     };
     setPublicPage(null);
     clearPublicHash();
     setView(newView);
+    const newHash = VIEW_HASHES[newView];
+    if (window.location.hash !== `#${newHash}`) {
+      window.history.pushState(null, '', `#${newHash}`);
+    }
     setSrAnnouncement(labels[newView]);
     addBreadcrumb('navigation', 'View changed', { view: newView });
   }, [clearPublicHash]);
@@ -582,6 +611,7 @@ function App() {
   const navItems: Array<{ key: AppView; label: string; icon: ReactNode }> = [
     { key: 'scan', label: 'Add Books', icon: <Scan size={18} /> },
     { key: 'library', label: 'Library', icon: <Library size={18} /> },
+    { key: 'next-steps', label: 'Next Steps', icon: <Lightbulb size={18} /> },
     { key: 'data', label: 'Import & Export', icon: <Database size={18} /> },
     { key: 'profile', label: 'Profile', icon: <User size={18} /> },
   ];
@@ -696,12 +726,14 @@ function App() {
                 if (key === 'library') void preloadLibrary();
                 if (key === 'data') void preloadData();
                 if (key === 'profile') void preloadProfile();
+                if (key === 'next-steps') void preloadNextSteps();
               }}
               onFocus={() => {
                 if (key === 'scan') void preloadScanner();
                 if (key === 'library') void preloadLibrary();
                 if (key === 'data') void preloadData();
                 if (key === 'profile') void preloadProfile();
+                if (key === 'next-steps') void preloadNextSteps();
               }}
               className={`${styles.navBtn} ${view === key ? styles.navBtnActive : ''}`}
               data-testid={uiContracts.navTabTestId(key)}
@@ -808,6 +840,20 @@ function App() {
           <ErrorBoundary>
             <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
               <ProfileSettings inline />
+            </Suspense>
+          </ErrorBoundary>
+        )}
+
+        {!publicPage && view === 'next-steps' && (
+          <ErrorBoundary>
+            <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
+              <NextSteps
+                onNavigate={handleViewChange}
+                onOpenBook={(isbn) => {
+                  setOpenBookIsbn(isbn);
+                  handleViewChange('library');
+                }}
+              />
             </Suspense>
           </ErrorBoundary>
         )}

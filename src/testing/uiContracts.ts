@@ -1,4 +1,4 @@
-export type MainViewKey = 'scan' | 'library' | 'data' | 'profile';
+export type MainViewKey = 'scan' | 'library' | 'data' | 'profile' | 'next-steps';
 
 export const uiContracts = {
   navTabTestId: (view: MainViewKey) => `nav-tab-${view}`,
