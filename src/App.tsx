@@ -232,8 +232,12 @@ function App() {
         if (isbn) {
           setView('library');
           setOpenBookIsbn(isbn);
+          return;
         }
       }
+
+      // Empty or unrecognised hash — fall back to the default view
+      setView('scan');
     };
 
     syncFromHash();
