@@ -5,8 +5,8 @@ import type { BookEntry } from '../types.ts';
 import { Trash2, ExternalLink, BookOpen, CheckCircle, Clock, XCircle, Pencil, X, Save, Tag, Share2 } from 'lucide-react';
 import { generateAmazonLink } from '../utils/amazonLink.ts';
 import { shareBook } from '../utils/shareBook.ts';
-import { getBookCoverSrc } from '../utils/bookPresentation.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
+import ProgressRing from './ProgressRing.tsx';
 import s from './BookCard.module.css';
 
 interface BookCardProps {
@@ -154,11 +154,18 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
         <div className={`book-card glass ${s.card}`} onClick={onClick} role="button" tabIndex={0}
              onKeyDown={(e) => { if (e.key === 'Enter') onClick?.(); }}>
             <div className={s.cardInner}>
-                <img
-                    src={getBookCoverSrc(book.coverImg)}
-                    alt={book.title}
-                    className={s.coverImg}
-                />
+                {book.coverImg?.trim() ? (
+                    <img
+                        src={book.coverImg}
+                        alt={book.title}
+                        className={s.coverImg}
+                    />
+                ) : (
+                    <div className={`cover-fallback ${s.coverImg}`}>
+                        <BookOpen size={24} />
+                        <span className="cover-fallback-title">{book.title}</span>
+                    </div>
+                )}
                 <div className={s.info}>
                     <h3 className={s.bookTitle}>{book.title}</h3>
                     <p className={s.bookAuthor}>{book.author}</p>
@@ -179,6 +186,7 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
                         </button>
                     </div>
                 </div>
+                <ProgressRing percent={progressPercent} size={40} />
             </div>
 
             {/* Shelf chips */}

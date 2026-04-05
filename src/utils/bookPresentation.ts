@@ -21,6 +21,10 @@ export function getBookCoverSrc(coverImg?: string): string {
   return coverImg?.trim() ? coverImg : FALLBACK_COVER_DATA_URL;
 }
 
+export function isDefaultCover(coverImg?: string): boolean {
+  return !coverImg?.trim() || coverImg === FALLBACK_COVER_DATA_URL;
+}
+
 export function getLibraryInsights(books: BookEntry[]): LibraryInsights {
   const readingCount = books.filter((book) => book.status === 'reading').length;
   const readCount = books.filter((book) => book.status === 'read').length;

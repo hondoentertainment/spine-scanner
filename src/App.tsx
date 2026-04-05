@@ -724,8 +724,8 @@ function App() {
 
         {!publicPage && view === 'scan' && (
           <ErrorBoundary>
-            <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
-              <div className={styles.scanView}>
+            <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} style={{ height: '60px' }} /><div className={styles.skeletonBlock} style={{ height: '300px', marginTop: '0.75rem' }} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
+              <div key="scan" className={`view-enter ${styles.scanView}`}>
                 <div className={styles.scanHeader}>
                   <div>
                     <span className={styles.sectionBadge}>Add books</span>
