@@ -1,6 +1,7 @@
 import { ArrowRight, BookMarked } from 'lucide-react';
 import styles from './OnboardingModal.module.css';
 import type { OnboardingStep } from './onboardingContent.tsx';
+import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 
 interface OnboardingModalProps {
   currentStep: number;
@@ -17,6 +18,7 @@ export default function OnboardingModal({
   onSkip,
   onComplete,
 }: OnboardingModalProps) {
+  const focusTrapRef = useFocusTrap<HTMLDivElement>();
   const step = steps[currentStep];
   const isLast = currentStep === steps.length - 1;
 
@@ -24,7 +26,7 @@ export default function OnboardingModal({
 
   return (
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
-      <div className={`glass ${styles.modal}`}>
+      <div ref={focusTrapRef} className={`glass ${styles.modal}`}>
         <div className={styles.progressRow}>
           <span className={styles.eyebrow}><BookMarked size={14} /> Quick tour</span>
           <span className={styles.progressText}>Step {currentStep + 1} of {steps.length}</span>
