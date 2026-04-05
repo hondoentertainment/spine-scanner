@@ -16,48 +16,66 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
 const targetDir = resolve(root, 'public', 'tesseract');
 
-// LSTM-only variants (matches OEM.LSTM_ONLY default).
-// getCore.js picks the right one based on browser SIMD support.
-const CORE_FILES = [
-  'tesseract-core-simd-lstm.wasm.js',       // Chrome 91+, Firefox 89+
-  'tesseract-core-lstm.wasm.js',             // No-SIMD fallback
-  'tesseract-core-relaxedsimd-lstm.wasm.js', // Chrome 114+, Safari 15.2+
+// Candidate locations for Tesseract assets across package versions.
+// We always copy to canonical names expected by the app runtime.
+const CORE_ASSET_CANDIDATES = {
+  'tesseract-core-simd-lstm.wasm.js': [
+    'node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm.js',
+    'node_modules/tesseract.js-core/tesseract-core-simd.wasm.js',
+  ],
+  'tesseract-core-lstm.wasm.js': [
+    'node_modules/tesseract.js-core/tesseract-core-lstm.wasm.js',
+    'node_modules/tesseract.js-core/tesseract-core.wasm.js',
+  ],
+  'tesseract-core-relaxedsimd-lstm.wasm.js': [
+    'node_modules/tesseract.js-core/tesseract-core-relaxedsimd-lstm.wasm.js',
+    'node_modules/tesseract.js-core/tesseract-core-simd.wasm.js',
+  ],
+};
+const WORKER_FILE_CANDIDATES = [
+  'node_modules/tesseract.js/dist/worker.min.js',
+  'node_modules/tesseract.js/src/worker-script/index.js',
 ];
-
-// Worker script — runs inside a Web Worker (Blob URL), so it must be
-// fetchable from the same origin via importScripts().
-const WORKER_FILE = 'worker.min.js';
 
 mkdirSync(targetDir, { recursive: true });
 
-const expectedCount = CORE_FILES.length + 1;
+const expectedCount = Object.keys(CORE_ASSET_CANDIDATES).length + 1;
 let copied = 0;
 const missing = [];
 
+const resolveFirstExisting = (candidates) => {
+  for (const relativePath of candidates) {
+    const absolutePath = resolve(root, relativePath);
+    if (existsSync(absolutePath)) return { absolutePath, relativePath };
+  }
+  return null;
+};
+
 // Copy WASM core files
-for (const file of CORE_FILES) {
-  const src = resolve(root, 'node_modules', 'tesseract.js-core', file);
-  const dest = resolve(targetDir, file);
-  if (existsSync(src)) {
-    copyFileSync(src, dest);
-    console.log(`  ✓ ${file}`);
+for (const [targetFile, candidates] of Object.entries(CORE_ASSET_CANDIDATES)) {
+  const source = resolveFirstExisting(candidates);
+  const dest = resolve(targetDir, targetFile);
+  if (source) {
+    copyFileSync(source.absolutePath, dest);
+    console.log(`  ✓ ${targetFile} (from ${source.relativePath})`);
     copied++;
   } else {
-    console.error(`  ✗ ${file} not found in node_modules`);
-    missing.push(`tesseract.js-core/${file}`);
+    console.error(`  ✗ ${targetFile} not found in known tesseract.js-core paths`);
+    missing.push(...candidates);
   }
 }
 
 // Copy worker script
-const workerSrc = resolve(root, 'node_modules', 'tesseract.js', 'dist', WORKER_FILE);
+const WORKER_FILE = 'worker.min.js';
+const workerSource = resolveFirstExisting(WORKER_FILE_CANDIDATES);
 const workerDest = resolve(targetDir, WORKER_FILE);
-if (existsSync(workerSrc)) {
-  copyFileSync(workerSrc, workerDest);
-  console.log(`  ✓ ${WORKER_FILE}`);
+if (workerSource) {
+  copyFileSync(workerSource.absolutePath, workerDest);
+  console.log(`  ✓ ${WORKER_FILE} (from ${workerSource.relativePath})`);
   copied++;
 } else {
-  console.error(`  ✗ ${WORKER_FILE} not found in node_modules/tesseract.js/dist/`);
-  missing.push(`tesseract.js/dist/${WORKER_FILE}`);
+  console.error(`  ✗ ${WORKER_FILE} not found in known tesseract.js paths`);
+  missing.push(...WORKER_FILE_CANDIDATES);
 }
 
 console.log(`Copied ${copied}/${expectedCount} tesseract assets to public/tesseract/`);
