@@ -34,7 +34,7 @@ Progress within Phase 25:
 1. **Confidence scoring** ✅ Already done — `ScanConfidenceBand` (`low` / `medium` / `high`) computed in `useScanPipeline` and surfaced in the Scanner UI via the `scanHealthCard` panel. Tests existed in `useScanPipeline.test.ts`.
 2. **Regression fixture test suite** ✅ Added — `src/hooks/__tests__/scanRegressionFixtures.test.ts` covers: dim-light capture, glossy/over-exposed cover, partial barcode with checksum-repair, rotated spine (90°/270° pass), low-resolution (move-closer), and confidence band mapping (low/medium/high).
 3. **OCR diagnostics panel** ✅ Already done — `DebugPanel.tsx` exposes live telemetry and timestamped scan logs, toggled by the terminal icon in the scanner toolbar.
-4. **Device benchmark runner** — still pending. A `scripts/benchmark-scan.ts` script that runs the pipeline against the fixture set and outputs a CSV would complete this phase.
+4. **Device benchmark runner** — ✅ Added `scripts/benchmark-scan.mjs` and `npm run benchmark:scan` (CSV per Vitest assertion from `scanRegressionFixtures.test.ts`; use `--out file.csv` to write a file). True on-device timing remains a manual follow-up if needed.
 
 ### 4. Phase 26 — Metadata Quality Layer (follow-on)
 

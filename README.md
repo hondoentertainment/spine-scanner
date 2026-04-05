@@ -34,6 +34,8 @@ npm run dev
 
 Open [http://localhost:5173/spine-scanner/](http://localhost:5173/spine-scanner/) in your browser.
 
+For automated coding assistants and agent workflows, see [`AGENTS.md`](./AGENTS.md) (CI parity, env vars, and validation commands).
+
 ### Cloud Sync Setup (Optional)
 
 The app works fully offline with localStorage. To enable cross-device sync:
@@ -127,6 +129,7 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 | `npm run test:e2e:mobile` | Run mobile Playwright matrix projects |
 | `npm run test:e2e:desktop` | Run desktop Playwright baseline |
 | `npm run lint` | Lint with ESLint |
+| `npm run benchmark:scan` | Run scan regression fixtures and print CSV (optional `--out file.csv`) |
 
 ### E2E Setup
 
