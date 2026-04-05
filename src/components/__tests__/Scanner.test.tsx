@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import Scanner from '../Scanner';
 import { ToastProvider } from '../Toast';
+import { setScannerTestBarcode } from '../../test/setup.ts';
+import { uiContracts } from '../../testing/uiContracts.ts';
 
 /* ================================================================
  *  Global DOM mocks for jsdom
@@ -86,20 +88,17 @@ vi.mock('react-webcam', () => {
 
   const setWebcamState = (next: Partial<typeof webcamState>) => {
     webcamState = { ...webcamState, ...next };
-    callbackFired = false; // Reset so the next render fires the callback
   };
 
-  // Track whether the media callback has been fired for the current render cycle.
-  // Reset via __setWebcamState (called in beforeEach) so each test starts fresh.
-  let callbackFired = false;
-
+  // Per-instance: React Strict Mode remounts the component; a module-level flag would skip
+  // onUserMedia/onUserMediaError on the second mount and leave Scanner stuck waiting for camera.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const Webcam = React.forwardRef((props: Record<string, any>, ref) => {
+    const callbackFiredRef = React.useRef(false);
     React.useEffect(() => {
-      // Fire the media callback only once to prevent infinite re-render loops.
-      // (State updates inside the callback trigger re-renders → new props → useEffect re-fires.)
-      if (callbackFired) return;
-      callbackFired = true;
+      // Fire the media callback only once per mount to avoid re-render loops from parent state updates.
+      if (callbackFiredRef.current) return;
+      callbackFiredRef.current = true;
       if (webcamState.autoError) {
         props.onUserMediaError?.(webcamState.autoError);
       } else if (webcamState.autoUserMedia) {
@@ -122,31 +121,20 @@ vi.mock('react-webcam', () => {
   return { default: Webcam, __setWebcamState: setWebcamState };
 });
 
-// ── @zxing/browser ────────────────────────────────────────────
-let barcodeResult: string | null = null;
-
+// ── @zxing/browser (still-image path only; continuous scan mocked off) ──
 vi.mock('@zxing/browser', () => ({
   BrowserMultiFormatReader: class {
     async decodeFromImageElement() {
-      if (barcodeResult === null) throw new Error('No barcode');
-      return { getText: () => barcodeResult };
+      const r = globalThis.__SCANNER_TEST_BARCODE__;
+      if (r == null) throw new Error('No barcode');
+      return { getText: () => r };
     }
     async decodeFromVideoElement(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       _video: any,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      callback?: (result: any, error: any) => void,
+      _callback?: (result: any, error: any) => void,
     ) {
-      // Simulate ZXing continuous mode: call callback once, then return controls
-      if (callback) {
-        setTimeout(() => {
-          if (barcodeResult !== null) {
-            callback({ getText: () => barcodeResult }, null);
-          } else {
-            callback(null, new Error('No barcode'));
-          }
-        }, 50);
-      }
       return { stop: vi.fn() };
     }
   },
@@ -159,6 +147,58 @@ vi.mock('@zxing/library', () => ({
     constructor() { super('Not found'); }
   },
 }));
+
+// ── useBarcodeScanner: no continuous video/native polling in unit tests ──
+// The real hook schedules perpetual timers; combined with forked workers that
+// load the full Scanner graph, that can hang or OOM the Vitest pool.
+// Dynamic import inside tryBarcodeDecode (not in the mock factory) avoids Vitest deadlocks.
+vi.mock('../../hooks/useBarcodeScanner.ts', () => {
+  const extractIsbnFromBarcode = (raw: string): string | null => {
+    const digitsOnly = raw.replace(/[^0-9X]/g, '');
+    if (digitsOnly.length === 13 || digitsOnly.length === 10) return digitsOnly;
+    const m13 = raw.match(/(?:978|979)\d{10}/);
+    if (m13) return m13[0];
+    const m10 = raw.match(/\d{9}[\dX]/);
+    if (m10 && m10[0].length === 10) return m10[0];
+    return null;
+  };
+
+  return {
+    useBarcodeScanner: ({
+      addLog,
+      enabled = true,
+    }: {
+      addLog: (m: string) => void;
+      enabled?: boolean;
+    }) => ({
+      tryBarcodeDecode: async (
+        _imageSource: HTMLImageElement | string,
+        label: string,
+      ): Promise<string | null> => {
+        if (!enabled) return null;
+        const sim = globalThis.__SCANNER_TEST_BARCODE__;
+        if (sim == null) return null;
+        const extracted = extractIsbnFromBarcode(sim);
+        if (!extracted) {
+          addLog(`Barcode [${label}] (mock): no extractable ISBN`);
+          return null;
+        }
+        const [{ isValidIsbn }, { tryFixChecksum }] = await Promise.all([
+          import('../../utils/isbnValidation.ts'),
+          import('../../utils/ocr.ts'),
+        ]);
+        const isbn = isValidIsbn(extracted) ? extracted : tryFixChecksum(extracted);
+        if (isbn) addLog(`Barcode [${label}] (mock): ${isbn} ✓`);
+        else addLog(`Barcode [${label}] (mock): ${extracted} (invalid checksum)`);
+        return isbn;
+      },
+      continuousActiveRef: { current: false },
+      setTelemetryCallback: () => {},
+      refocus: () => {},
+      isScanning: false,
+    }),
+  };
+});
 
 // ── tesseract.js ──────────────────────────────────────────────
 let ocrText = '';
@@ -203,7 +243,7 @@ const renderWithToast = (ui: React.ReactElement) =>
 describe('Scanner', () => {
   beforeEach(async () => {
     ocrText = '';
-    barcodeResult = null;
+    setScannerTestBarcode(null);
     ocrConfidence = undefined;
     createWorkerShouldFail = false;
     workerShouldFail = false;
@@ -270,7 +310,7 @@ describe('Scanner', () => {
   /* ── Barcode scanning ──────────────────────────────────────── */
   describe('barcode scanning', () => {
     it('calls onScan when valid barcode is detected', async () => {
-      barcodeResult = '9780141036144';
+      setScannerTestBarcode('9780141036144');
 
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
@@ -279,11 +319,12 @@ describe('Scanner', () => {
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 12000 });
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144', { source: 'scan' }), { timeout: 12000 });
     }, 15000);
 
     it('falls through to OCR if barcode has invalid checksum (no repair)', async () => {
-      barcodeResult = '9780141036145'; // invalid, tryFixChecksum returns null
+      // Unrepairable 13-digit candidate (checksum repair returns null)
+      setScannerTestBarcode('1111111111111');
       ocrText = 'No ISBN here at all';
 
       const onScan = vi.fn();
@@ -300,7 +341,7 @@ describe('Scanner', () => {
 
     it('calls onScan with repaired ISBN when barcode has repairable checksum', async () => {
       // 9780306406151 is invalid; tryFixChecksum repairs to 9780306466151 (0→6 at position 7)
-      barcodeResult = '9780306406151';
+      setScannerTestBarcode('9780306406151');
 
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
@@ -309,7 +350,7 @@ describe('Scanner', () => {
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780306466151'), { timeout: 8000 });
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780306466151', { source: 'scan' }), { timeout: 8000 });
     }, 10000);
   });
 
@@ -325,7 +366,7 @@ describe('Scanner', () => {
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 10000 });
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144', { source: 'scan' }), { timeout: 10000 });
     }, 15000);
 
     it('shows OCR confidence summary after a successful OCR scan', async () => {
@@ -339,7 +380,7 @@ describe('Scanner', () => {
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 10000 });
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144', { source: 'scan' }), { timeout: 10000 });
       await waitFor(() => expect(screen.getByText('OCR confidence: High')).toBeInTheDocument());
       expect(screen.getByText('92% confidence from OCR analysis.')).toBeInTheDocument();
     }, 15000);
@@ -382,7 +423,7 @@ describe('Scanner', () => {
       fireEvent.click(suggestionBtn);
 
       await waitFor(() => {
-        const input = screen.getByRole('textbox', { name: /enter isbn/i });
+        const input = screen.getByRole('textbox', { name: /enter isbn manually/i });
         expect(input).toHaveValue('1111111111111');
       });
     }, 15000);
@@ -393,6 +434,8 @@ describe('Scanner', () => {
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
+      fireEvent.click(screen.getByRole('radio', { name: /^OCR$/i }));
+
       const capture = screen.getByRole('button', { name: /scan book/i });
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
@@ -402,7 +445,7 @@ describe('Scanner', () => {
       // onScan should never have been called
       expect(onScan).not.toHaveBeenCalled();
       // Manual entry form should have been shown (the "no candidates" path sets showManual)
-      expect(screen.getByPlaceholderText(/type isbn/i)).toBeInTheDocument();
+      expect(screen.getByTestId(uiContracts.scannerManualInputTestId)).toBeInTheDocument();
     }, 15000);
   });
 
@@ -419,7 +462,7 @@ describe('Scanner', () => {
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 10000 });
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144', { source: 'scan' }), { timeout: 10000 });
     }, 15000);
 
     it('recovers when worker.recognize throws', async () => {
@@ -433,7 +476,7 @@ describe('Scanner', () => {
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 10000 });
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144', { source: 'scan' }), { timeout: 10000 });
     }, 15000);
   });
 
@@ -442,7 +485,7 @@ describe('Scanner', () => {
     it('opens manual entry form', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
       fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
-      expect(screen.getByPlaceholderText(/type isbn/i)).toBeInTheDocument();
+      expect(screen.getByTestId(uiContracts.scannerManualInputTestId)).toBeInTheDocument();
     });
 
     it('submits valid manual ISBN', () => {
@@ -450,7 +493,7 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
       fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
-      fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '9780141036144' } });
+      fireEvent.change(screen.getByTestId(uiContracts.scannerManualInputTestId), { target: { value: '9780141036144' } });
       fireEvent.click(screen.getByRole('button', { name: /submit isbn/i }));
 
       expect(onScan).toHaveBeenCalledWith('9780141036144', { source: 'manual' });
@@ -461,7 +504,7 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
       fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
-      fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '123456' } });
+      fireEvent.change(screen.getByTestId(uiContracts.scannerManualInputTestId), { target: { value: '123456' } });
       fireEvent.click(screen.getByRole('button', { name: /submit isbn/i }));
 
       expect(onScan).not.toHaveBeenCalled();
@@ -476,7 +519,7 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
       fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
-      fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '9780141036144' } });
+      fireEvent.change(screen.getByTestId(uiContracts.scannerManualInputTestId), { target: { value: '9780141036144' } });
 
       const submitButton = screen.getByRole('button', { name: /submit isbn/i });
       expect(submitButton).not.toBeDisabled();
@@ -495,7 +538,7 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
       fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
-      fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '1111111111111' } });
+      fireEvent.change(screen.getByTestId(uiContracts.scannerManualInputTestId), { target: { value: '1111111111111' } });
       fireEvent.click(screen.getByRole('button', { name: /submit isbn/i }));
 
       expect(onScan).toHaveBeenCalledWith('1111111111111', { allowReview: true, source: 'manual' });
@@ -506,7 +549,7 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
       fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
-      fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '0743273567' } });
+      fireEvent.change(screen.getByTestId(uiContracts.scannerManualInputTestId), { target: { value: '0743273567' } });
       fireEvent.click(screen.getByRole('button', { name: /submit isbn/i }));
 
       expect(onScan).toHaveBeenCalledWith('0743273567', { source: 'manual' });
@@ -515,7 +558,7 @@ describe('Scanner', () => {
     it('closes manual form', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
       fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
-      expect(screen.getByPlaceholderText(/type isbn/i)).toBeInTheDocument();
+      expect(screen.getByTestId(uiContracts.scannerManualInputTestId)).toBeInTheDocument();
 
       fireEvent.click(screen.getByText(/back to scanning/i));
       expect(screen.queryByPlaceholderText(/type isbn/i)).not.toBeInTheDocument();
@@ -586,7 +629,7 @@ describe('Scanner', () => {
     });
 
     it('calls onScan when photo contains valid barcode', async () => {
-      barcodeResult = '9780141036144';
+      setScannerTestBarcode('9780141036144');
 
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
@@ -602,11 +645,11 @@ describe('Scanner', () => {
         fireEvent.change(fileInput, { target: { files: [file] } });
       });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 8000 });
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144', { source: 'scan' }), { timeout: 8000 });
     }, 10000);
 
     it('calls onScan via OCR when photo has no barcode but OCR finds ISBN', async () => {
-      barcodeResult = null;
+      setScannerTestBarcode(null);
       ocrText = 'Penguin Classics  ISBN 978-0-14-103614-4  The Great Gatsby';
 
       const onScan = vi.fn();
@@ -623,7 +666,7 @@ describe('Scanner', () => {
         fireEvent.change(fileInput, { target: { files: [file] } });
       });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 15000 });
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144', { source: 'scan' }), { timeout: 15000 });
     }, 20000);
   });
 

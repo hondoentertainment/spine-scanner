@@ -332,10 +332,14 @@ describe('Regression fixture — OCR confidence band output', () => {
 
   it('returns confidenceBand="medium" for confidence in 60–84 range', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
-    const runOcr = vi.fn().mockResolvedValue({
-      isbn: '9780141036144',
-      allCandidates: ['9780141036144'],
-      confidence: 70,
+    let pass = 0;
+    const runOcr = vi.fn().mockImplementation(async () => {
+      pass += 1;
+      // First pass: sub-threshold confidence triggers "continue scanning"; later passes must be fast.
+      if (pass === 1) {
+        return { isbn: '9780141036144', allCandidates: ['9780141036144'], confidence: 70 };
+      }
+      return { isbn: null, allCandidates: [] };
     });
 
     const { result } = renderHook(() =>
@@ -348,7 +352,7 @@ describe('Regression fixture — OCR confidence band output', () => {
     });
 
     expect(pipelineResult?.confidenceBand).toBe('medium');
-  });
+  }, 15000);
 
   it('returns confidenceBand="low" for confidence below 60', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);

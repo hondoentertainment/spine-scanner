@@ -367,6 +367,12 @@ describe('tryFixChecksum', () => {
     expect(isValidIsbn(repaired!)).toBe(true);
   });
 
+  it('repairs last-digit 5↔4 confusion on ISBN-13 (common OCR/barcode misread)', () => {
+    const repaired = tryFixChecksum('9780141036145');
+    expect(repaired).toBe('9780141036144');
+    expect(isValidIsbn(repaired!)).toBe(true);
+  });
+
   it('repairs single-digit OCR error (ISBN-10)', () => {
     // 1000007006 is valid; corrupt position 6: '7' → '1' → 1000001006 (invalid).
     // The ambiguity map for '1' includes '7', so tryFixChecksum should find 1000007006.
@@ -503,6 +509,9 @@ describe('tryFixChecksum / getNearMissCandidates — new ambiguity entries', () 
     expect(OCR_AMBIGUITY_MAP['4']).toBeDefined();
     expect(OCR_AMBIGUITY_MAP['4']).toContain('1');
     expect(OCR_AMBIGUITY_MAP['4']).toContain('9');
+    expect(OCR_AMBIGUITY_MAP['4']).toContain('5');
+
+    expect(OCR_AMBIGUITY_MAP['5']).toContain('4');
 
     expect(OCR_AMBIGUITY_MAP['X']).toBeDefined();
     expect(OCR_AMBIGUITY_MAP['X']).toContain('0');

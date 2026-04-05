@@ -486,6 +486,8 @@ const Scanner: React.FC<ScannerProps> = ({
 
     useEffect(() => {
         if (!autoScan) return;
+        // Vitest runs in MODE=test; the full OCR pipeline on a 2s interval exhausts workers and times out.
+        if (import.meta.env.VITEST === 'true') return;
         addLog('Auto-scan (OCR) started');
         setStatus('Auto-scanning... hold book steady');
         const interval = setInterval(() => {

@@ -36,7 +36,16 @@ const runOcrWithLang = vi.fn();
 const captureAveragedFrame = vi.fn();
 
 vi.mock('react-webcam', () => {
-  const Webcam = React.forwardRef((_props, ref) => {
+  // Mirror real Webcam: Scanner waits for onUserMedia before treating the camera as ready.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const Webcam = React.forwardRef((_props: Record<string, any>, ref) => {
+    const firedRef = React.useRef(false);
+    React.useEffect(() => {
+      if (firedRef.current) return;
+      firedRef.current = true;
+      _props.onUserMedia?.();
+    }, [_props]);
+
     React.useImperativeHandle(ref, () => ({
       video: {
         readyState: 4,
@@ -121,7 +130,7 @@ describe('Scanner manual submit', () => {
     renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
     fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
-    fireEvent.change(screen.getByRole('textbox', { name: /enter isbn/i }), {
+    fireEvent.change(screen.getByRole('textbox', { name: /enter isbn manually/i }), {
       target: { value: '9780141036144' },
     });
 
