@@ -57,7 +57,8 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
   const { preferences, updatePreferences } = useProfileStore();
   const { setTheme } = useTheme();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
-  const scanStats = useAnalyticsStore((state) => state.getSummary());
+  const analyticsEvents = useAnalyticsStore((state) => state.events);
+  const scanStats = useMemo(() => useAnalyticsStore.getState().getSummary(), [analyticsEvents]);
   const displayName = profile?.username ?? profile?.displayName ?? user?.user_metadata?.full_name ?? user?.email ?? 'Local reader';
   const avatarUrl = profile?.avatarUrl ?? user?.user_metadata?.avatar_url ?? null;
   const joinedLabel = user?.created_at
