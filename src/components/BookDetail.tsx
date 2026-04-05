@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useToast } from './Toast.tsx';
 import { useFocusTrap } from '../hooks/useFocusTrap.ts';
@@ -11,6 +11,7 @@ import {
   X, ExternalLink, BookOpen, CheckCircle, Clock, XCircle,
   Pencil, Save, Tag, Trash2, Share2
 } from 'lucide-react';
+import ProgressRing from './ProgressRing.tsx';
 import styles from './BookDetail.module.css';
 
 interface BookDetailProps {
@@ -55,6 +56,34 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
     pageCount: book.pageCount,
     coverImg: book.coverImg,
   });
+
+  const touchStartY = useRef(0);
+  const touchDeltaY = useRef(0);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+    touchDeltaY.current = 0;
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    const delta = e.touches[0].clientY - touchStartY.current;
+    touchDeltaY.current = delta;
+    if (delta > 0 && modalRef.current) {
+      modalRef.current.style.transform = `translateY(${delta}px)`;
+      modalRef.current.style.transition = 'none';
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (modalRef.current) {
+      modalRef.current.style.transition = '';
+      modalRef.current.style.transform = '';
+    }
+    if (touchDeltaY.current > 100) {
+      onClose();
+    }
+  }, [onClose]);
 
   const bookShelfIds = book.shelfIds || [];
   const bookShelves = shelves.filter((s) => bookShelfIds.includes(s.id));
@@ -115,7 +144,8 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
 
   return (
     <div className={styles.overlay} onClick={onClose} role="dialog" aria-modal="true" aria-label={`Details for ${book.title}`}>
-      <div ref={focusTrapRef} className={styles.modal} onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
+      <div ref={focusTrapRef} className={styles.modal} onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}
+        onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
         {/* Close button */}
         <button onClick={onClose} className={styles.closeBtn} aria-label="Close detail view">
           <X size={20} />

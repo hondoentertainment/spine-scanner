@@ -139,7 +139,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       {/* Toast stack */}
       <div className={styles.container} role="status" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`${styles.toast} ${styles[t.type]} ${t.details ? styles.toastWithDetails : ''} ${t.action ? styles.toastWithAction : ''}`}>
+          <div key={t.id} className={`${styles.toast} ${styles[t.type]} ${t.details ? styles.toastWithDetails : ''} ${t.action ? styles.toastWithAction : ''} ${t.type === 'success' ? 'success-pulse' : ''}`}>
             <div className={styles.toastHeader}>
               <span className={styles.icon}>{icons[t.type]}</span>
               <span className={styles.message}>{t.message}</span>
