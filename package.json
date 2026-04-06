@@ -24,8 +24,8 @@
     "test:e2e:desktop": "playwright test --project=chromium"
   },
   "dependencies": {
-    "@sentry/react": "^10.45.0",
-    "@supabase/supabase-js": "^2.99.3",
+    "@sentry/react": "^10.47.0",
+    "@supabase/supabase-js": "^2.101.1",
     "@tanstack/react-virtual": "^3.13.23",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
