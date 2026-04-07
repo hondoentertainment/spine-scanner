@@ -44,3 +44,7 @@ public/tesseract/*.wasm.js
 
 # Environment
 .env
+
+# Full-page browser saves (large, third-party assets; GitHub push protection may flag embedded tokens)
+/5-Project Audit and Prioritization Canvas _ Spine AI.html
+/5-Project Audit and Prioritization Canvas _ Spine AI_files/
