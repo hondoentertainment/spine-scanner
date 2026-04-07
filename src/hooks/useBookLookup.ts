@@ -47,7 +47,7 @@ const lookupGoogleBooks = async (isbn: string): Promise<BookMetadata | null> => 
         title: volumeInfo.title || 'Unknown Title',
         authors: volumeInfo.authors || ['Unknown Author'],
         pageCount: volumeInfo.pageCount || 0,
-        thumbnail: volumeInfo.imageLinks?.thumbnail || '',
+        thumbnail: (volumeInfo.imageLinks?.thumbnail || '').replace(/zoom=1/, 'zoom=2'),
         isbn,
     };
 };

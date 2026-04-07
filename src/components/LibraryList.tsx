@@ -28,6 +28,7 @@ import type { BookEntry, SavedView, SmartShelf } from '../types.ts';
 import { SHELF_COLORS } from '../types.ts';
 import BookCard from './BookCard.tsx';
 import BookDetail from './BookDetail.tsx';
+import EmptyStateIllustration from './EmptyStateIllustration.tsx';
 import ShelfManager from './ShelfManager.tsx';
 import { useToast } from './Toast.tsx';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
@@ -108,6 +109,7 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
   const [showSmartShelfForm, setShowSmartShelfForm] = useState(false);
   const [newViewName, setNewViewName] = useState('');
   const [newSmartShelfName, setNewSmartShelfName] = useState('');
+  const [pullRefreshVisible, setPullRefreshVisible] = useState(false);
 
   const sortBy = preferences.librarySortBy;
   const sortAsc = preferences.librarySortAsc;
@@ -438,6 +440,11 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
     toast(`Added selected books to ${shelf?.name ?? 'shelf'}`, 'success');
     setBulkShelfId('');
   }, [bulkAssignShelf, bulkShelfId, selectedIds, shelves, toast]);
+
+  const handleLibraryScroll = useCallback((e: React.UIEvent<HTMLElement>) => {
+    const target = e.currentTarget;
+    setPullRefreshVisible(target.scrollTop === 0 && books.length > 0);
+  }, [books.length]);
 
   return (
     <section className={s.container}>

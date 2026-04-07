@@ -168,6 +168,18 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
                 )}
                 <div className={s.info}>
                     <h3 className={s.bookTitle}>{book.title}</h3>
+                    {bookShelves.length > 0 && (
+                        <div className={s.shelfDots}>
+                            {bookShelves.map((shelf) => (
+                                <span
+                                    key={shelf.id}
+                                    className={s.shelfDotIndicator}
+                                    style={{ background: shelf.color }}
+                                    title={shelf.name}
+                                />
+                            ))}
+                        </div>
+                    )}
                     <p className={s.bookAuthor}>{book.author}</p>
                     <div className={s.links}>
                         {generateAmazonLink(book.isbn) && (
