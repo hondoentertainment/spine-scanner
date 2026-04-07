@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useToast } from './Toast.tsx';
 import type { BookEntry } from '../types.ts';
@@ -9,12 +9,31 @@ import { getBookCoverSrc } from '../utils/bookPresentation.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
 import s from './BookCard.module.css';
 
-interface BookCardProps {
+export interface BookCardProps {
     book: BookEntry;
+    /** @deprecated Prefer `onActivateBookId` so the card can memoize without new closures per row. */
     onClick?: () => void;
+    /** Stable handler — avoids per-row inline lambdas in virtualized lists. */
+    onActivateBookId?: (id: string) => void;
 }
 
-const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
+function bookVisualEqual(a: BookEntry, b: BookEntry): boolean {
+    return (
+        a.id === b.id
+        && a.title === b.title
+        && a.author === b.author
+        && a.status === b.status
+        && a.coverImg === b.coverImg
+        && a.notes === b.notes
+        && a.pageCount === b.pageCount
+        && (a.pagesFinished ?? 0) === (b.pagesFinished ?? 0)
+        && a.isbn === b.isbn
+        && a.needsReview === b.needsReview
+        && (a.shelfIds?.join(',') ?? '') === (b.shelfIds?.join(',') ?? '')
+    );
+}
+
+const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookId }) => {
     const {
         updateBook,
         updateBookStatus,
@@ -27,8 +46,30 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
         unassignShelf,
     } = useBookStore();
     const { toast, confirm } = useToast();
+    const shelfAnchorRef = useRef<HTMLDivElement>(null);
+    const shelfTriggerRef = useRef<HTMLButtonElement>(null);
     const [editing, setEditing] = useState(false);
     const [showShelfPicker, setShowShelfPicker] = useState(false);
+
+    useEffect(() => {
+        if (!showShelfPicker) return;
+        const onPointerDown = (ev: MouseEvent) => {
+            if (shelfAnchorRef.current?.contains(ev.target as Node)) return;
+            setShowShelfPicker(false);
+        };
+        const onKey = (ev: KeyboardEvent) => {
+            if (ev.key === 'Escape') {
+                setShowShelfPicker(false);
+                shelfTriggerRef.current?.focus();
+            }
+        };
+        document.addEventListener('mousedown', onPointerDown);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onPointerDown);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [showShelfPicker]);
     const [draft, setDraft] = useState({
         title: book.title,
         author: book.author,
@@ -43,11 +84,16 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
     const progressPercent = getReadingProgressPercent(book);
     const progressValue = Math.min(book.pageCount || 0, book.pagesFinished || 0);
 
+    const openCard = () => {
+        if (onActivateBookId) onActivateBookId(book.id);
+        else onClick?.();
+    };
+
     const statusChips: { status: BookEntry['status']; icon: React.ReactNode; label: string }[] = [
-        { status: 'to-read', icon: <Clock size={11} />, label: 'To Read' },
-        { status: 'reading', icon: <BookOpen size={11} />, label: 'Reading' },
-        { status: 'read', icon: <CheckCircle size={11} />, label: 'Read' },
-        { status: 'dnf', icon: <XCircle size={11} />, label: 'DNF' },
+        { status: 'to-read', icon: <Clock size={14} />, label: 'To Read' },
+        { status: 'reading', icon: <BookOpen size={14} />, label: 'Reading' },
+        { status: 'read', icon: <CheckCircle size={14} />, label: 'Read' },
+        { status: 'dnf', icon: <XCircle size={14} />, label: 'DNF' },
     ];
 
     const handleEdit = (e: React.MouseEvent) => {
@@ -151,13 +197,26 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
     }
 
     return (
-        <div className={`book-card glass ${s.card}`} onClick={onClick} role="button" tabIndex={0}
-             onKeyDown={(e) => { if (e.key === 'Enter') onClick?.(); }}>
+        <div
+            className={`book-card glass ${s.card}`}
+            onClick={openCard}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openCard();
+                }
+            }}
+        >
             <div className={s.cardInner}>
                 <img
                     src={getBookCoverSrc(book.coverImg)}
                     alt={book.title}
                     className={s.coverImg}
+                    loading="lazy"
+                    decoding="async"
+                    fetchPriority="low"
                 />
                 <div className={s.info}>
                     <h3 className={s.bookTitle}>{book.title}</h3>
@@ -195,17 +254,27 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
                     </span>
                 ))}
                 {shelves.length > 0 && (
-                    <div className={s.shelfPickerWrap}>
-                        <button onClick={() => setShowShelfPicker(!showShelfPicker)}
-                                aria-label="Add to shelf" className={s.shelfPickerBtn}>
+                    <div ref={shelfAnchorRef} className={s.shelfPickerWrap}>
+                        <button
+                            ref={shelfTriggerRef}
+                            type="button"
+                            onClick={() => setShowShelfPicker(!showShelfPicker)}
+                            aria-label="Add to shelf"
+                            aria-expanded={showShelfPicker}
+                            className={s.shelfPickerBtn}
+                        >
                             <Tag size={10} /> +
                         </button>
                         {showShelfPicker && availableShelves.length > 0 && (
-                            <div className={s.shelfPickerDrop}>
+                            <div className={s.shelfPickerDrop} role="listbox" aria-label="Choose shelf">
                                 {availableShelves.map((shelf) => (
-                                    <button key={shelf.id}
+                                    <button
+                                        key={shelf.id}
+                                        type="button"
                                         onClick={() => { assignShelf(book.id, shelf.id); setShowShelfPicker(false); }}
-                                        className={s.shelfPickerItem} style={{ color: shelf.color }}>
+                                        className={s.shelfPickerItem}
+                                        style={{ color: shelf.color }}
+                                    >
                                         <span className={s.shelfDot} style={{ background: shelf.color }} />
                                         {shelf.name}
                                     </button>
@@ -272,5 +341,11 @@ const BookCard: React.FC<BookCardProps> = ({ book, onClick }) => {
         </div>
     );
 };
+
+const BookCard = React.memo(BookCardInner, (prev, next) => {
+    if (prev.onClick !== next.onClick) return false;
+    if (prev.onActivateBookId !== next.onActivateBookId) return false;
+    return bookVisualEqual(prev.book, next.book);
+});
 
 export default BookCard;

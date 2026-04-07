@@ -1,10 +1,10 @@
 /**
  * Share/copy utilities for individual books.
- * Deep link format: #{base}#book-{isbn} opens library with that book in view.
+ * Deep link: /library?isbn=… (legacy #book-{isbn} still redirects on load).
  */
 import { generateAmazonLink } from './amazonLink.ts';
 
-/** Base URL for shareable links (origin + base path). */
+/** Base URL for shareable links (origin + base path, no trailing slash). */
 export function getShareBaseUrl(): string {
   const base = import.meta.env.BASE_URL || '/';
   return `${window.location.origin}${base.endsWith('/') ? base.slice(0, -1) : base}`;
@@ -13,8 +13,8 @@ export function getShareBaseUrl(): string {
 /** Generate deep link to open a specific book in the app. */
 export function getBookShareUrl(isbn: string): string {
   const clean = isbn.replace(/[^0-9Xa-z-]/g, ''); // allow photo-uuid
-  if (!clean) return getShareBaseUrl();
-  return `${getShareBaseUrl()}#book-${encodeURIComponent(clean)}`;
+  if (!clean) return `${getShareBaseUrl()}/library`;
+  return `${getShareBaseUrl()}/library?isbn=${encodeURIComponent(clean)}`;
 }
 
 /** Copy share link to clipboard. Returns true on success. */

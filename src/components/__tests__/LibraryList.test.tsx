@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import LibraryList from '../LibraryList';
 import { ToastProvider } from '../Toast';
 import { useBookStore } from '../../store/useBookStore';
@@ -43,8 +44,18 @@ const makeShelf = (overrides: Partial<Shelf> = {}): Shelf => ({
   ...overrides,
 });
 
-const renderWithToast = (ui: React.ReactElement) =>
-  render(<ToastProvider>{ui}</ToastProvider>);
+function renderLibraryList(ui: React.ReactElement) {
+  return render(
+    <MemoryRouter initialEntries={['/library']}>
+      <ToastProvider>
+        <Routes>
+          <Route path="/library" element={ui} />
+          <Route path="/data" element={<div data-testid="data-route">Data management</div>} />
+        </Routes>
+      </ToastProvider>
+    </MemoryRouter>,
+  );
+}
 
 describe('LibraryList', () => {
   beforeEach(() => {
@@ -53,7 +64,7 @@ describe('LibraryList', () => {
   });
 
   it('shows the new browsing-focused hero copy', () => {
-    renderWithToast(<LibraryList />);
+    renderLibraryList(<LibraryList />);
 
     expect(screen.getByText('Your library, built for browsing not digging.')).toBeInTheDocument();
     expect(screen.getByText('Build a library that feels easy to use')).toBeInTheDocument();
@@ -61,7 +72,7 @@ describe('LibraryList', () => {
 
   it('calls onStartScanning from the empty state', () => {
     const onStartScanning = vi.fn();
-    renderWithToast(<LibraryList onStartScanning={onStartScanning} />);
+    renderLibraryList(<LibraryList onStartScanning={onStartScanning} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Add your first book/i }));
     expect(onStartScanning).toHaveBeenCalledOnce();
@@ -76,7 +87,7 @@ describe('LibraryList', () => {
       ],
     });
 
-    renderWithToast(<LibraryList />);
+    renderLibraryList(<LibraryList />);
 
     const recentButtons = screen.getAllByRole('button').filter((button) =>
       button.textContent?.includes('Newest') || button.textContent?.includes('Middle') || button.textContent?.includes('Oldest')
@@ -95,7 +106,7 @@ describe('LibraryList', () => {
       ],
     });
 
-    renderWithToast(<LibraryList />);
+    renderLibraryList(<LibraryList />);
 
     fireEvent.change(screen.getByLabelText('Search library'), { target: { value: 'Gatsby' } });
     expect(screen.getAllByText('The Great Gatsby').length).toBeGreaterThan(0);
@@ -110,7 +121,7 @@ describe('LibraryList', () => {
 
   it('shows a reset state when filters remove all books', () => {
     useBookStore.setState({ books: [makeBook()] });
-    renderWithToast(<LibraryList />);
+    renderLibraryList(<LibraryList />);
 
     fireEvent.change(screen.getByLabelText('Search library'), { target: { value: 'zzz nonexistent' } });
 
@@ -127,7 +138,7 @@ describe('LibraryList', () => {
       ],
     });
 
-    renderWithToast(<LibraryList />);
+    renderLibraryList(<LibraryList />);
 
     fireEvent.click(screen.getByText('Read'));
     expect(screen.getByText('Status: read')).toBeInTheDocument();
@@ -141,7 +152,7 @@ describe('LibraryList', () => {
       books: [makeBook({ shelfIds: ['s1'] })],
     });
 
-    renderWithToast(<LibraryList />);
+    renderLibraryList(<LibraryList />);
 
     expect(screen.getByText('All Shelves')).toBeInTheDocument();
     expect(screen.getAllByText(/Fiction/).length).toBeGreaterThanOrEqual(1);
@@ -149,7 +160,7 @@ describe('LibraryList', () => {
 
   it('toggles reading statistics from the hero action', () => {
     useBookStore.setState({ books: [makeBook({ status: 'read', pageCount: 300 })] });
-    renderWithToast(<LibraryList />);
+    renderLibraryList(<LibraryList />);
 
     fireEvent.click(screen.getByRole('button', { name: /Show stats/i }));
     expect(screen.getByText('Total Books')).toBeInTheDocument();
@@ -161,19 +172,19 @@ describe('LibraryList', () => {
     useBookStore.setState({ books: [book] });
     const onOpenComplete = vi.fn();
 
-    renderWithToast(
-      <LibraryList initialOpenIsbn="9780141036144" onOpenComplete={onOpenComplete} />
+    renderLibraryList(
+      <LibraryList initialOpenIsbn="9780141036144" onOpenComplete={onOpenComplete} />,
     );
 
     expect(screen.getByText(/ISBN: 9780141036144/)).toBeInTheDocument();
     expect(onOpenComplete).toHaveBeenCalled();
   });
 
-  it('calls onManageData when the manage button is clicked', () => {
-    const onManageData = vi.fn();
-    renderWithToast(<LibraryList onManageData={onManageData} />);
+  it('navigates to data management when import & export is clicked', () => {
+    useBookStore.setState({ books: [makeBook()] });
+    renderLibraryList(<LibraryList />);
 
-    fireEvent.click(screen.getByLabelText('Manage library data'));
-    expect(onManageData).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByLabelText('Import and export library data'));
+    expect(screen.getByTestId('data-route')).toBeInTheDocument();
   });
 });

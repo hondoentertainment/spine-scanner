@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore.ts';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useProfileStore } from '../store/useProfileStore.ts';
@@ -7,10 +8,13 @@ import { useTheme } from '../hooks/useTheme.ts';
 import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
 import {
-  X, User, Sun, Moon, Monitor, LayoutGrid, List, ArrowUpDown,
+  X, User, Sun, Moon, Monitor, LayoutGrid, List, ArrowUpDown, Columns2,
   CheckCircle, Layers, BarChart3, Tag, BookOpen, Clock3, Bookmark, Flame, ScanLine,
+  Database, Share2,
 } from 'lucide-react';
 import type { ProfilePreferences } from '../types.ts';
+import { getShareBaseUrl } from '../utils/shareBook.ts';
+import { useToast } from './Toast.tsx';
 import s from './ProfileSettings.module.css';
 
 interface ProfileSettingsProps {
@@ -33,6 +37,7 @@ const sortOptions: { value: ProfilePreferences['librarySortBy']; label: string }
 
 const viewOptions: { value: ProfilePreferences['libraryViewMode']; label: string; icon: React.ReactNode }[] = [
   { value: 'grid', label: 'Grid', icon: <LayoutGrid size={16} /> },
+  { value: 'masonry', label: 'Covers', icon: <Columns2 size={16} /> },
   { value: 'list', label: 'List', icon: <List size={16} /> },
 ];
 
@@ -52,6 +57,8 @@ const statusSummary = [
 ] as const;
 
 const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = false }) => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const { user, profile } = useAuthStore();
   const { books, shelves } = useBookStore();
   const { preferences, updatePreferences } = useProfileStore();
@@ -306,6 +313,37 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           )}
         </div>
       )}
+
+      <div className={s.section}>
+        <h3 className={s.sectionTitle}>Library data & sharing</h3>
+        <p className={s.sectionHint}>Import, export, backups, and a link that opens your library in the browser.</p>
+        <div className={s.optionRow}>
+          <button
+            type="button"
+            className={s.optBtn}
+            onClick={() => navigate('/data')}
+          >
+            <Database size={16} aria-hidden />
+            Import & export
+          </button>
+          <button
+            type="button"
+            className={s.optBtn}
+            onClick={async () => {
+              const url = `${getShareBaseUrl()}/library`;
+              try {
+                await navigator.clipboard.writeText(url);
+                toast('Library link copied', 'success');
+              } catch {
+                toast('Could not copy link', 'error');
+              }
+            }}
+          >
+            <Share2 size={16} aria-hidden />
+            Copy library link
+          </button>
+        </div>
+      </div>
 
       <div className={s.section}>
         <h3 className={s.sectionTitle}>Theme</h3>

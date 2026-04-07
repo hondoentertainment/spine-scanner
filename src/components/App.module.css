@@ -47,6 +47,39 @@
   display: flex;
   align-items: center;
   gap: 0.9rem;
+  min-width: 0;
+}
+
+.brandCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.brandLinkBlock {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+  border-radius: 1rem;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  touch-action: manipulation;
+}
+
+.brandLinkBlock:hover {
+  opacity: 0.92;
+}
+
+.brandLinkBlock:active {
+  transform: scale(0.99);
+}
+
+.brandLinkBlock:focus-visible {
+  outline: 2px solid var(--accent-blue, #38bdf8);
+  outline-offset: 3px;
 }
 
 .logoBox {
@@ -68,8 +101,19 @@
 
 .subtitle {
   max-width: 48ch;
+  margin: 0;
   font-size: 0.95rem;
   color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.mainContent {
+  outline: none;
+}
+
+.mainContent:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-blue, #38bdf8);
+  border-radius: 0.5rem;
 }
 
 .headerRight {
@@ -214,11 +258,53 @@
   color: var(--text-muted);
   background: transparent;
   touch-action: manipulation;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  box-sizing: border-box;
+  transition: transform 0.12s ease, opacity 0.12s ease, background 0.15s ease, color 0.15s ease;
 }
 
 .navBtnActive {
   color: white;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.navBtn:active:not(.navBtnActive) {
+  transform: scale(0.97);
+  opacity: 0.92;
+}
+
+.navBtnActive:active {
+  transform: scale(0.98);
+}
+
+.navIcon,
+.navFabIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.navLabel {
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+}
+
+@media (min-width: 641px) {
+  .navLabel {
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+
+  .navBtn {
+    flex-direction: row;
+  }
 }
 
 .scanView {
@@ -272,12 +358,12 @@
 .alertError {
   margin-top: 1.5rem;
   padding: 1rem;
-  color: #f87171;
+  color: var(--error, #f87171);
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  border: 1px solid rgba(248, 113, 113, 0.2);
-  background: rgba(248, 113, 113, 0.05);
+  border: 1px solid var(--error-border, rgba(248, 113, 113, 0.2));
+  background: var(--error-bg, rgba(248, 113, 113, 0.05));
 }
 
 .lazyFallback {
@@ -369,6 +455,18 @@
   .skeletonGrid span {
     animation: none !important;
   }
+
+  .brandLinkBlock,
+  .navBtn,
+  .navBtnActive {
+    transition: none !important;
+    transform: none !important;
+  }
+
+  .navBtnFab {
+    margin-top: 0 !important;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.25) !important;
+  }
 }
 
 @media (max-width: 900px) {
@@ -395,7 +493,7 @@
     align-items: stretch;
   }
 
-  /* Bottom nav on mobile */
+  /* Bottom nav on mobile — thumb reach + safe area (notch / home indicator) */
   .nav {
     position: fixed;
     bottom: 0;
@@ -407,6 +505,9 @@
     justify-content: space-around;
     gap: 0.25rem;
     padding: 0.5rem;
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+    border-radius: 1rem 1rem 0 0;
+    border-bottom: none;
   }
 
   .navBtn {
@@ -421,7 +522,7 @@
   }
 
   main {
-    padding-bottom: 72px;
+    padding-bottom: var(--main-bottom-pad-mobile, calc(72px + env(safe-area-inset-bottom, 0px)));
   }
 
   .navBtn,
@@ -436,7 +537,43 @@
   }
 
   .siteFooter {
-    margin-bottom: 76px;
+    margin-bottom: calc(var(--main-bottom-pad-mobile, 76px) + 0.35rem);
+  }
+
+  .navBtnFab {
+    position: relative;
+    flex: 0 0 auto;
+    align-self: flex-start;
+    background: linear-gradient(135deg, var(--accent-blue, #38bdf8), var(--primary, #6366f1));
+    color: white;
+    border-radius: 9999px;
+    width: 3.45rem;
+    min-width: 3.45rem;
+    height: 3.45rem;
+    min-height: 3.45rem;
+    margin-top: -1.25rem;
+    padding: 0;
+    box-shadow: 0 10px 28px rgba(99, 102, 241, 0.42);
+  }
+
+  .navBtnFab.navBtnActive {
+    color: white;
+    background: linear-gradient(135deg, var(--accent-blue, #38bdf8), var(--primary, #6366f1));
+    box-shadow:
+      0 0 0 2px rgba(255, 255, 255, 0.28),
+      0 12px 32px rgba(99, 102, 241, 0.48);
+  }
+
+  .navBtnFab .navLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .footerButton {

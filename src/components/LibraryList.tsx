@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   ArrowUpDown,
@@ -13,6 +14,7 @@ import {
   LayoutGrid,
   LibraryBig,
   List,
+  Columns2,
   RotateCcw,
   ScanLine,
   Search,
@@ -20,6 +22,7 @@ import {
   Sparkles,
   Trash2,
   WandSparkles,
+  X,
   XCircle,
 } from 'lucide-react';
 import { useBookStore } from '../store/useBookStore.ts';
@@ -31,15 +34,15 @@ import BookDetail from './BookDetail.tsx';
 import ShelfManager from './ShelfManager.tsx';
 import { useToast } from './Toast.tsx';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
-import { getActiveLibraryFilterLabels, getBookCoverSrc, getLibraryInsights } from '../utils/bookPresentation.ts';
+import { getBookCoverSrc, getLibraryInsights } from '../utils/bookPresentation.ts';
 import s from './LibraryList.module.css';
 
 type SortField = 'title' | 'author' | 'dateAdded' | 'pageCount';
 type StatusFilter = BookEntry['status'] | 'all';
-type ViewMode = 'grid' | 'list';
+type ViewMode = 'grid' | 'list' | 'masonry';
+type LibrarySegment = 'foryou' | 'shelves' | 'all';
 
 interface LibraryListProps {
-  onManageData?: () => void;
   onStartScanning?: () => void;
   initialOpenIsbn?: string | null;
   onOpenComplete?: () => void;
@@ -79,7 +82,8 @@ const SORT_OPTIONS: Array<{ value: SortField; label: string }> = [
   { value: 'pageCount', label: 'Page count' },
 ];
 
-export default function LibraryList({ onManageData, onStartScanning, initialOpenIsbn, onOpenComplete }: LibraryListProps) {
+export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenComplete }: LibraryListProps) {
+  const navigate = useNavigate();
   const {
     books,
     shelves,
@@ -108,6 +112,14 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
   const [showSmartShelfForm, setShowSmartShelfForm] = useState(false);
   const [newViewName, setNewViewName] = useState('');
   const [newSmartShelfName, setNewSmartShelfName] = useState('');
+  const [librarySegment, setLibrarySegment] = useState<LibrarySegment>('foryou');
+  const [librarySessionReturn] = useState(() => {
+    try {
+      return sessionStorage.getItem('spine-library-session') === '1';
+    } catch {
+      return false;
+    }
+  });
 
   const sortBy = preferences.librarySortBy;
   const sortAsc = preferences.librarySortAsc;
@@ -124,6 +136,20 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
   const setViewMode = useCallback((value: ViewMode) => updatePreferences({ libraryViewMode: value }), [updatePreferences]);
   const setShowStats = useCallback((value: boolean) => updatePreferences({ showStatsDefault: value }), [updatePreferences]);
   const setShowShelves = useCallback((value: boolean) => updatePreferences({ showShelvesDefault: value }), [updatePreferences]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('spine-library-session', '1');
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    if (librarySegment === 'shelves') {
+      setShowShelves(true);
+    }
+  }, [librarySegment, setShowShelves]);
 
   const resetActivePresets = useCallback(() => {
     setActiveSavedViewId(null);
@@ -147,6 +173,9 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
   );
 
   const filteredAndSorted = useMemo(() => {
+    const forYou = librarySegment === 'foryou';
+    const effectiveSortBy = forYou ? 'dateAdded' : sortBy;
+    const effectiveSortAsc = forYou ? false : sortAsc;
     const loweredSearch = searchTerm.trim().toLowerCase();
     const minPageValue = minPages.trim() ? parseInt(minPages, 10) : null;
     const maxPageValue = maxPages.trim() ? parseInt(maxPages, 10) : null;
@@ -166,7 +195,7 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
       })
       .sort((a, b) => {
         let cmp = 0;
-        switch (sortBy) {
+        switch (effectiveSortBy) {
           case 'title':
             cmp = a.title.localeCompare(b.title);
             break;
@@ -180,31 +209,63 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
             cmp = (a.pageCount || 0) - (b.pageCount || 0);
             break;
         }
-        return sortAsc ? cmp : -cmp;
+        return effectiveSortAsc ? cmp : -cmp;
       });
-  }, [books, searchTerm, statusFilter, shelfFilter, reviewOnly, minPages, maxPages, sortBy, sortAsc]);
+  }, [books, searchTerm, statusFilter, shelfFilter, reviewOnly, minPages, maxPages, sortBy, sortAsc, librarySegment]);
 
   const selectedShelf = shelves.find((shelf) => shelf.id === shelfFilter) ?? null;
-  const activeFilters = useMemo(() => {
-    const labels = getActiveLibraryFilterLabels({
-      searchTerm,
-      statusFilter,
-      shelfName: selectedShelf?.name ?? null,
-    });
-    if (reviewOnly) labels.push('Needs review');
-    if (minPages.trim()) labels.push(`Min pages: ${minPages.trim()}`);
-    if (maxPages.trim()) labels.push(`Max pages: ${maxPages.trim()}`);
-    return labels;
-  }, [searchTerm, statusFilter, selectedShelf?.name, reviewOnly, minPages, maxPages]);
+  const filterChips = useMemo(() => {
+    const chips: { id: string; label: string; onRemove: () => void }[] = [];
+    const trimmedSearch = searchTerm.trim();
+    if (trimmedSearch) {
+      chips.push({ id: 'search', label: `Search: ${trimmedSearch}`, onRemove: () => setSearchTerm('') });
+    }
+    if (statusFilter !== 'all') {
+      chips.push({
+        id: 'status',
+        label: `Status: ${statusFilter.replace('-', ' ')}`,
+        onRemove: () => setStatusFilter('all'),
+      });
+    }
+    if (selectedShelf) {
+      chips.push({
+        id: 'shelf',
+        label: `Shelf: ${selectedShelf.name}`,
+        onRemove: () => setShelfFilter(null),
+      });
+    }
+    if (reviewOnly) {
+      chips.push({ id: 'review', label: 'Needs review', onRemove: () => setReviewOnly(false) });
+    }
+    if (minPages.trim()) {
+      chips.push({
+        id: 'minPages',
+        label: `Min pages: ${minPages.trim()}`,
+        onRemove: () => setMinPages(''),
+      });
+    }
+    if (maxPages.trim()) {
+      chips.push({
+        id: 'maxPages',
+        label: `Max pages: ${maxPages.trim()}`,
+        onRemove: () => setMaxPages(''),
+      });
+    }
+    return chips;
+  }, [searchTerm, statusFilter, selectedShelf, reviewOnly, minPages, maxPages]);
 
   const listParentRef = useRef<HTMLDivElement>(null);
   const gridParentRef = useRef<HTMLDivElement>(null);
   const [gridColumns, setGridColumns] = useState(3);
   const gridColumnWidth = 220;
+  const effectiveGridColumns = viewMode === 'masonry' ? 2 : gridColumns;
 
   useEffect(() => {
     const container = gridParentRef.current;
-    if (!container || viewMode !== 'grid' || typeof ResizeObserver === 'undefined') return undefined;
+    if (!container || (viewMode !== 'grid' && viewMode !== 'masonry') || typeof ResizeObserver === 'undefined') {
+      return undefined;
+    }
+    if (viewMode === 'masonry') return undefined;
 
     const observer = new ResizeObserver(([entry]) => {
       const cols = Math.max(1, Math.floor(entry.contentRect.width / gridColumnWidth));
@@ -222,11 +283,11 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
     overscan: 8,
   });
 
-  const gridRowCount = Math.ceil(filteredAndSorted.length / gridColumns);
+  const gridRowCount = Math.ceil(filteredAndSorted.length / effectiveGridColumns);
   const gridVirtualizer = useVirtualizer({
     count: gridRowCount,
     getScrollElement: () => gridParentRef.current,
-    estimateSize: () => 350,
+    estimateSize: () => (viewMode === 'masonry' ? 400 : 350),
     overscan: 4,
   });
 
@@ -279,6 +340,13 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
     }
     setSelectedBook(book);
   }, [selectionMode, toggleBookSelection]);
+
+  /** Stable ref for virtualized grid cards — avoids new `onClick` per row (memo-friendly). */
+  const openBookById = useCallback((id: string) => {
+    const book = useBookStore.getState().books.find((b) => b.id === id);
+    if (!book) return;
+    handleBookOpen(book);
+  }, [handleBookOpen]);
 
   const applySavedView = useCallback((view: SavedView) => {
     setSearchTerm(view.searchTerm);
@@ -441,7 +509,34 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
 
   return (
     <section className={s.container}>
-      <div className={`glass ${s.hero}`}>
+      {!emptyLibrary && (
+        <div className={s.segmentBar} role="tablist" aria-label="Library scope">
+          {(['foryou', 'shelves', 'all'] as const).map((seg) => (
+            <button
+              key={seg}
+              type="button"
+              role="tab"
+              aria-selected={librarySegment === seg}
+              className={`glass ${s.segmentBtn} ${librarySegment === seg ? s.segmentBtnActive : ''}`}
+              onClick={() => setLibrarySegment(seg)}
+            >
+              {seg === 'foryou' ? 'For you' : seg === 'shelves' ? 'Shelves' : 'All books'}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {librarySegment === 'foryou' && !emptyLibrary && (
+        <p className={s.segmentHint}>
+          Newest titles first. Use{' '}
+          <button type="button" className={s.segmentLink} onClick={() => setLibrarySegment('all')}>
+            All books
+          </button>
+          {' '}for saved views, smart shelves, and every sort option.
+        </p>
+      )}
+
+      <div className={`glass ${s.hero} ${librarySessionReturn ? s.heroCompact : ''}`}>
         <div className={s.heroCopy}>
           <span className={s.eyebrow}>
             <Sparkles size={14} />
@@ -494,6 +589,13 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
             <strong>{insights.completionRate}%</strong>
             <span>{insights.totalBooks} books in your library</span>
           </div>
+          <div className={`glass ${s.highlightCard}`}>
+            <span className={s.highlightLabel}>Finished this year</span>
+            <strong>{insights.finishedThisYear}</strong>
+            <span>
+              Mark books as read with a finish date to track {new Date().getFullYear()} progress.
+            </span>
+          </div>
         </div>
       </div>
 
@@ -519,12 +621,16 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
             <div className={s.statValue}>{insights.readCount}</div>
             <div className={s.statLabel}>Finished</div>
           </div>
+          <div className={s.statItem}>
+            <div className={s.statValue}>{insights.finishedThisYear}</div>
+            <div className={s.statLabel}>Finished {new Date().getFullYear()}</div>
+          </div>
         </div>
       )}
 
       {showShelves && <ShelfManager />}
 
-      {!emptyLibrary && activeFilters.length === 0 && insights.recentlyAdded.length > 0 && (
+      {!emptyLibrary && filterChips.length === 0 && insights.recentlyAdded.length > 0 && (
         <div className={s.recentSection}>
           <div className={s.recentHeader}>
             <div>
@@ -543,7 +649,14 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
                 className={`glass ${s.recentCard}`}
                 onClick={() => setSelectedBook(book)}
               >
-                <img src={getBookCoverSrc(book.coverImg)} alt={book.title} className={s.recentCover} />
+                <img
+                  src={getBookCoverSrc(book.coverImg)}
+                  alt={book.title}
+                  className={s.recentCover}
+                  loading="lazy"
+                  decoding="async"
+                  fetchPriority="low"
+                />
                 <div className={s.recentMeta}>
                   <strong>{book.title}</strong>
                   <span>{book.author}</span>
@@ -592,6 +705,10 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
       )}
 
       <div className={s.header}>
+        <div className="sr-only" aria-live="polite" aria-atomic="true">
+          {!emptyLibrary &&
+            `${filteredAndSorted.length} book${filteredAndSorted.length === 1 ? '' : 's'} match your filters.`}
+        </div>
         <div>
           <span className={s.sectionLabel}>
             <LibraryBig size={14} />
@@ -610,22 +727,21 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
             <CheckSquare size={16} />
             {selectionMode ? 'Done selecting' : 'Select books'}
           </button>
-          {onManageData && (
-            <button
-              type="button"
-              className={`glass ${s.manageBtn}`}
-              onClick={onManageData}
-              aria-label="Manage library data"
-            >
-              <Settings size={16} />
-              Manage data
-            </button>
-          )}
+          <button
+            type="button"
+            className={`glass ${s.manageBtn}`}
+            onClick={() => navigate('/data')}
+            aria-label="Import and export library data"
+          >
+            <Settings size={16} />
+            Import & export
+          </button>
         </div>
       </div>
 
       {!emptyLibrary && (
         <>
+          {librarySegment !== 'foryou' && (
           <div className={s.savedTools}>
             <div className={s.presetGroup}>
               <div className={s.recentHeader}>
@@ -729,6 +845,7 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
               </div>
             </div>
           </div>
+          )}
 
           <div className={s.searchRow}>
             <label className={s.searchWrap}>
@@ -752,12 +869,19 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
             </button>
           </div>
 
-          {activeFilters.length > 0 && (
+          {filterChips.length > 0 && (
             <div className={s.activeFilters}>
-              {activeFilters.map((label) => (
-                <span key={label} className={`glass ${s.activeFilterChip}`}>
-                  {label}
-                </span>
+              {filterChips.map((chip) => (
+                <button
+                  key={chip.id}
+                  type="button"
+                  className={`glass ${s.activeFilterChip}`}
+                  onClick={chip.onRemove}
+                  aria-label={`Remove filter: ${chip.label}`}
+                >
+                  <span>{chip.label}</span>
+                  <X size={14} className={s.chipDismissIcon} aria-hidden />
+                </button>
               ))}
             </div>
           )}
@@ -871,6 +995,14 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
               </button>
               <button
                 type="button"
+                className={`${s.viewBtn} ${viewMode === 'masonry' ? s.viewBtnActive : ''}`}
+                onClick={() => setViewMode('masonry')}
+                aria-label="Show cover columns view"
+              >
+                <Columns2 size={16} />
+              </button>
+              <button
+                type="button"
                 className={`${s.viewBtn} ${viewMode === 'list' ? s.viewBtnActive : ''}`}
                 onClick={() => setViewMode('list')}
                 aria-label="Show list view"
@@ -937,12 +1069,10 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
               <ScanLine size={16} />
               Add your first book
             </button>
-            {onManageData && (
-              <button type="button" className={`glass ${s.secondaryAction}`} onClick={onManageData}>
-                <Settings size={16} />
-                Manage library data
-              </button>
-            )}
+            <button type="button" className={`glass ${s.secondaryAction}`} onClick={() => navigate('/data')}>
+              <Settings size={16} />
+              Import & export
+            </button>
           </div>
         </div>
       )}
@@ -961,13 +1091,16 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
         </div>
       )}
 
-      {!emptyLibrary && !emptyFilteredResults && viewMode === 'grid' && (
-        <div ref={gridParentRef} className={`glass ${s.virtualContainer}`}>
+      {!emptyLibrary && !emptyFilteredResults && (viewMode === 'grid' || viewMode === 'masonry') && (
+        <div
+          ref={gridParentRef}
+          className={`glass ${s.virtualContainer} ${viewMode === 'masonry' ? s.virtualContainerMasonry : ''}`}
+        >
           <div className={s.virtualInner} style={{ height: `${gridVirtualizer.getTotalSize()}px` }}>
             {gridVirtualizer.getVirtualItems().map((virtualRow) => {
               const rowBooks = filteredAndSorted.slice(
-                virtualRow.index * gridColumns,
-                virtualRow.index * gridColumns + gridColumns
+                virtualRow.index * effectiveGridColumns,
+                virtualRow.index * effectiveGridColumns + effectiveGridColumns
               );
               return (
                 <div
@@ -982,7 +1115,7 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
                   }}
                 >
                   {rowBooks.map((book) => (
-                    <div key={book.id} className={s.cardWrap}>
+                    <div key={book.id} className={`${s.cardWrap} ${viewMode === 'masonry' ? s.cardWrapMasonry : ''}`}>
                       {selectionMode && (
                         <label className={`glass ${s.selectToggle}`}>
                           <input
@@ -993,7 +1126,7 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
                           Select
                         </label>
                       )}
-                      <BookCard book={book} onClick={() => handleBookOpen(book)} />
+                      <BookCard book={book} onActivateBookId={openBookById} />
                     </div>
                   ))}
                 </div>
@@ -1032,7 +1165,14 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
                       />
                     </label>
                   )}
-                  <img src={getBookCoverSrc(book.coverImg)} alt={book.title} className={s.listCover} />
+                  <img
+                    src={getBookCoverSrc(book.coverImg)}
+                    alt={book.title}
+                    className={s.listCover}
+                    loading="lazy"
+                    decoding="async"
+                    fetchPriority="low"
+                  />
                   <div className={s.listInfo}>
                     <div className={s.listTitle}>{book.title}</div>
                     <div className={s.listAuthor}>{book.author}</div>

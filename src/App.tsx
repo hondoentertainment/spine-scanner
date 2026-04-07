@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, lazy, Suspense, useMemo } from 'react';
 import type { ReactNode } from 'react';
+import { Routes, Route, Navigate, NavLink, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import AuthPanel from './components/AuthPanel.tsx';
 import ThemeToggle from './components/ThemeToggle.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
@@ -14,7 +15,7 @@ import { useToast } from './components/Toast.tsx';
 import { mergeSync, pushBooks } from './lib/syncBooks.ts';
 import { formatRelativeTime } from './utils/formatRelativeTime.ts';
 import type { BookEntry } from './types.ts';
-import { BookOpen, Library, Scan, AlertCircle, Database, Layers, User, Sparkles, Cloud, BookMarked, ChevronRight } from 'lucide-react';
+import { BookOpen, Library, Scan, AlertCircle, Layers, User, Sparkles, Cloud, BookMarked, ChevronRight, Home } from 'lucide-react';
 import { generateAmazonLink } from './utils/amazonLink.ts';
 import { isValidIsbn, normalizeToIsbn13 } from './utils/isbnValidation.ts';
 import { isbnExistsInLibrary } from './utils/libraryUtils.ts';
@@ -31,11 +32,13 @@ import { uiContracts } from './testing/uiContracts.ts';
 
 const Scanner = lazy(() => import('./components/Scanner.tsx'));
 const LibraryList = lazy(() => import('./components/LibraryList.tsx'));
+const HomeFeed = lazy(() => import('./components/HomeFeed.tsx'));
 const DataManagement = lazy(() => import('./components/DataManagement.tsx'));
 const ProfileSettings = lazy(() => import('./components/ProfileSettings.tsx'));
 const PasswordReset = lazy(() => import('./components/PasswordReset.tsx'));
 const preloadScanner = () => import('./components/Scanner.tsx');
 const preloadLibrary = () => import('./components/LibraryList.tsx');
+const preloadHome = () => import('./components/HomeFeed.tsx');
 const preloadData = () => import('./components/DataManagement.tsx');
 const preloadProfile = () => import('./components/ProfileSettings.tsx');
 
@@ -44,7 +47,7 @@ type ScanRequestOptions = {
   source?: 'scan' | 'manual' | 'ocr' | 'barcode' | 'suggestion';
 };
 
-type AppView = 'scan' | 'library' | 'data' | 'profile';
+type AppView = 'home' | 'scan' | 'library' | 'profile';
 
 const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL as string | undefined;
 const SITE_URL = (import.meta.env.VITE_SITE_URL as string | undefined)?.replace(/\/$/, '');
@@ -84,6 +87,66 @@ function getPublicPageFromHash(hash: string): PublicPage | null {
   return null;
 }
 
+function getPublicPageFromPath(pathname: string): PublicPage | null {
+  const parts = pathname.split('/').filter(Boolean);
+  const last = parts[parts.length - 1];
+  if (last === 'about' || last === 'privacy' || last === 'terms' || last === 'support') {
+    return last;
+  }
+  return null;
+}
+
+/** One line under the logo — changes with route so each area feels distinct. */
+const ROUTE_BRANDING_SUBTITLE: Record<string, string> = {
+  '/home': 'Your reading feed, library snapshot, and quick paths to scan.',
+  '/scan': 'A friendlier home for scanning, organizing, and finding books fast.',
+  '/library': 'Browse, search, and organize your saved books.',
+  '/data': 'Import, export, and back up your library.',
+  '/profile': 'Account, cloud sync, import/export, and app preferences.',
+};
+
+function getBrandingSubtitle(pathname: string, publicPage: PublicPage | null): string {
+  if (publicPage) {
+    return `${PUBLIC_PAGE_META[publicPage].label} · ${APP_TITLE}`;
+  }
+  return ROUTE_BRANDING_SUBTITLE[pathname] ?? ROUTE_BRANDING_SUBTITLE['/scan'];
+}
+
+function getDocumentTitle(pathname: string, publicPage: PublicPage | null): string {
+  if (publicPage) return PUBLIC_PAGE_META[publicPage].title;
+  const inner: Record<string, string> = {
+    '/home': `Home · ${APP_TITLE}`,
+    '/scan': APP_TITLE,
+    '/library': `Library · ${APP_TITLE}`,
+    '/data': `Data · ${APP_TITLE}`,
+    '/profile': `Profile · ${APP_TITLE}`,
+  };
+  return inner[pathname] ?? APP_TITLE;
+}
+
+function AppLibraryRoute({
+  onStartScanning,
+}: {
+  onStartScanning: () => void;
+}) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const isbn = searchParams.get('isbn');
+  const onOpenComplete = useCallback(() => {
+    if (!isbn) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('isbn');
+    setSearchParams(next, { replace: true });
+  }, [isbn, searchParams, setSearchParams]);
+
+  return (
+    <LibraryList
+      onStartScanning={onStartScanning}
+      initialOpenIsbn={isbn}
+      onOpenComplete={onOpenComplete}
+    />
+  );
+}
+
 function upsertMetaTag(attribute: 'name' | 'property', key: string, value: string) {
   let element = document.head.querySelector(`meta[${attribute}="${key}"]`) as HTMLMetaElement | null;
   if (!element) {
@@ -106,8 +169,11 @@ function upsertStructuredData(id: string, payload: Record<string, unknown>) {
 }
 
 function App() {
-  const [view, setView] = useState<AppView>('scan');
-  const [publicPage, setPublicPage] = useState<PublicPage | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const publicPage = getPublicPageFromPath(location.pathname);
+  const showMarketingHero = location.pathname === '/scan';
+  const brandingSubtitle = getBrandingSubtitle(location.pathname, publicPage);
   const { lookupByIsbn, loading, error } = useBookLookup();
   const { addBook, books, setBooks, shelves, setShelves } = useBookStore();
   const { user, recoveryMode, initialize: initAuth } = useAuthStore();
@@ -120,7 +186,6 @@ function App() {
   const { theme, toggleTheme } = useTheme();
   const { toast, confirm } = useToast();
   const { track } = useAnalyticsStore();
-  const [openBookIsbn, setOpenBookIsbn] = useState<string | null>(null);
   const [srAnnouncement, setSrAnnouncement] = useState('');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
@@ -141,11 +206,12 @@ function App() {
     totalBooks: books.length,
     totalShelves: shelves.length,
     reviewCount: insights.reviewCount,
-    currentView: publicPage ?? view,
+    currentView: publicPage ?? location.pathname,
     userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
     language: typeof navigator !== 'undefined' ? navigator.language : 'unknown',
-  }), [books.length, insights.reviewCount, lastSyncFailedAt, lastSyncedAt, online, pendingChanges, publicPage, shelves.length, user?.id, view]);
+  }), [books.length, insights.reviewCount, lastSyncFailedAt, lastSyncedAt, location.pathname, online, pendingChanges, publicPage, shelves.length, user?.id]);
 
+  const mainRef = useRef<HTMLElement>(null);
   const initialSyncDone = useRef(false);
   const prevBooksRef = useRef(books);
   const prevShelvesRef = useRef(shelves);
@@ -192,34 +258,36 @@ function App() {
     return () => { clearTimeout(saveTimeoutRef.current); };
   }, [user?.id, preferences, saveToCloud]);
 
+  /** One-time migration from hash URLs (#book-…, #about) to path routes. */
   useEffect(() => {
-    const syncFromHash = () => {
-      const hash = window.location.hash.slice(1);
-      const matchedPublicPage = getPublicPageFromHash(hash);
+    const hash = window.location.hash.slice(1);
+    if (!hash) return;
 
-      if (matchedPublicPage) {
-        setPublicPage(matchedPublicPage);
-        return;
+    const fromHashPublic = getPublicPageFromHash(hash);
+    if (fromHashPublic) {
+      navigate(`/${fromHashPublic}`, { replace: true });
+      return;
+    }
+
+    const m = hash.match(/^book-(.+)$/);
+    if (m) {
+      const isbn = decodeURIComponent(m[1]);
+      if (isbn) {
+        navigate(`/library?isbn=${encodeURIComponent(isbn)}`, { replace: true });
       }
+    }
+  }, [navigate]);
 
-      setPublicPage(null);
-      const m = hash.match(/^book-(.+)$/);
-      if (m) {
-        const isbn = decodeURIComponent(m[1]);
-        if (isbn) {
-          setView('library');
-          setOpenBookIsbn(isbn);
-        }
-      }
-    };
-
-    syncFromHash();
-    window.addEventListener('hashchange', syncFromHash);
-    return () => window.removeEventListener('hashchange', syncFromHash);
-  }, []);
+  /** After route changes, bring the viewport back to the top (respect reduced motion). */
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') return;
+    const instant = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, left: 0, behavior: instant ? 'instant' : 'smooth' });
+  }, [location.pathname]);
 
   useEffect(() => {
     const preloadAll = () => {
+      void preloadHome();
       void preloadScanner();
       void preloadLibrary();
       void preloadData();
@@ -331,25 +399,21 @@ function App() {
     updatePreferences({ onboardingCompleted: true });
   }, [updatePreferences]);
 
-  const clearPublicHash = useCallback(() => {
-    if (getPublicPageFromHash(window.location.hash.slice(1))) {
-      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
-    }
-  }, []);
-
   const openPublicPage = useCallback((page: PublicPage) => {
-    setPublicPage(page);
+    navigate(`/${page}`);
     setSrAnnouncement(`${PUBLIC_PAGE_META[page].label} page`);
-    if (window.location.hash !== `#${page}`) {
-      window.location.hash = page;
-    }
-  }, []);
+  }, [navigate]);
 
   const closePublicPage = useCallback(() => {
-    setPublicPage(null);
+    navigate('/home');
     setSrAnnouncement('Returned to app');
-    clearPublicHash();
-  }, [clearPublicHash]);
+  }, [navigate]);
+
+  const goToMain = useCallback((path: '/home' | '/scan' | '/library' | '/data' | '/profile', announcement: string) => {
+    navigate(path);
+    setSrAnnouncement(announcement);
+    addBreadcrumb('navigation', 'Route changed', { path });
+  }, [navigate]);
 
   const handlePhotoCapture = useCallback((imageDataUrl: string) => {
     const id = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2);
@@ -376,9 +440,8 @@ function App() {
     if (user && online) {
       void pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
     }
-    setOpenBookIsbn(photoIsbn);
-    setView('library');
-  }, [addBook, books, user, online, toast, track]);
+    navigate(`/library?isbn=${encodeURIComponent(photoIsbn)}`);
+  }, [addBook, books, user, online, toast, track, navigate]);
 
   useEffect(() => {
     if (publicPage) {
@@ -398,7 +461,7 @@ function App() {
   const addBookAndOpen = useCallback((newBook: BookEntry, successMessage: string, trackMethod: string, forceOpen = false) => {
     addBook(newBook);
     track('book_added', { method: trackMethod, isbn: newBook.isbn });
-    const viewLibrary = () => { setOpenBookIsbn(newBook.isbn); setView('library'); };
+    const viewLibrary = () => { navigate(`/library?isbn=${encodeURIComponent(newBook.isbn)}`); };
     if (batchMode && !forceOpen) {
       toast('Added. Ready for the next book.', 'success', 4000, undefined, { label: 'View in Library', onClick: viewLibrary });
       batchBooksAddedRef.current += 1;
@@ -407,14 +470,13 @@ function App() {
       }
     } else {
       toast(successMessage, 'success');
-      setOpenBookIsbn(newBook.isbn);
-      setView('library');
+      navigate(`/library?isbn=${encodeURIComponent(newBook.isbn)}`);
     }
 
     if (user && online) {
       void pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
     }
-  }, [addBook, batchMode, books, online, toast, track, user]);
+  }, [addBook, batchMode, books, navigate, online, toast, track, user]);
 
   const handleScan = async (isbn: string, options: ScanRequestOptions = {}) => {
     const normalizedInput = isbn.replace(/[^0-9Xx]/g, '').replace(/x$/i, 'X') || isbn;
@@ -433,8 +495,7 @@ function App() {
         cancelLabel: 'Dismiss',
       });
       if (openInLibrary) {
-        setOpenBookIsbn(normalizedInput);
-        setView('library');
+        navigate(`/library?isbn=${encodeURIComponent(normalizedInput)}`);
       }
       return;
     }
@@ -518,26 +579,13 @@ function App() {
     }
   };
 
-  const handleViewChange = useCallback((newView: AppView) => {
-    const labels: Record<string, string> = {
-      scan: 'Scanner view',
-      library: 'Library view',
-      data: 'Import and export view',
-      profile: 'Profile view',
-    };
-    setPublicPage(null);
-    clearPublicHash();
-    setView(newView);
-    setSrAnnouncement(labels[newView]);
-    addBreadcrumb('navigation', 'View changed', { view: newView });
-  }, [clearPublicHash]);
-
   useEffect(() => {
-    const title = publicPage ? PUBLIC_PAGE_META[publicPage].title : APP_TITLE;
+    const title = getDocumentTitle(location.pathname, publicPage);
     const description = publicPage ? PUBLIC_PAGE_META[publicPage].description : APP_DESCRIPTION;
     const siteOrigin = SITE_URL ?? window.location.origin;
+    const basePath = import.meta.env.BASE_URL.replace(/\/?$/, '');
     const canonicalHref = publicPage
-      ? `${siteOrigin}${import.meta.env.BASE_URL}#${publicPage}`
+      ? `${siteOrigin}${basePath}/${publicPage}`
       : `${siteOrigin}${window.location.pathname}${window.location.search}`;
     const socialImage = `${siteOrigin}${import.meta.env.BASE_URL}social-preview.svg`;
 
@@ -577,18 +625,28 @@ function App() {
         priceCurrency: 'USD',
       },
     });
-  }, [publicPage]);
+  }, [publicPage, location.pathname, location.search]);
 
-  const navItems: Array<{ key: AppView; label: string; icon: ReactNode }> = [
-    { key: 'scan', label: 'Add Books', icon: <Scan size={18} /> },
-    { key: 'library', label: 'Library', icon: <Library size={18} /> },
-    { key: 'data', label: 'Import & Export', icon: <Database size={18} /> },
-    { key: 'profile', label: 'Profile', icon: <User size={18} /> },
+  const navItems: Array<{ key: AppView; label: string; shortLabel: string; icon: ReactNode; fab?: boolean }> = [
+    { key: 'home', label: 'Home', shortLabel: 'Home', icon: <Home size={20} strokeWidth={2} aria-hidden /> },
+    { key: 'library', label: 'Library', shortLabel: 'Library', icon: <Library size={20} strokeWidth={2} aria-hidden /> },
+    { key: 'scan', label: 'Add books', shortLabel: 'Add', icon: <Scan size={22} strokeWidth={2} aria-hidden />, fab: true },
+    { key: 'profile', label: 'Profile', shortLabel: 'Profile', icon: <User size={20} strokeWidth={2} aria-hidden /> },
   ];
 
   return (
     <div className="app-container">
-      <a href="#main-content" className={styles.skipLink}>Skip to main content</a>
+      <a
+        href="#main-content"
+        className={styles.skipLink}
+        onClick={() => {
+          queueMicrotask(() => {
+            mainRef.current?.focus({ preventScroll: true });
+          });
+        }}
+      >
+        Skip to main content
+      </a>
 
       <div className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">
         {srAnnouncement}
@@ -597,15 +655,22 @@ function App() {
       <header className={styles.header}>
         <div className={styles.headerTop}>
           <div className={styles.branding}>
-            <div className={styles.logoBox}>
-              <BookOpen size={28} color="white" />
-            </div>
-            <div>
-              <h1 className={styles.appTitle}>
-                Spine<span className={styles.titleAccent}>Scanner</span>
-              </h1>
-              <p className={styles.subtitle}>A friendlier home for scanning, organizing, and finding books fast.</p>
-            </div>
+            <NavLink
+              to="/home"
+              className={styles.brandLinkBlock}
+              aria-label="SpineScanner home — Feed"
+              onClick={() => setSrAnnouncement('Home feed')}
+            >
+              <div className={styles.logoBox}>
+                <BookOpen size={28} color="white" aria-hidden />
+              </div>
+              <div className={styles.brandCopy}>
+                <h1 className={styles.appTitle}>
+                  Spine<span className={styles.titleAccent}>Scanner</span>
+                </h1>
+                <p className={styles.subtitle}>{brandingSubtitle}</p>
+              </div>
+            </NavLink>
           </div>
 
           <div className={styles.headerRight}>
@@ -617,200 +682,268 @@ function App() {
               online={online}
               pendingChanges={pendingChanges}
               syncFailedRecently={syncFailedRecently}
-              onOpenProfile={() => handleViewChange('profile')}
+              onOpenProfile={() => goToMain('/profile', 'Profile view')}
             />
           </div>
         </div>
 
-        <section className={`glass ${styles.hero}`} aria-label="Book site overview">
-          <div className={styles.heroIntro}>
-            <span className={styles.eyebrow}><Sparkles size={14} /> Reader-first workflow</span>
-            <h2 className={styles.heroTitle}>Add books in seconds and browse them like a real library.</h2>
-            <p className={styles.heroText}>
-              Scan a spine, upload a photo, or type an ISBN. The app keeps your collection searchable, synced, and easy to return to.
-            </p>
-            <div className={styles.heroActions}>
-              <button type="button" className={`glass ${styles.primaryAction}`} onClick={() => handleViewChange('scan')}>
-                <Scan size={18} /> Start scanning
-              </button>
-              <button type="button" className={`glass ${styles.secondaryAction}`} onClick={() => handleViewChange('library')}>
-                <Library size={18} /> Browse library
-              </button>
-            </div>
-          </div>
+        {showMarketingHero && (
+          <>
+            <section className={`glass ${styles.hero}`} aria-label="Book site overview">
+              <div className={styles.heroIntro}>
+                <span className={styles.eyebrow}><Sparkles size={14} /> Reader-first workflow</span>
+                <h2 className={styles.heroTitle}>Add books in seconds and browse them like a real library.</h2>
+                <p className={styles.heroText}>
+                  Scan a spine, upload a photo, or type an ISBN. The app keeps your collection searchable, synced, and easy to return to.
+                </p>
+                <div className={styles.heroActions}>
+                  <button type="button" className={`glass ${styles.primaryAction}`} onClick={() => goToMain('/scan', 'Scanner view')}>
+                    <Scan size={18} /> Start scanning
+                  </button>
+                  <button type="button" className={`glass ${styles.secondaryAction}`} onClick={() => goToMain('/library', 'Library view')}>
+                    <Library size={18} /> Browse library
+                  </button>
+                </div>
+              </div>
 
-          <div className={styles.heroStats}>
-            <div className={`glass ${styles.statCard}`}>
-              <span className={styles.statLabel}>Books saved</span>
-              <strong>{insights.totalBooks}</strong>
-              <span>{insights.toReadCount} still on deck</span>
-            </div>
-            <div className={`glass ${styles.statCard}`}>
-              <span className={styles.statLabel}>Reading now</span>
-              <strong>{insights.currentlyReading?.title ?? 'Nothing pinned yet'}</strong>
-              <span>{insights.currentlyReading?.author ?? 'Mark a title as reading to keep it visible.'}</span>
-            </div>
-            <div className={`glass ${styles.statCard}`}>
-              <span className={styles.statLabel}>Sync status</span>
-              <strong>{online ? 'Online' : 'Offline'}</strong>
-              <span>{pendingChanges > 0 ? `${pendingChanges} change${pendingChanges === 1 ? '' : 's'} to sync` : lastSyncedAt ? `Synced ${formatRelativeTime(lastSyncedAt)}` : 'Everything is up to date.'}</span>
-            </div>
-          </div>
-        </section>
+              <div className={styles.heroStats}>
+                <div className={`glass ${styles.statCard}`}>
+                  <span className={styles.statLabel}>Books saved</span>
+                  <strong>{insights.totalBooks}</strong>
+                  <span>{insights.toReadCount} still on deck</span>
+                </div>
+                <div className={`glass ${styles.statCard}`}>
+                  <span className={styles.statLabel}>Reading now</span>
+                  <strong>{insights.currentlyReading?.title ?? 'Nothing pinned yet'}</strong>
+                  <span>{insights.currentlyReading?.author ?? 'Mark a title as reading to keep it visible.'}</span>
+                </div>
+                <div className={`glass ${styles.statCard}`}>
+                  <span className={styles.statLabel}>Sync status</span>
+                  <strong>{online ? 'Online' : 'Offline'}</strong>
+                  <span>{pendingChanges > 0 ? `${pendingChanges} change${pendingChanges === 1 ? '' : 's'} to sync` : lastSyncedAt ? `Synced ${formatRelativeTime(lastSyncedAt)}` : 'Everything is up to date.'}</span>
+                </div>
+              </div>
+            </section>
 
-        <section className={styles.quickGuide} aria-label="How it works">
-          <div className={`glass ${styles.guideCard}`}>
-            <Scan size={18} />
-            <div>
-              <strong>1. Add a book</strong>
-              <p>Scan live, snap a photo, or type the ISBN if the camera misses.</p>
-            </div>
-          </div>
-          <div className={`glass ${styles.guideCard}`}>
-            <BookMarked size={18} />
-            <div>
-              <strong>2. Organize it</strong>
-              <p>Track reading status, notes, and shelves without leaving the library view.</p>
-            </div>
-          </div>
-          <div className={`glass ${styles.guideCard}`}>
-            <Cloud size={18} />
-            <div>
-              <strong>3. Pick up anywhere</strong>
-              <p>Your collection stays searchable and syncs when you reconnect.</p>
-            </div>
-          </div>
-        </section>
+            <section className={styles.quickGuide} aria-label="How it works">
+              <div className={`glass ${styles.guideCard}`}>
+                <Scan size={18} />
+                <div>
+                  <strong>1. Add a book</strong>
+                  <p>Scan live, snap a photo, or type the ISBN if the camera misses.</p>
+                </div>
+              </div>
+              <div className={`glass ${styles.guideCard}`}>
+                <BookMarked size={18} />
+                <div>
+                  <strong>2. Organize it</strong>
+                  <p>Track reading status, notes, and shelves without leaving the library view.</p>
+                </div>
+              </div>
+              <div className={`glass ${styles.guideCard}`}>
+                <Cloud size={18} />
+                <div>
+                  <strong>3. Pick up anywhere</strong>
+                  <p>Your collection stays searchable and syncs when you reconnect.</p>
+                </div>
+              </div>
+            </section>
+          </>
+        )}
 
-        <nav className={`glass ${styles.nav}`} role="tablist" aria-label="Main navigation">
-          {navItems.map(({ key, label, icon }) => (
-            <button
-              key={key}
-              role="tab"
-              onClick={() => handleViewChange(key)}
-              aria-label={`${label} tab`}
-              aria-selected={view === key}
-              aria-current={view === key ? 'page' : undefined}
-              onMouseEnter={() => {
-                if (key === 'scan') void preloadScanner();
-                if (key === 'library') void preloadLibrary();
-                if (key === 'data') void preloadData();
-                if (key === 'profile') void preloadProfile();
-              }}
-              onFocus={() => {
-                if (key === 'scan') void preloadScanner();
-                if (key === 'library') void preloadLibrary();
-                if (key === 'data') void preloadData();
-                if (key === 'profile') void preloadProfile();
-              }}
-              className={`${styles.navBtn} ${view === key ? styles.navBtnActive : ''}`}
-              data-testid={uiContracts.navTabTestId(key)}
-            >
-              {icon} {label}
-            </button>
-          ))}
+        <nav className={`glass ${styles.nav}`} aria-label="Main navigation">
+          {navItems.map(({ key, label, shortLabel, icon, fab }) => {
+            const to = `/${key}`;
+            const announcements: Record<AppView, string> = {
+              home: 'Home feed',
+              scan: 'Scanner view',
+              library: 'Library view',
+              profile: 'Profile view',
+            };
+            return (
+              <NavLink
+                key={key}
+                to={to}
+                end
+                aria-label={fab ? label : undefined}
+                onClick={() => { setSrAnnouncement(announcements[key]); addBreadcrumb('navigation', 'Route changed', { path: to }); }}
+                onMouseEnter={() => {
+                  if (key === 'home') void preloadHome();
+                  if (key === 'scan') void preloadScanner();
+                  if (key === 'library') void preloadLibrary();
+                  if (key === 'profile') void preloadProfile();
+                }}
+                onFocus={() => {
+                  if (key === 'home') void preloadHome();
+                  if (key === 'scan') void preloadScanner();
+                  if (key === 'library') void preloadLibrary();
+                  if (key === 'profile') void preloadProfile();
+                }}
+                className={({ isActive }) =>
+                  `${styles.navBtn} ${fab ? styles.navBtnFab : ''} ${isActive ? styles.navBtnActive : ''}`.trim()}
+                data-testid={uiContracts.navTabTestId(key)}
+              >
+                <span className={fab ? styles.navFabIcon : styles.navIcon}>{icon}</span>
+                <span className={styles.navLabel}>{shortLabel}</span>
+              </NavLink>
+            );
+          })}
         </nav>
       </header>
 
-      <main id="main-content">
-        {publicPage && (
-          <PublicInfoPage
-            page={publicPage}
-            supportEmail={SUPPORT_EMAIL}
-            diagnostics={publicPage === 'support' ? diagnostics : null}
-            onClose={closePublicPage}
-          />
-        )}
-
-        {!publicPage && view === 'scan' && (
-          <ErrorBoundary>
-            <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
-              <div className={styles.scanView}>
-                <div className={styles.scanHeader}>
-                  <div>
-                    <span className={styles.sectionBadge}>Add books</span>
-                    <h2 className={styles.scanTitle}>Three easy ways to capture a book</h2>
-                    <p className={styles.scanSubtitle}>Use the camera for speed, upload a photo for tricky spines, or type the ISBN when you want full control.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => updatePreferences({ batchModeDefault: !batchMode })}
-                    className={`glass ${styles.batchToggle} ${batchMode ? styles.batchToggleActive : ''}`}
-                    aria-pressed={batchMode}
-                    title={batchMode ? 'Exit batch mode' : 'Batch add keeps you on the scanner after each add'}
-                  >
-                    <Layers size={18} />
-                    {batchMode ? 'Batch mode on' : 'Batch add'}
-                  </button>
-                </div>
-
-                <div className={styles.scanTips}>
-                  <div className={`glass ${styles.tipCard}`}>
-                    <strong>Best for speed</strong>
-                    <span>Center the barcode and hold still for a second.</span>
-                  </div>
-                  <div className={`glass ${styles.tipCard}`}>
-                    <strong>Best for hard covers</strong>
-                    <span>Use photo upload when the spine text is small or reflective.</span>
-                  </div>
-                  <button type="button" className={`glass ${styles.tipCard} ${styles.tipCardButton}`} onClick={() => handleViewChange('library')}>
-                    <strong>Already scanned enough?</strong>
-                    <span>Jump to your library <ChevronRight size={14} /></span>
-                  </button>
-                </div>
-
-                <Scanner
-                  onScan={handleScan}
-                  onPhotoCapture={handlePhotoCapture}
-                  isScanning={loading}
-                  batchMode={batchMode}
-                  onOpenSupport={() => openPublicPage('support')}
-                  onOpenPrivacy={() => openPublicPage('privacy')}
-                  onViewLibrary={(isbn) => {
-                    if (isbn) setOpenBookIsbn(isbn);
-                    handleViewChange('library');
-                  }}
-                />
-
-                {error && (
-                  <div className={`glass ${styles.alertError}`}>
-                    <AlertCircle size={20} />
-                    <span>{error}</span>
-                  </div>
-                )}
-              </div>
-            </Suspense>
-          </ErrorBoundary>
-        )}
-
-        {!publicPage && view === 'library' && (
-          <ErrorBoundary>
-            <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
-              <LibraryList
-                onManageData={() => handleViewChange('data')}
-                onStartScanning={() => handleViewChange('scan')}
-                initialOpenIsbn={openBookIsbn}
-                onOpenComplete={() => setOpenBookIsbn(null)}
+      <main ref={mainRef} id="main-content" className={styles.mainContent} tabIndex={-1}>
+        <Routes>
+          <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route
+            path="/about"
+            element={(
+              <PublicInfoPage
+                page="about"
+                supportEmail={SUPPORT_EMAIL}
+                diagnostics={null}
+                onClose={closePublicPage}
               />
-            </Suspense>
-          </ErrorBoundary>
-        )}
+            )}
+          />
+          <Route
+            path="/privacy"
+            element={(
+              <PublicInfoPage
+                page="privacy"
+                supportEmail={SUPPORT_EMAIL}
+                diagnostics={null}
+                onClose={closePublicPage}
+              />
+            )}
+          />
+          <Route
+            path="/terms"
+            element={(
+              <PublicInfoPage
+                page="terms"
+                supportEmail={SUPPORT_EMAIL}
+                diagnostics={null}
+                onClose={closePublicPage}
+              />
+            )}
+          />
+          <Route
+            path="/support"
+            element={(
+              <PublicInfoPage
+                page="support"
+                supportEmail={SUPPORT_EMAIL}
+                diagnostics={diagnostics}
+                onClose={closePublicPage}
+              />
+            )}
+          />
+          <Route
+            path="/home"
+            element={(
+              <ErrorBoundary>
+                <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
+                  <HomeFeed />
+                </Suspense>
+              </ErrorBoundary>
+            )}
+          />
+          <Route
+            path="/scan"
+            element={(
+              <ErrorBoundary>
+                <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
+                  <div className={styles.scanView}>
+                    <div className={styles.scanHeader}>
+                      <div>
+                        <span className={styles.sectionBadge}>Add books</span>
+                        <h2 className={styles.scanTitle}>Three easy ways to capture a book</h2>
+                        <p className={styles.scanSubtitle}>Use the camera for speed, upload a photo for tricky spines, or type the ISBN when you want full control.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => updatePreferences({ batchModeDefault: !batchMode })}
+                        className={`glass ${styles.batchToggle} ${batchMode ? styles.batchToggleActive : ''}`}
+                        aria-pressed={batchMode}
+                        title={batchMode ? 'Exit batch mode' : 'Batch add keeps you on the scanner after each add'}
+                      >
+                        <Layers size={18} />
+                        {batchMode ? 'Batch mode on' : 'Batch add'}
+                      </button>
+                    </div>
 
-        {!publicPage && view === 'data' && (
-          <ErrorBoundary>
-            <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
-              <DataManagement onClose={() => handleViewChange('library')} />
-            </Suspense>
-          </ErrorBoundary>
-        )}
+                    <div className={styles.scanTips}>
+                      <div className={`glass ${styles.tipCard}`}>
+                        <strong>Best for speed</strong>
+                        <span>Center the barcode and hold still for a second.</span>
+                      </div>
+                      <div className={`glass ${styles.tipCard}`}>
+                        <strong>Best for hard covers</strong>
+                        <span>Use photo upload when the spine text is small or reflective.</span>
+                      </div>
+                      <button type="button" className={`glass ${styles.tipCard} ${styles.tipCardButton}`} onClick={() => goToMain('/library', 'Library view')}>
+                        <strong>Already scanned enough?</strong>
+                        <span>Jump to your library <ChevronRight size={14} /></span>
+                      </button>
+                    </div>
 
-        {!publicPage && view === 'profile' && (
-          <ErrorBoundary>
-            <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
-              <ProfileSettings inline />
-            </Suspense>
-          </ErrorBoundary>
-        )}
+                    <Scanner
+                      onScan={handleScan}
+                      onPhotoCapture={handlePhotoCapture}
+                      isScanning={loading}
+                      batchMode={batchMode}
+                      onOpenSupport={() => openPublicPage('support')}
+                      onOpenPrivacy={() => openPublicPage('privacy')}
+                      onViewLibrary={(isbn) => {
+                        navigate(isbn ? `/library?isbn=${encodeURIComponent(isbn)}` : '/library');
+                      }}
+                    />
+
+                    {error && (
+                      <div className={`glass ${styles.alertError}`}>
+                        <AlertCircle size={20} />
+                        <span>{error}</span>
+                      </div>
+                    )}
+                  </div>
+                </Suspense>
+              </ErrorBoundary>
+            )}
+          />
+          <Route
+            path="/library"
+            element={(
+              <ErrorBoundary>
+                <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
+                  <AppLibraryRoute
+                    onStartScanning={() => goToMain('/scan', 'Scanner view')}
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            )}
+          />
+          <Route
+            path="/data"
+            element={(
+              <ErrorBoundary>
+                <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
+                  <DataManagement onClose={() => goToMain('/profile', 'Profile view')} />
+                </Suspense>
+              </ErrorBoundary>
+            )}
+          />
+          <Route
+            path="/profile"
+            element={(
+              <ErrorBoundary>
+                <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
+                  <ProfileSettings inline />
+                </Suspense>
+              </ErrorBoundary>
+            )}
+          />
+          <Route path="*" element={<Navigate to="/home" replace />} />
+        </Routes>
       </main>
 
       {showOnboarding && (
@@ -819,12 +952,12 @@ function App() {
           steps={DEFAULT_ONBOARDING_STEPS.map((step) => ({
             ...step,
             onCta: step.id === 'scan'
-              ? () => handleViewChange('scan')
+              ? () => goToMain('/scan', 'Scanner view')
               : step.id === 'review'
-                ? () => handleViewChange('library')
+                ? () => goToMain('/library', 'Library view')
                 : step.id === 'views'
-                  ? () => handleViewChange('library')
-                  : () => handleViewChange('data'),
+                  ? () => goToMain('/library', 'Library view')
+                  : () => goToMain('/data', 'Import and export view'),
           }))}
           onNext={() => setOnboardingStep((step) => Math.min(step + 1, DEFAULT_ONBOARDING_STEPS.length - 1))}
           onSkip={completeOnboarding}

@@ -58,6 +58,14 @@
   white-space: nowrap;
 }
 
+.syncCluster {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  max-width: min(100%, 420px);
+}
+
 .syncBtn {
   padding: 0.4rem 0.75rem;
   display: flex;
@@ -67,6 +75,32 @@
   font-weight: 600;
   border-radius: 9999px;
   position: relative;
+}
+
+.syncBtnSyncing {
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .syncBtnSyncing {
+    animation: syncPulse 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes syncPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .syncBtnSyncing {
+    animation: none !important;
+  }
 }
 
 .pendingBadge {

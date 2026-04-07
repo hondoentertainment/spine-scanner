@@ -1,6 +1,7 @@
 /* ---- Dark theme (default) ---- */
 :root,
 [data-theme="dark"] {
+  color-scheme: dark;
   --primary: #6366f1;
   --primary-hover: #4f46e5;
   --bg-dark: #0f172a;
@@ -15,10 +16,32 @@
   --body-bg-color: #0f172a;
   --input-bg: rgba(255, 255, 255, 0.08);
   --input-border: rgba(255, 255, 255, 0.15);
+  --error: #f87171;
+  --error-bg: rgba(248, 113, 113, 0.08);
+  --error-border: rgba(248, 113, 113, 0.28);
+  /* Design tokens — keep surfaces competitive with top-tier PWAs */
+  --radius-sm: 0.5rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.5rem;
+  --radius-xl: 1.75rem;
+  --shadow-glass: 0 8px 32px -8px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  --font-ui: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* Mobile bottom nav + safe area — used by App shell */
+  --bottom-nav-bar-height: 3.5rem;
+  --bottom-nav-padding-y: 0.5rem;
+  --main-bottom-pad-mobile: calc(
+    var(--bottom-nav-bar-height) + var(--bottom-nav-padding-y) + env(safe-area-inset-bottom, 0px)
+  );
 }
 
 /* ---- Light theme ---- */
 [data-theme="light"] {
+  color-scheme: light;
+  --bottom-nav-bar-height: 3.5rem;
+  --bottom-nav-padding-y: 0.5rem;
+  --main-bottom-pad-mobile: calc(
+    var(--bottom-nav-bar-height) + var(--bottom-nav-padding-y) + env(safe-area-inset-bottom, 0px)
+  );
   --primary: #6366f1;
   --primary-hover: #4f46e5;
   --bg-dark: #f1f5f9;
@@ -33,6 +56,10 @@
   --body-bg-color: #f1f5f9;
   --input-bg: rgba(0, 0, 0, 0.04);
   --input-border: rgba(0, 0, 0, 0.12);
+  --shadow-glass: 0 8px 30px -10px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+  --error: #dc2626;
+  --error-bg: rgba(220, 38, 38, 0.08);
+  --error-border: rgba(220, 38, 38, 0.25);
 }
 
 * {
@@ -43,12 +70,13 @@
 
 body {
   margin: 0;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-ui);
   background-color: var(--body-bg-color);
   background: var(--body-bg);
   color: var(--text-main);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   transition: background-color 0.3s, color 0.3s;
 }
 
@@ -57,7 +85,8 @@ body {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--glass-border);
-  border-radius: 1rem;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-glass);
 }
 
 button {
@@ -70,6 +99,12 @@ button {
 
 button:active {
   transform: scale(0.95);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:active {
+    transform: none;
+  }
 }
 
 /* Screen-reader only (visually hidden, announced to assistive tech) */
@@ -96,7 +131,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   width: 100%;
   max-width: 960px;
   margin: 0 auto;
-  border-radius: 1.5rem;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 }
@@ -137,7 +172,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   height: 2px;
   background: linear-gradient(90deg, transparent, var(--accent-blue), transparent);
   box-shadow: 0 0 20px var(--accent-blue);
-  animation: scan 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .viewfinder::after {
+    animation: scan 2.2s ease-in-out infinite;
+  }
 }
 
 @keyframes scan {

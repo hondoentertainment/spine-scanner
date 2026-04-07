@@ -19,6 +19,17 @@ export const useTheme = () => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  /** Match browser / PWA chrome to resolved theme (Android theme-color, iOS status bar). */
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const themeColor = theme === 'light' ? '#f1f5f9' : '#0f172a';
+    document.getElementById('app-theme-color')?.setAttribute('content', themeColor);
+    const apple = document.getElementById('apple-status-bar-style');
+    if (apple) {
+      apple.setAttribute('content', theme === 'light' ? 'default' : 'black-translucent');
+    }
+  }, [theme]);
+
   // When theme is 'system', react to OS preference changes
   useEffect(() => {
     if (themePreference !== 'system') return;

@@ -69,7 +69,7 @@ export interface ProfilePreferences {
   theme: 'light' | 'dark' | 'system';
   librarySortBy: 'title' | 'author' | 'dateAdded' | 'pageCount';
   librarySortAsc: boolean;
-  libraryViewMode: 'grid' | 'list';
+  libraryViewMode: 'grid' | 'list' | 'masonry';
   libraryStatusFilter: 'all' | 'to-read' | 'reading' | 'read' | 'dnf';
   batchModeDefault: boolean;
   showStatsDefault: boolean;

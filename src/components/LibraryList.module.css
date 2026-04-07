@@ -371,9 +371,33 @@
 }
 
 .activeFilterChip {
-  padding: 0.45rem 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.65rem 0.45rem 0.75rem;
+  min-height: 40px;
   font-size: 0.8rem;
+  font-weight: 600;
   color: var(--text-main);
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  border-radius: 9999px;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.activeFilterChip:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.activeFilterChip:active {
+  transform: scale(0.98);
+}
+
+.chipDismissIcon {
+  flex-shrink: 0;
+  opacity: 0.85;
 }
 
 .filterRow,
@@ -630,6 +654,32 @@
   .inlineForm,
   .bulkBar {
     align-items: stretch;
+    flex-direction: column;
+  }
+
+  .bulkActions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .bulkBtn,
+  .bulkSelect {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .filterRow {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.35rem;
+    margin-bottom: 0.85rem;
+    scrollbar-width: thin;
+    gap: 0.45rem;
+  }
+
+  .filterBtn {
+    flex-shrink: 0;
   }
 
   .clearBtn,
@@ -643,4 +693,83 @@
   .bulkSelect {
     width: 100%;
   }
+}
+
+.segmentBar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.segmentBtn {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.65rem 0.85rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  color: var(--text-muted);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.04);
+  touch-action: manipulation;
+}
+
+.segmentBtnActive {
+  color: white;
+  background: rgba(99, 102, 241, 0.38);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.segmentHint {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin: 0 0 1rem;
+  line-height: 1.45;
+}
+
+.segmentLink {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--accent-blue);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  touch-action: manipulation;
+}
+
+.heroCompact {
+  grid-template-columns: 1fr;
+  padding: 1rem 1.15rem;
+  margin-bottom: 1rem;
+}
+
+.heroCompact .title {
+  font-size: clamp(1.2rem, 4vw, 1.55rem);
+}
+
+.heroCompact .highlightGrid {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.65rem;
+}
+
+.heroCompact .highlightCard {
+  padding: 0.75rem;
+}
+
+.heroCompact .highlightCard strong {
+  font-size: 0.95rem;
+}
+
+.virtualContainerMasonry {
+  min-height: 260px;
+}
+
+.cardWrapMasonry {
+  min-width: 0;
 }

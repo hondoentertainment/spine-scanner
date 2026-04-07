@@ -444,6 +444,14 @@
   margin-bottom: 0.25rem;
 }
 
+.sectionHint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0 0 0.35rem;
+  line-height: 1.45;
+  max-width: 52ch;
+}
+
 .field {
   display: flex;
   flex-direction: column;

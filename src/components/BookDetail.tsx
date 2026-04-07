@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useToast } from './Toast.tsx';
 import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import type { BookEntry } from '../types.ts';
 import { generateAmazonLink } from '../utils/amazonLink.ts';
+import { getBookCoverSrc } from '../utils/bookPresentation.ts';
 import { shareBook } from '../utils/shareBook.ts';
 import { isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
@@ -46,6 +47,7 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   } = useBookStore();
   const { toast, confirm } = useToast();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
+  const shelfAnchorRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState(false);
   const [showShelfPicker, setShowShelfPicker] = useState(false);
   const [draft, setDraft] = useState({
@@ -102,12 +104,27 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
     }
   };
 
+  useEffect(() => {
+    if (!showShelfPicker) return;
+    const onPointerDown = (ev: MouseEvent) => {
+      if (shelfAnchorRef.current?.contains(ev.target as Node)) return;
+      setShowShelfPicker(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [showShelfPicker]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSave();
     }
     if (e.key === 'Escape') {
+      if (showShelfPicker) {
+        e.stopPropagation();
+        setShowShelfPicker(false);
+        return;
+      }
       if (editing) handleCancel();
       else onClose();
     }
@@ -116,20 +133,18 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   return (
     <div className={styles.overlay} onClick={onClose} role="dialog" aria-modal="true" aria-label={`Details for ${book.title}`}>
       <div ref={focusTrapRef} className={styles.modal} onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
-        {/* Close button */}
         <button onClick={onClose} className={styles.closeBtn} aria-label="Close detail view">
           <X size={20} />
         </button>
 
-        {/* Cover + metadata */}
-        <div className={styles.top}>
-          <img
-            src={book.coverImg || 'https://via.placeholder.com/128x192?text=No+Cover'}
-            alt={book.title}
-            className={styles.cover}
-          />
-          <div className={styles.meta}>
-            {editing ? (
+        <div className={styles.scrollBody}>
+          {editing ? (
+            <div className={styles.editTop}>
+              <img
+                src={getBookCoverSrc(book.coverImg)}
+                alt=""
+                className={styles.coverSmall}
+              />
               <div className={styles.editFields}>
                 <label className={styles.label}>Title</label>
                 <input
@@ -181,14 +196,25 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                   </button>
                 </div>
               </div>
-            ) : (
-              <>
+            </div>
+          ) : (
+            <>
+              <div className={styles.coverHero}>
+                <img
+                  src={getBookCoverSrc(book.coverImg)}
+                  alt={book.title}
+                  className={styles.coverHeroImg}
+                />
+              </div>
+              <div className={styles.metaBelow}>
                 <h2 className={styles.title}>{book.title}</h2>
                 <p className={styles.author}>{book.author}</p>
                 <div className={styles.details}>
                   {!isBookPhotoOnly(book) && <span>ISBN: {book.isbn}</span>}
                   {book.pageCount > 0 && <span>{book.pageCount} pages</span>}
                   <span>Added {new Date(book.dateAdded).toLocaleDateString()}</span>
+                  {book.startedAt && <span>Started {new Date(book.startedAt).toLocaleDateString()}</span>}
+                  {book.finishedAt && <span>Finished {new Date(book.finishedAt).toLocaleDateString()}</span>}
                 </div>
                 <div className={styles.linkRow}>
                   {generateAmazonLink(book.isbn) && (
@@ -213,25 +239,26 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                     <Share2 size={12} /> Share
                   </button>
                 </div>
-              </>
-            )}
-          </div>
-        </div>
+              </div>
+            </>
+          )}
 
-        {/* Status buttons */}
-        <div className={styles.statusRow}>
-          {(['to-read', 'reading', 'read', 'dnf'] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => updateBookStatus(book.id, s)}
-              className={`${styles.statusBtn} ${book.status === s ? styles[`status_${s.replace('-', '_')}`] : ''}`}
-              aria-label={`Set status to ${statusLabels[s]}`}
-            >
-              {statusIcons[s]}
-              <span className={styles.statusLabel}>{statusLabels[s]}</span>
-            </button>
-          ))}
-        </div>
+          <div className={styles.stickyStatus}>
+            <div className={styles.statusRow}>
+              {(['to-read', 'reading', 'read', 'dnf'] as const).map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => updateBookStatus(book.id, st)}
+                  className={`${styles.statusBtn} ${book.status === st ? styles[`status_${st.replace('-', '_')}`] : ''}`}
+                  aria-label={`Set status to ${statusLabels[st]}`}
+                >
+                  {statusIcons[st]}
+                  <span className={styles.statusLabel}>{statusLabels[st]}</span>
+                </button>
+              ))}
+            </div>
+          </div>
 
         <div className={styles.progressSection}>
           <div className={styles.progressHeader}>
@@ -278,19 +305,22 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
             </span>
           ))}
           {shelves.length > 0 && (
-            <div style={{ position: 'relative' }}>
+            <div ref={shelfAnchorRef} style={{ position: 'relative' }}>
               <button
+                type="button"
                 onClick={() => setShowShelfPicker(!showShelfPicker)}
                 className={styles.addShelfBtn}
                 aria-label="Add to shelf"
+                aria-expanded={showShelfPicker}
               >
                 <Tag size={12} /> + Shelf
               </button>
               {showShelfPicker && availableShelves.length > 0 && (
-                <div className={styles.shelfPicker}>
+                <div className={styles.shelfPicker} role="listbox" aria-label="Choose shelf">
                   {availableShelves.map((shelf) => (
                     <button
                       key={shelf.id}
+                      type="button"
                       onClick={() => { assignShelf(book.id, shelf.id); setShowShelfPicker(false); }}
                       className={styles.shelfOption}
                       style={{ color: shelf.color }}
@@ -324,6 +354,7 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
           <button onClick={handleRemove} className={styles.removeBtn}>
             <Trash2 size={14} /> Remove
           </button>
+        </div>
         </div>
       </div>
     </div>

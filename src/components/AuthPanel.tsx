@@ -18,6 +18,29 @@ interface AuthPanelProps {
 
 type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset-sent' | 'confirm-pending';
 
+function buildSyncAnnouncement(
+  syncing: boolean,
+  online: boolean,
+  pendingChanges: number,
+  syncFailedRecently: boolean | undefined,
+  lastSyncedAt: string | null,
+): string {
+  if (syncing) return 'Syncing your library to the cloud.';
+  if (!online && pendingChanges > 0) {
+    return `Offline. ${pendingChanges} local change${pendingChanges === 1 ? '' : 's'} will upload when you are back online.`;
+  }
+  if (pendingChanges > 0) {
+    return `${pendingChanges} change${pendingChanges === 1 ? '' : 's'} not yet uploaded. Press Sync to save to the cloud.`;
+  }
+  if (syncFailedRecently && online) {
+    return 'Last sync failed. Press Sync or Retry to try again.';
+  }
+  if (lastSyncedAt && online) {
+    return `All changes synced. Last successful sync ${formatRelativeTime(lastSyncedAt)}.`;
+  }
+  return 'Library is up to date with the cloud.';
+}
+
 const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSyncedAt, online, pendingChanges, syncFailedRecently, onOpenProfile }) => {
   const {
     user, profile, loading, error, confirmationPending,
@@ -82,8 +105,22 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSyncedAt,
 
   // === Signed-in user badge ===
   if (user) {
+    const syncAnnouncement = buildSyncAnnouncement(syncing, online, pendingChanges, syncFailedRecently, lastSyncedAt);
+
+    const syncBtnTitle = !online
+      ? 'Connect to the internet to sync your library'
+      : syncing
+        ? 'Sync in progress…'
+        : pendingChanges > 0
+          ? 'Upload pending changes to the cloud'
+          : 'Sync library to cloud now';
+
     return (
       <div className={s.wrap}>
+        <div className="sr-only" aria-live="polite" aria-atomic="true">
+          {syncAnnouncement}
+        </div>
+
         {!online && (
           <div className={`glass ${s.offlineBadge}`}>
             <WifiOff size={12} /> Offline
@@ -91,13 +128,13 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSyncedAt,
         )}
 
         {onOpenProfile && (
-          <button onClick={onOpenProfile} className={`glass ${s.settingsBtn}`} aria-label="Profile and settings">
+          <button type="button" onClick={onOpenProfile} className={`glass ${s.settingsBtn}`} aria-label="Profile and settings">
             <Settings size={16} />
           </button>
         )}
         <div className={`glass ${s.userBadge}`}>
           {(profile?.avatarUrl ?? user.user_metadata?.avatar_url) ? (
-            <img src={profile?.avatarUrl ?? user.user_metadata?.avatar_url} alt="" className={s.avatar} width={18} height={18} />
+            <img src={profile?.avatarUrl ?? user.user_metadata?.avatar_url} alt="" className={s.avatar} width={18} height={18} decoding="async" />
           ) : (
             <Cloud size={14} style={{ color: online ? '#22c55e' : '#f59e0b' }} />
           )}
@@ -106,37 +143,46 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSyncedAt,
           </span>
         </div>
 
-        <button onClick={onSyncNow} disabled={syncing || !online}
-          className={`glass ${s.syncBtn}`} aria-label="Sync library to cloud"
-          style={{
-            color: !online ? 'var(--text-muted)' : syncing ? 'var(--text-muted)' : 'var(--accent-blue)',
-            cursor: syncing || !online ? 'not-allowed' : 'pointer',
-          }}>
-          {syncing ? <Loader size={14} className="animate-spin" /> : <Cloud size={14} />}
-          {syncing ? 'Syncing...' : 'Sync'}
+        <div className={s.syncCluster} role="group" aria-label="Cloud sync">
+          <button
+            type="button"
+            onClick={onSyncNow}
+            disabled={syncing || !online}
+            title={syncBtnTitle}
+            className={`glass ${s.syncBtn} ${syncing ? s.syncBtnSyncing : ''}`}
+            aria-label={syncing ? 'Syncing library to cloud' : 'Sync library to cloud'}
+            style={{
+              color: !online ? 'var(--text-muted)' : syncing ? 'var(--text-muted)' : 'var(--accent-blue)',
+              cursor: syncing || !online ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {syncing ? <Loader size={14} className="animate-spin" aria-hidden /> : <Cloud size={14} aria-hidden />}
+            {syncing ? 'Syncing…' : 'Sync'}
+            {pendingChanges > 0 && !syncing && (
+              <span className={s.pendingBadge} style={{ background: online ? '#f59e0b' : '#ef4444' }}>
+                {pendingChanges > 99 ? '99+' : pendingChanges}
+              </span>
+            )}
+          </button>
+
+          {lastSyncedAt && online && pendingChanges === 0 && !syncing && (
+            <span className={s.syncedTime}>Synced {formatRelativeTime(lastSyncedAt)}</span>
+          )}
           {pendingChanges > 0 && !syncing && (
-            <span className={s.pendingBadge}
-              style={{ background: online ? '#f59e0b' : '#ef4444' }}>
-              {pendingChanges > 99 ? '99+' : pendingChanges}
+            <span className={s.pendingText} style={{ color: online ? '#f59e0b' : '#ef4444' }}>
+              {online
+                ? `Saved on this device · ${pendingChanges} waiting to upload`
+                : `${pendingChanges} local change${pendingChanges === 1 ? '' : 's'} · will sync when online`}
             </span>
           )}
-        </button>
+          {syncFailedRecently && online && pendingChanges > 0 && !syncing && (
+            <button type="button" onClick={onSyncNow} className={`glass ${s.retryBtn}`} aria-label="Retry sync now">
+              <RefreshCw size={12} aria-hidden /> Retry
+            </button>
+          )}
+        </div>
 
-        {lastSyncedAt && online && pendingChanges === 0 && (
-          <span className={s.syncedTime}>Synced {formatRelativeTime(lastSyncedAt)}</span>
-        )}
-        {pendingChanges > 0 && !syncing && (
-          <span className={s.pendingText} style={{ color: online ? '#f59e0b' : '#ef4444' }}>
-            {pendingChanges} change{pendingChanges === 1 ? '' : 's'} to sync{online ? '' : ' (offline)'}
-          </span>
-        )}
-        {syncFailedRecently && online && pendingChanges > 0 && !syncing && (
-          <button onClick={onSyncNow} className={`glass ${s.retryBtn}`} aria-label="Retry sync">
-            <RefreshCw size={12} /> Retry
-          </button>
-        )}
-
-        <button onClick={signOut} className={`glass ${s.signOutBtn}`} aria-label="Sign out">
+        <button type="button" onClick={signOut} className={`glass ${s.signOutBtn}`} aria-label="Sign out">
           <LogOut size={14} />
         </button>
       </div>
