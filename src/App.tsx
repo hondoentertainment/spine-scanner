@@ -15,6 +15,7 @@ import { mergeSync, pushBooks } from './lib/syncBooks.ts';
 import { formatRelativeTime } from './utils/formatRelativeTime.ts';
 import type { BookEntry } from './types.ts';
 import { BookOpen, Library, Scan, AlertCircle, Database, Layers, User, Sparkles, Cloud, BookMarked, ChevronRight } from 'lucide-react';
+import { burstConfetti } from './utils/confetti.ts';
 import { generateAmazonLink } from './utils/amazonLink.ts';
 import { isValidIsbn, normalizeToIsbn13 } from './utils/isbnValidation.ts';
 import { isbnExistsInLibrary } from './utils/libraryUtils.ts';
@@ -398,6 +399,7 @@ function App() {
   const addBookAndOpen = useCallback((newBook: BookEntry, successMessage: string, trackMethod: string, forceOpen = false) => {
     addBook(newBook);
     track('book_added', { method: trackMethod, isbn: newBook.isbn });
+    burstConfetti();
     const viewLibrary = () => { setOpenBookIsbn(newBook.isbn); setView('library'); };
     if (batchMode && !forceOpen) {
       toast('Added. Ready for the next book.', 'success', 4000, undefined, { label: 'View in Library', onClick: viewLibrary });

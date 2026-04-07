@@ -220,7 +220,7 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
   const virtualizer = useVirtualizer({
     count: filteredAndSorted.length,
     getScrollElement: () => listParentRef.current,
-    estimateSize: () => 110,
+    estimateSize: () => 82,
     overscan: 8,
   });
 
@@ -528,6 +528,12 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
       )}
 
       {showShelves && <ShelfManager />}
+
+      {pullRefreshVisible && (
+          <div className="pull-refresh-indicator" style={{ textAlign: 'center', padding: '0.5rem', color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+              ↑ Pull to refresh
+          </div>
+      )}
 
       {!emptyLibrary && activeFilters.length === 0 && insights.recentlyAdded.length > 0 && (
         <div className={s.recentSection}>
@@ -932,9 +938,7 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
 
       {emptyLibrary && (
         <div className={`glass ${s.emptyState}`}>
-          <div className={s.emptyIcon}>
-            <LibraryBig size={28} />
-          </div>
+          <EmptyStateIllustration type="empty-library" />
           <h3>Start your library</h3>
           <p className={s.heroText}>Scan a first stack, then come back here to review, sort, and save views for later.</p>
           <div className={s.emptyActions}>
@@ -954,9 +958,7 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
 
       {emptyFilteredResults && (
         <div className={`glass ${s.emptyState}`}>
-          <div className={s.emptyIcon}>
-            <Filter size={28} />
-          </div>
+          <EmptyStateIllustration type="no-results" />
           <h3>No books match those filters</h3>
           <p className={s.heroText}>Try widening the search, relaxing page limits, or clearing review-only mode.</p>
           <button type="button" className={`glass ${s.clearBtn}`} onClick={clearFilters}>
