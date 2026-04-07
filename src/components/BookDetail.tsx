@@ -265,7 +265,10 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
 
         <div className={styles.progressSection}>
           <div className={styles.progressHeader}>
-            <strong>Reading progress</strong>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <ProgressRing percent={progressPercent} size={32} strokeWidth={3} />
+              <strong>Reading progress</strong>
+            </div>
             <span>{progressPercent}% complete</span>
           </div>
           <div className={styles.progressTrack}>

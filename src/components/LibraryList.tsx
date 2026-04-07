@@ -447,9 +447,7 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
             <Sparkles size={14} />
             Library workspace
           </span>
-          <h1 className={s.title}>Your library, built for browsing not digging.</h1>
-          <p className={s.heroText}>Build a library that feels easy to use</p>
-          <p className={s.resultsSummary}>Scan fast, review edge cases later, and keep your shelves tidy without losing momentum.</p>
+          <h1 className={s.title}>Your Library</h1>
           <div className={s.heroActions}>
             <button type="button" className={`glass ${s.primaryAction}`} onClick={onStartScanning}>
               <ScanLine size={16} />
@@ -477,7 +475,7 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
         <div className={s.highlightGrid}>
           <button type="button" className={`glass ${s.highlightCard} ${s.highlightCardCta}`} onClick={() => setReviewOnly(true)}>
             <span className={s.highlightLabel}>Needs review</span>
-            <strong>{insights.reviewCount}</strong>
+            <strong className="animate-count">{insights.reviewCount}</strong>
             <span>{insights.reviewCount === 1 ? 'Book' : 'Books'} waiting for cleanup</span>
           </button>
           <button
@@ -486,12 +484,12 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
             onClick={() => setStatusFilter('reading')}
           >
             <span className={s.highlightLabel}>Currently reading</span>
-            <strong>{insights.readingCount}</strong>
+            <strong className="animate-count">{insights.readingCount}</strong>
             <span>{insights.currentlyReading?.title ?? 'Nothing in progress yet'}</span>
           </button>
           <div className={`glass ${s.highlightCard}`}>
             <span className={s.highlightLabel}>Completion rate</span>
-            <strong>{insights.completionRate}%</strong>
+            <strong className="animate-count">{insights.completionRate}%</strong>
             <span>{insights.totalBooks} books in your library</span>
           </div>
         </div>
@@ -500,23 +498,23 @@ export default function LibraryList({ onManageData, onStartScanning, initialOpen
       {showStats && (
         <div className={`glass ${s.stats}`}>
           <div className={s.statItem}>
-            <div className={s.statValue}>{insights.totalBooks}</div>
+            <div className={`${s.statValue} animate-count`}>{insights.totalBooks}</div>
             <div className={s.statLabel}>Total Books</div>
           </div>
           <div className={s.statItem}>
-            <div className={s.statValue}>{insights.pagesRead}</div>
+            <div className={`${s.statValue} animate-count`}>{insights.pagesRead}</div>
             <div className={s.statLabel}>Pages Read</div>
           </div>
           <div className={s.statItem}>
-            <div className={s.statValue}>{insights.toReadCount}</div>
+            <div className={`${s.statValue} animate-count`}>{insights.toReadCount}</div>
             <div className={s.statLabel}>To Read</div>
           </div>
           <div className={s.statItem}>
-            <div className={s.statValue}>{insights.readingCount}</div>
+            <div className={`${s.statValue} animate-count`}>{insights.readingCount}</div>
             <div className={s.statLabel}>Reading</div>
           </div>
           <div className={s.statItem}>
-            <div className={s.statValue}>{insights.readCount}</div>
+            <div className={`${s.statValue} animate-count`}>{insights.readCount}</div>
             <div className={s.statLabel}>Finished</div>
           </div>
         </div>

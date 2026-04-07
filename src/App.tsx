@@ -785,29 +785,35 @@ function App() {
 
         {!publicPage && view === 'library' && (
           <ErrorBoundary>
-            <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
-              <LibraryList
-                onManageData={() => handleViewChange('data')}
-                onStartScanning={() => handleViewChange('scan')}
-                initialOpenIsbn={openBookIsbn}
-                onOpenComplete={() => setOpenBookIsbn(null)}
-              />
+            <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} style={{ height: '120px' }} /><div className={styles.skeletonBlock} style={{ height: '44px', marginTop: '0.75rem', maxWidth: '400px' }} /><div className={styles.skeletonGrid}><span style={{ height: '180px' }} /><span style={{ height: '180px' }} /><span style={{ height: '180px' }} /></div></div>}>
+              <div key="library" className="view-enter">
+                <LibraryList
+                  onManageData={() => handleViewChange('data')}
+                  onStartScanning={() => handleViewChange('scan')}
+                  initialOpenIsbn={openBookIsbn}
+                  onOpenComplete={() => setOpenBookIsbn(null)}
+                />
+              </div>
             </Suspense>
           </ErrorBoundary>
         )}
 
         {!publicPage && view === 'data' && (
           <ErrorBoundary>
-            <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
-              <DataManagement onClose={() => handleViewChange('library')} />
+            <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} style={{ height: '48px' }} /><div className={styles.skeletonBlock} style={{ height: '200px', marginTop: '0.75rem' }} /></div>}>
+              <div key="data" className="view-enter">
+                <DataManagement onClose={() => handleViewChange('library')} />
+              </div>
             </Suspense>
           </ErrorBoundary>
         )}
 
         {!publicPage && view === 'profile' && (
           <ErrorBoundary>
-            <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
-              <ProfileSettings inline />
+            <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} style={{ height: '80px', borderRadius: '50%', width: '80px', margin: '0 auto' }} /><div className={styles.skeletonBlock} style={{ height: '24px', maxWidth: '200px', margin: '0.75rem auto 0' }} /><div className={styles.skeletonGrid}><span /><span /><span /><span /></div></div>}>
+              <div key="profile" className="view-enter">
+                <ProfileSettings inline />
+              </div>
             </Suspense>
           </ErrorBoundary>
         )}

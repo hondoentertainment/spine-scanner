@@ -58,6 +58,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
   const { setTheme } = useTheme();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
   const analyticsEvents = useAnalyticsStore((state) => state.events);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recompute summary when events array reference changes
   const scanStats = useMemo(() => useAnalyticsStore.getState().getSummary(), [analyticsEvents]);
   const displayName = profile?.username ?? profile?.displayName ?? user?.user_metadata?.full_name ?? user?.email ?? 'Local reader';
   const avatarUrl = profile?.avatarUrl ?? user?.user_metadata?.avatar_url ?? null;
