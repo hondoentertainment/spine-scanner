@@ -29,7 +29,7 @@ describe('exportToJSON / importFromJSON', () => {
     it('includes version and export date in JSON', () => {
         const json = exportToJSON([makeBook()]);
         const parsed = JSON.parse(json);
-        expect(parsed.version).toBe(2);
+        expect(parsed.version).toBe(3);
         expect(parsed.exportedAt).toBeDefined();
     });
 

@@ -10,10 +10,11 @@ import { isSupabaseConfigured } from '../lib/supabase.ts';
 import {
   X, User, Sun, Moon, Monitor, LayoutGrid, List, ArrowUpDown, Columns2,
   CheckCircle, Layers, BarChart3, Tag, BookOpen, Clock3, Bookmark, Flame, ScanLine,
-  Database, Share2,
+  Database, Share2, Target, Download,
 } from 'lucide-react';
 import type { ProfilePreferences } from '../types.ts';
 import { getShareBaseUrl } from '../utils/shareBook.ts';
+import { exportAccountSnapshot } from '../utils/exportFormats.ts';
 import { useToast } from './Toast.tsx';
 import s from './ProfileSettings.module.css';
 
@@ -342,6 +343,65 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
             <Share2 size={16} aria-hidden />
             Copy library link
           </button>
+          <button
+            type="button"
+            className={s.optBtn}
+            onClick={() => {
+              const json = exportAccountSnapshot(books, shelves, preferences);
+              const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+              const u = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              const date = new Date().toISOString().slice(0, 10);
+              a.href = u;
+              a.download = `spinescanner_account_${date}.json`;
+              a.click();
+              URL.revokeObjectURL(u);
+              toast('Account data downloaded', 'success');
+            }}
+          >
+            <Download size={16} aria-hidden />
+            Download my data (JSON)
+          </button>
+        </div>
+      </div>
+
+      <div className={s.section}>
+        <h3 className={s.sectionTitle}>
+          <Target size={18} style={{ verticalAlign: 'middle', marginRight: 6 }} aria-hidden />
+          Reading goals ({new Date().getFullYear()})
+        </h3>
+        <p className={s.sectionHint}>Optional targets for books and pages finished this calendar year. Shown on Home when set.</p>
+        <div className={s.field}>
+          <label className={s.label} htmlFor="goal-books">Books finished (year)</label>
+          <input
+            id="goal-books"
+            className={s.textInput}
+            type="number"
+            min={0}
+            inputMode="numeric"
+            placeholder="Off"
+            value={preferences.readingGoalBooksPerYear ?? ''}
+            onChange={(e) => {
+              const v = e.target.value;
+              updatePreferences({ readingGoalBooksPerYear: v === '' ? null : Math.max(0, parseInt(v, 10) || 0) });
+            }}
+          />
+        </div>
+        <div className={s.field}>
+          <label className={s.label} htmlFor="goal-pages">Pages finished (year)</label>
+          <input
+            id="goal-pages"
+            className={s.textInput}
+            type="number"
+            min={0}
+            inputMode="numeric"
+            placeholder="Off"
+            value={preferences.readingGoalPagesPerYear ?? ''}
+            onChange={(e) => {
+              const v = e.target.value;
+              updatePreferences({ readingGoalPagesPerYear: v === '' ? null : Math.max(0, parseInt(v, 10) || 0) });
+            }}
+          />
         </div>
       </div>
 
@@ -440,6 +500,18 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
             <span className={s.toggleHint}>Stay on scanner after each add</span>
           </div>
           {preferences.batchModeDefault && <CheckCircle size={18} className={s.check} />}
+        </button>
+        <button
+          type="button"
+          onClick={() => updatePreferences({ warnOnDuplicateIsbn: !preferences.warnOnDuplicateIsbn })}
+          className={`${s.toggleRow} ${preferences.warnOnDuplicateIsbn ? s.toggleRowActive : ''}`}
+        >
+          <BookOpen size={18} />
+          <div className={s.toggleLabel}>
+            <span>Warn on duplicate ISBN</span>
+            <span className={s.toggleHint}>Turn off only if you intentionally keep multiple copies</span>
+          </div>
+          {preferences.warnOnDuplicateIsbn && <CheckCircle size={18} className={s.check} />}
         </button>
       </div>
 

@@ -248,3 +248,60 @@
   font-weight: 600;
   border-radius: 0.5rem;
 }
+
+.duplicateStack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.duplicateCard {
+  padding: 1rem 1.1rem;
+  border-radius: 0.75rem;
+}
+
+.duplicateHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.65rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.duplicateHead strong {
+  color: var(--text-main);
+  font-size: 0.95rem;
+}
+
+.duplicateList {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.duplicateRow {
+  margin: 0;
+}
+
+.duplicateLabel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.duplicateTitle {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.duplicateAuthor {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}

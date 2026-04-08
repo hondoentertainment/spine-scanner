@@ -102,6 +102,163 @@
   color: var(--text-muted);
 }
 
+.syncStrip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.syncIcon {
+  flex-shrink: 0;
+  color: var(--accent-blue);
+}
+
+.goals {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem;
+}
+
+.goalRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.goalMeta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.goalTrack {
+  height: 8px;
+  border-radius: 9999px;
+  background: rgba(148, 163, 184, 0.2);
+  overflow: hidden;
+}
+
+.goalFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+  transition: width 0.35s ease;
+}
+
+.goalLink {
+  align-self: flex-start;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent-blue);
+  cursor: pointer;
+  text-decoration: underline;
+  touch-action: manipulation;
+}
+
+.reviewBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.reviewBannerBody {
+  flex: 1 1 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.reviewBannerBody strong {
+  color: var(--text-main);
+  font-size: 0.92rem;
+}
+
+.reviewBannerBtn {
+  min-height: 40px;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  border: none;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: white;
+  background: linear-gradient(135deg, var(--accent-blue), var(--primary));
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.suggestionsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.suggestionList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.suggestionCard {
+  width: 100%;
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  text-align: left;
+  align-items: center;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.suggestionCover {
+  width: 2.75rem;
+  height: 4rem;
+  border-radius: 0.4rem;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.suggestionReason {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-purple);
+  margin-bottom: 0.15rem;
+}
+
+.suggestionTitle {
+  display: block;
+  font-weight: 700;
+  font-size: 0.92rem;
+  line-height: 1.25;
+}
+
+.suggestionAuthor {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 .storiesSection,
 .feedSection {
   display: flex;

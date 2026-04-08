@@ -165,6 +165,20 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
             <h3>Your controls</h3>
             <p>You can export your library, clear local analytics, sign out of sync, or remove local browser storage at any time from the app’s data tools.</p>
           </article>
+          <article className={styles.card}>
+            <h3>Reading goals, series, and highlights</h3>
+            <p>
+              Optional yearly book and page targets, series labels, and saved quotes live only in your library data. They are included in JSON backups
+              and in the optional “download my data” export from Profile when you choose to download it.
+            </p>
+          </article>
+          <article className={styles.card}>
+            <h3>Duplicates and merging</h3>
+            <p>
+              If the same ISBN appears more than once, you can merge rows in Import &amp; export. That combines shelves, notes, and highlights into the
+              entry you keep; other rows are removed from your library.
+            </p>
+          </article>
         </div>
       )}
 

@@ -466,6 +466,16 @@
   letter-spacing: 0.05em;
 }
 
+.textInput {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-main);
+  font-size: 0.9rem;
+  max-width: 14rem;
+}
+
 .optionRow {
   display: flex;
   flex-wrap: wrap;

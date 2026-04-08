@@ -18,6 +18,12 @@ export interface BookEntry {
   startedAt?: string | null;
   finishedAt?: string | null;
   lastProgressAt?: string | null;
+  /** Optional series / collection label (e.g. "The Expanse"). */
+  seriesName?: string;
+  /** Volume number within the series, when known. */
+  seriesIndex?: number;
+  /** Short quotes or reading notes kept as separate lines. */
+  highlights?: string[];
 }
 
 export interface Shelf {
@@ -77,6 +83,12 @@ export interface ProfilePreferences {
   onboardingCompleted: boolean;
   smartShelves: SmartShelf[];
   savedViews: SavedView[];
+  /** Target finished books this calendar year; null disables the goal. */
+  readingGoalBooksPerYear: number | null;
+  /** Target pages finished this calendar year; null disables the goal. */
+  readingGoalPagesPerYear: number | null;
+  /** When true, warn before adding a second copy of the same ISBN. */
+  warnOnDuplicateIsbn: boolean;
 }
 
 export const DEFAULT_PREFERENCES: ProfilePreferences = {
@@ -91,4 +103,7 @@ export const DEFAULT_PREFERENCES: ProfilePreferences = {
   onboardingCompleted: false,
   smartShelves: [],
   savedViews: [],
+  readingGoalBooksPerYear: null,
+  readingGoalPagesPerYear: null,
+  warnOnDuplicateIsbn: true,
 };

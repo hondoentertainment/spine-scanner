@@ -53,6 +53,14 @@ export const useProfileStore = create<ProfileStore>()(
     {
       name: STORAGE_KEY,
       partialize: (state) => ({ preferences: state.preferences }),
+      merge: (persisted, current) => {
+        const p = persisted as Partial<ProfileStore> | undefined;
+        return {
+          ...current,
+          ...p,
+          preferences: { ...DEFAULT_PREFERENCES, ...current.preferences, ...p?.preferences },
+        };
+      },
     }
   )
 );

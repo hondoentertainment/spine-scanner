@@ -22,6 +22,7 @@ import { isbnExistsInLibrary } from './utils/libraryUtils.ts';
 import { useAnalyticsStore } from './store/useAnalyticsStore.ts';
 import { getLibraryInsights } from './utils/bookPresentation.ts';
 import PublicInfoPage, { type PublicPage } from './components/PublicInfoPage.tsx';
+import PwaInstallPrompt from './components/PwaInstallPrompt.tsx';
 import OnboardingModal from './components/OnboardingModal.tsx';
 import { DEFAULT_ONBOARDING_STEPS } from './components/onboardingContent.tsx';
 import { addBreadcrumb, captureException, isEnabled as isMonitoringEnabled, setTag, setUser as setMonitoringUser } from './lib/errorMonitoring.ts';
@@ -483,7 +484,7 @@ function App() {
     const isChecksumValid = isValidIsbn(normalizedInput);
     const canReviewInvalid = options.allowReview === true && !isChecksumValid;
 
-    if (isbnExistsInLibrary(normalizedInput, books)) {
+    if (preferences.warnOnDuplicateIsbn !== false && isbnExistsInLibrary(normalizedInput, books)) {
       if (batchMode && options.source !== 'manual') {
         toast('Already in your library. Keep scanning.', 'info');
         return;
@@ -678,7 +679,7 @@ function App() {
               <NavLink
                 to="/library"
                 end
-                aria-label="Movie library"
+                aria-label="Book library"
                 className={({ isActive }) =>
                   `${styles.headerQuickLink} ${isActive ? styles.headerQuickLinkActive : ''}`.trim()}
                 onClick={() => {
@@ -689,7 +690,7 @@ function App() {
                 onFocus={() => { void preloadLibrary(); }}
               >
                 <Library size={16} strokeWidth={2} aria-hidden />
-                <span className={styles.headerQuickLinkText}>Movie library</span>
+                <span className={styles.headerQuickLinkText}>Book library</span>
               </NavLink>
               <NavLink
                 to="/scan"
@@ -1014,6 +1015,8 @@ function App() {
           onComplete={completeOnboarding}
         />
       )}
+
+      <PwaInstallPrompt />
 
       <footer className={`glass ${styles.siteFooter}`}>
         <div>

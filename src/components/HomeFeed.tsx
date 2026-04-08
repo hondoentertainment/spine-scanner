@@ -1,8 +1,12 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Library, ScanLine, Sparkles, Clock } from 'lucide-react';
+import { BookOpen, Library, ScanLine, Sparkles, Clock, Target, Cloud, Inbox, Lightbulb } from 'lucide-react';
 import { useBookStore } from '../store/useBookStore.ts';
+import { useProfileStore } from '../store/useProfileStore.ts';
+import { useAuthStore } from '../store/useAuthStore.ts';
+import { useSyncQueue } from '../store/useSyncQueue.ts';
 import { getBookCoverSrc, getLibraryInsights } from '../utils/bookPresentation.ts';
+import { formatRelativeTime } from '../utils/formatRelativeTime.ts';
 import type { BookEntry } from '../types.ts';
 import s from './HomeFeed.module.css';
 
@@ -27,6 +31,10 @@ function formatAdded(dateIso: string): string {
 export default function HomeFeed() {
   const navigate = useNavigate();
   const books = useBookStore((state) => state.books);
+  const { preferences } = useProfileStore();
+  const user = useAuthStore((state) => state.user);
+  const pendingChanges = useSyncQueue((state) => state.pendingChanges);
+  const lastSyncedAt = useSyncQueue((state) => state.lastSyncedAt);
   const insights = useMemo(() => getLibraryInsights(books), [books]);
 
   const sortedRecent = useMemo(
@@ -41,6 +49,35 @@ export default function HomeFeed() {
   }, [books, sortedRecent]);
 
   const strip = sortedRecent.slice(0, 12);
+
+  const bookGoal = preferences.readingGoalBooksPerYear;
+  const pageGoal = preferences.readingGoalPagesPerYear;
+  const showBookGoal = bookGoal != null && bookGoal > 0;
+  const showPageGoal = pageGoal != null && pageGoal > 0;
+  const bookGoalTarget = showBookGoal ? bookGoal : 0;
+  const pageGoalTarget = showPageGoal ? pageGoal : 0;
+  const bookGoalPct = showBookGoal ? Math.min(100, Math.round((insights.finishedThisYear / bookGoalTarget) * 100)) : 0;
+  const pageGoalPct = showPageGoal ? Math.min(100, Math.round((insights.pagesReadThisYear / pageGoalTarget) * 100)) : 0;
+
+  const suggestions = useMemo(() => {
+    const out: { book: BookEntry; reason: string }[] = [];
+    const reading = books.filter((b) => b.status === 'reading');
+    reading
+      .sort((a, b) => b.dateAdded.localeCompare(a.dateAdded))
+      .slice(0, 2)
+      .forEach((b) => out.push({ book: b, reason: 'Continue reading' }));
+    books
+      .filter((b) => b.status === 'to-read')
+      .sort((a, b) => b.dateAdded.localeCompare(a.dateAdded))
+      .slice(0, 3)
+      .forEach((b) => out.push({ book: b, reason: 'From your want-to-read list' }));
+    const seen = new Set<string>();
+    return out.filter((item) => {
+      if (seen.has(item.book.id)) return false;
+      seen.add(item.book.id);
+      return true;
+    }).slice(0, 5);
+  }, [books]);
 
   return (
     <div className={s.wrap}>
@@ -79,6 +116,99 @@ export default function HomeFeed() {
           <span className={s.statLabel}>Done</span>
         </div>
       </section>
+
+      {user && (pendingChanges > 0 || lastSyncedAt) && (
+        <div className={`glass ${s.syncStrip}`} aria-live="polite">
+          <Cloud size={16} className={s.syncIcon} aria-hidden />
+          <span>
+            {pendingChanges > 0
+              ? `${pendingChanges} local change${pendingChanges === 1 ? '' : 's'} waiting to sync`
+              : lastSyncedAt
+                ? `Last synced ${formatRelativeTime(lastSyncedAt)}`
+                : 'Cloud sync ready'}
+          </span>
+        </div>
+      )}
+
+      {(showBookGoal || showPageGoal) && (
+        <section className={`glass ${s.goals}`} aria-label="Reading goals this year">
+          <div className={s.sectionHead}>
+            <Target size={16} aria-hidden />
+            <h2 className={s.sectionTitle}>{new Date().getFullYear()} goals</h2>
+          </div>
+          {showBookGoal && (
+            <div className={s.goalRow}>
+              <div className={s.goalMeta}>
+                <span>Books finished</span>
+                <span>
+                  {insights.finishedThisYear} / {bookGoalTarget}
+                </span>
+              </div>
+              <div className={s.goalTrack} role="progressbar" aria-valuenow={bookGoalPct} aria-valuemin={0} aria-valuemax={100}>
+                <span className={s.goalFill} style={{ width: `${bookGoalPct}%` }} />
+              </div>
+            </div>
+          )}
+          {showPageGoal && (
+            <div className={s.goalRow}>
+              <div className={s.goalMeta}>
+                <span>Pages finished</span>
+                <span>
+                  {insights.pagesReadThisYear.toLocaleString()} / {pageGoalTarget.toLocaleString()}
+                </span>
+              </div>
+              <div className={s.goalTrack} role="progressbar" aria-valuenow={pageGoalPct} aria-valuemin={0} aria-valuemax={100}>
+                <span className={s.goalFill} style={{ width: `${pageGoalPct}%` }} />
+              </div>
+            </div>
+          )}
+          <button type="button" className={s.goalLink} onClick={() => navigate('/profile')}>
+            Adjust goals in profile
+          </button>
+        </section>
+      )}
+
+      {insights.reviewCount > 0 && (
+        <div className={`glass ${s.reviewBanner}`}>
+          <Inbox size={18} aria-hidden />
+          <div className={s.reviewBannerBody}>
+            <strong>Review queue</strong>
+            <span>
+              {insights.reviewCount} book{insights.reviewCount === 1 ? '' : 's'} need a quick metadata check.
+            </span>
+          </div>
+          <button type="button" className={s.reviewBannerBtn} onClick={() => navigate('/library?review=1')}>
+            Open queue
+          </button>
+        </div>
+      )}
+
+      {suggestions.length > 0 && (
+        <section className={s.suggestionsSection} aria-label="Suggestions">
+          <div className={s.sectionHead}>
+            <Lightbulb size={16} aria-hidden />
+            <h2 className={s.sectionTitle}>Suggestions</h2>
+          </div>
+          <ul className={s.suggestionList}>
+            {suggestions.map(({ book, reason }) => (
+              <li key={book.id}>
+                <button
+                  type="button"
+                  className={`glass ${s.suggestionCard}`}
+                  onClick={() => navigate(`/library?isbn=${encodeURIComponent(book.isbn)}`)}
+                >
+                  <img src={getBookCoverSrc(book.coverImg)} alt="" className={s.suggestionCover} loading="lazy" decoding="async" />
+                  <div>
+                    <span className={s.suggestionReason}>{reason}</span>
+                    <span className={s.suggestionTitle}>{book.title}</span>
+                    <span className={s.suggestionAuthor}>{book.author}</span>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {strip.length > 0 && (
         <section className={s.storiesSection} aria-label="Recently added">

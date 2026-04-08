@@ -56,6 +56,8 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
     isbn: book.isbn,
     pageCount: book.pageCount,
     coverImg: book.coverImg,
+    seriesName: book.seriesName ?? '',
+    seriesIndex: book.seriesIndex != null ? String(book.seriesIndex) : '',
   });
 
   const bookShelfIds = book.shelfIds || [];
@@ -71,11 +73,15 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
       isbn: book.isbn,
       pageCount: book.pageCount,
       coverImg: book.coverImg,
+      seriesName: book.seriesName ?? '',
+      seriesIndex: book.seriesIndex != null ? String(book.seriesIndex) : '',
     });
     setEditing(true);
   };
 
   const handleSave = () => {
+    const idxRaw = draft.seriesIndex.trim();
+    const parsedIdx = idxRaw === '' ? undefined : Number(idxRaw);
     updateBook(book.id, {
       title: draft.title.trim() || book.title,
       author: draft.author.trim() || book.author,
@@ -83,6 +89,8 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
       pageCount: draft.pageCount || 0,
       coverImg: draft.coverImg.trim(),
       amazonLink: generateAmazonLink(draft.isbn.trim() || book.isbn),
+      seriesName: draft.seriesName.trim() || undefined,
+      seriesIndex: parsedIdx !== undefined && Number.isFinite(parsedIdx) ? parsedIdx : undefined,
     });
     setEditing(false);
     toast('Book updated', 'success');
@@ -103,6 +111,19 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
       toast('Book removed', 'info');
     }
   };
+
+  useEffect(() => {
+    if (editing) return;
+    setDraft({
+      title: book.title,
+      author: book.author,
+      isbn: book.isbn,
+      pageCount: book.pageCount,
+      coverImg: book.coverImg,
+      seriesName: book.seriesName ?? '',
+      seriesIndex: book.seriesIndex != null ? String(book.seriesIndex) : '',
+    });
+  }, [book, editing]);
 
   useEffect(() => {
     if (!showShelfPicker) return;
@@ -179,6 +200,27 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                     />
                   </div>
                 </div>
+                <div className={styles.row}>
+                  <div style={{ flex: 1 }}>
+                    <label className={styles.label}>Series</label>
+                    <input
+                      className={styles.input}
+                      value={draft.seriesName}
+                      onChange={(e) => setDraft({ ...draft, seriesName: e.target.value })}
+                      placeholder="Optional"
+                    />
+                  </div>
+                  <div style={{ width: '90px' }}>
+                    <label className={styles.label}>Vol.#</label>
+                    <input
+                      className={styles.input}
+                      inputMode="decimal"
+                      value={draft.seriesIndex}
+                      onChange={(e) => setDraft({ ...draft, seriesIndex: e.target.value })}
+                      placeholder="—"
+                    />
+                  </div>
+                </div>
                 <label className={styles.label}>Cover URL</label>
                 <input
                   className={styles.input}
@@ -209,6 +251,13 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
               <div className={styles.metaBelow}>
                 <h2 className={styles.title}>{book.title}</h2>
                 <p className={styles.author}>{book.author}</p>
+                {(book.seriesName || book.seriesIndex != null) && (
+                  <p className={styles.seriesLine}>
+                    {book.seriesName}
+                    {book.seriesName && book.seriesIndex != null ? ' · ' : ''}
+                    {book.seriesIndex != null ? `Book ${book.seriesIndex}` : ''}
+                  </p>
+                )}
                 <div className={styles.details}>
                   {!isBookPhotoOnly(book) && <span>ISBN: {book.isbn}</span>}
                   {book.pageCount > 0 && <span>{book.pageCount} pages</span>}
@@ -342,6 +391,20 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
           value={book.notes}
           onChange={(e) => updateBookNotes(book.id, e.target.value)}
           className={styles.notes}
+        />
+
+        <label className={styles.highlightsLabel} htmlFor={`highlights-${book.id}`}>
+          Highlights & quotes
+        </label>
+        <textarea
+          id={`highlights-${book.id}`}
+          placeholder="One quote or highlight per paragraph (blank line between entries)..."
+          value={(book.highlights ?? []).join('\n\n')}
+          onChange={(e) => {
+            const parts = e.target.value.split(/\n\n+/).map((s) => s.trim()).filter(Boolean);
+            updateBook(book.id, { highlights: parts });
+          }}
+          className={styles.highlights}
         />
 
         {/* Actions */}

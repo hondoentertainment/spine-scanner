@@ -3,6 +3,30 @@ import { persist } from 'zustand/middleware';
 import type { BookEntry, Shelf } from '../types.ts';
 import { normalizeBookEntry, normalizeBooks, updateBookForStatus, updateBookProgress } from '../utils/bookState.ts';
 
+function pickBetterTitle(a: string, b: string): string {
+  const ta = a.trim();
+  const tb = b.trim();
+  const la = ta.toLowerCase();
+  const lb = tb.toLowerCase();
+  if (!tb) return ta;
+  if (!ta) return tb;
+  if (la === 'unknown title' || la === 'review isbn entry') return tb;
+  if (lb === 'unknown title' || lb === 'review isbn entry') return ta;
+  return ta.length >= tb.length ? ta : tb;
+}
+
+function pickBetterAuthor(a: string, b: string): string {
+  const ta = a.trim();
+  const tb = b.trim();
+  const la = ta.toLowerCase();
+  const lb = tb.toLowerCase();
+  if (!tb) return ta;
+  if (!ta) return tb;
+  if (la === 'unknown author' || la === 'manual entry') return tb;
+  if (lb === 'unknown author' || lb === 'manual entry') return ta;
+  return ta.length >= tb.length ? ta : tb;
+}
+
 interface BookStore {
   books: BookEntry[];
   shelves: Shelf[];
@@ -25,6 +49,8 @@ interface BookStore {
   setShelves: (shelves: Shelf[]) => void;
   assignShelf: (bookId: string, shelfId: string) => void;
   unassignShelf: (bookId: string, shelfId: string) => void;
+  /** Merge duplicate rows into one entry (keep `keepId`, drop others). */
+  mergeBooks: (keepId: string, removeIds: string[]) => void;
 }
 
 export const useBookStore = create<BookStore>()(
@@ -119,6 +145,31 @@ export const useBookStore = create<BookStore>()(
               : b
           ),
         })),
+      mergeBooks: (keepId, removeIds) =>
+        set((state) => {
+          const keep = state.books.find((b) => b.id === keepId);
+          if (!keep) return state;
+          const toRemove = new Set(removeIds.filter((id) => id !== keepId));
+          let merged: BookEntry = { ...keep };
+          for (const other of state.books) {
+            if (!toRemove.has(other.id)) continue;
+            merged = {
+              ...merged,
+              title: pickBetterTitle(merged.title, other.title),
+              author: pickBetterAuthor(merged.author, other.author),
+              pageCount: Math.max(merged.pageCount || 0, other.pageCount || 0),
+              coverImg: merged.coverImg?.trim() ? merged.coverImg : other.coverImg,
+              shelfIds: [...new Set([...(merged.shelfIds || []), ...(other.shelfIds || [])])],
+              notes: [merged.notes, other.notes].filter((n) => n?.trim()).join('\n---\n'),
+              highlights: [...(merged.highlights || []), ...(other.highlights || [])],
+              seriesName: merged.seriesName?.trim() || other.seriesName?.trim() || undefined,
+              seriesIndex: merged.seriesIndex ?? other.seriesIndex,
+              amazonLink: merged.amazonLink?.trim() ? merged.amazonLink : other.amazonLink,
+            };
+          }
+          const rest = state.books.filter((b) => b.id !== keepId && !toRemove.has(b.id));
+          return { books: [normalizeBookEntry(merged), ...rest] };
+        }),
     }),
     {
       name: 'spine-scanner-storage',

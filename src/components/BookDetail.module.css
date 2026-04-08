@@ -121,7 +121,14 @@
 .author {
   font-size: 0.95rem;
   color: var(--text-muted);
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.seriesLine {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent-purple);
+  margin: 0 0 0.75rem;
 }
 
 .details {
@@ -446,6 +453,35 @@
 
 .notes:focus {
   border-color: var(--accent-blue);
+}
+
+.highlightsLabel {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 0.75rem 0 0.35rem;
+}
+
+.highlights {
+  width: 100%;
+  min-height: 88px;
+  padding: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--text-main);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
+  resize: vertical;
+  font-family: inherit;
+  outline: none;
+  margin-bottom: 0.5rem;
+}
+
+.highlights:focus {
+  border-color: var(--accent-purple);
 }
 
 /* ---- Actions ---- */

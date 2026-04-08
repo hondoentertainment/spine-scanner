@@ -16,26 +16,32 @@ test.describe('SpineScanner release smoke', () => {
 
   test('loads the app shell and primary navigation', async ({ page }) => {
     await expect(page.getByRole('heading', { level: 1, name: /spinescanner/i })).toBeVisible();
+    await expect(page.getByTestId(uiContracts.navTabTestId('home'))).toBeVisible();
     await expect(page.getByTestId(uiContracts.navTabTestId('scan'))).toBeVisible();
     await expect(page.getByTestId(uiContracts.navTabTestId('library'))).toBeVisible();
-    await expect(page.getByTestId(uiContracts.navTabTestId('data'))).toBeVisible();
     await expect(page.getByTestId(uiContracts.navTabTestId('profile'))).toBeVisible();
   });
 
-  test('scanner view is visible by default and manual ISBN entry works', async ({ page }) => {
+  test('home feed is the default route', async ({ page }) => {
+    await expect(page.getByRole('heading', { name: /^Home$/ })).toBeVisible();
+  });
+
+  test('scanner view and manual ISBN entry work from the nav', async ({ page }) => {
+    await page.getByTestId(uiContracts.navTabTestId('scan')).click();
     await expect(page.getByRole('heading', { name: /three easy ways to capture a book/i })).toBeVisible();
     await page.getByTestId(uiContracts.scannerTypeIsbnTestId).first().click();
     await expect(page.getByTestId(uiContracts.scannerManualInputTestId)).toBeVisible();
   });
 
-  test('library view shows the new empty-state flow', async ({ page }) => {
+  test('library view shows the empty-state flow', async ({ page }) => {
     await page.getByTestId(uiContracts.navTabTestId('library')).click();
-    await expect(page.getByRole('heading', { name: /0 books ready to browse/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /start your library/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /add your first book/i })).toBeVisible();
   });
 
-  test('data and profile views load', async ({ page }) => {
-    await page.getByTestId(uiContracts.navTabTestId('data')).click();
+  test('data route and profile load', async ({ page }) => {
+    await page.goto('/data');
+    await dismissOnboardingIfPresent(page);
     await expect(page.getByRole('heading', { name: /import & export/i })).toBeVisible();
 
     await page.getByTestId(uiContracts.navTabTestId('profile')).click();

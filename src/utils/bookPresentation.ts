@@ -17,6 +17,8 @@ export interface LibraryInsights {
   currentlyReading: BookEntry | null;
   /** Books marked read with `finishedAt` in the current calendar year. */
   finishedThisYear: number;
+  /** Sum of page counts for books finished this calendar year. */
+  pagesReadThisYear: number;
 }
 
 export function getBookCoverSrc(coverImg?: string): string {
@@ -41,10 +43,12 @@ export function getLibraryInsights(books: BookEntry[]): LibraryInsights {
       .sort((a, b) => Date.parse(b.dateAdded) - Date.parse(a.dateAdded))[0] ?? null;
 
   const calendarYear = new Date().getFullYear();
-  const finishedThisYear = books.filter((book) => {
+  const finishedThisYearBooks = books.filter((book) => {
     if (book.status !== 'read' || !book.finishedAt) return false;
     return new Date(book.finishedAt).getFullYear() === calendarYear;
-  }).length;
+  });
+  const finishedThisYear = finishedThisYearBooks.length;
+  const pagesReadThisYear = finishedThisYearBooks.reduce((sum, book) => sum + (book.pageCount || 0), 0);
 
   return {
     totalBooks: books.length,
@@ -59,6 +63,7 @@ export function getLibraryInsights(books: BookEntry[]): LibraryInsights {
     recentlyAdded,
     currentlyReading,
     finishedThisYear,
+    pagesReadThisYear,
   };
 }
 

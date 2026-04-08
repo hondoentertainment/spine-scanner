@@ -33,10 +33,19 @@ export function normalizeBookEntry(book: BookEntry): BookEntry {
     ? book.startedAt ?? book.dateAdded
     : null;
 
+  const rawHighlights = Array.isArray(book.highlights)
+    ? book.highlights.filter((h): h is string => typeof h === 'string').map((h) => h.trim()).filter(Boolean)
+    : [];
+  const seriesNameRaw = typeof book.seriesName === 'string' ? book.seriesName.trim() : '';
+  const seriesIndexRaw = typeof book.seriesIndex === 'number' && !Number.isNaN(book.seriesIndex) ? book.seriesIndex : undefined;
+
   return {
     ...book,
     isPhotoOnly: book.isPhotoOnly === true,
     shelfIds: Array.isArray(book.shelfIds) ? book.shelfIds : [],
+    highlights: rawHighlights,
+    seriesName: seriesNameRaw || undefined,
+    seriesIndex: seriesIndexRaw,
     needsReview: inferNeedsReview(book),
     reviewReason: book.reviewReason ?? '',
     pagesFinished: book.status === 'read' && pageCount > 0 ? pageCount : pagesFinished,

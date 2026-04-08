@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useBookLookup } from '../hooks/useBookLookup.ts';
 import { useToast } from './Toast.tsx';
@@ -7,8 +7,9 @@ import type { ImportResult } from '../utils/importLogic.ts';
 import { normalizeToIsbn13 } from '../utils/isbnValidation.ts';
 import { isbnExistsInLibrary, isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { exportToGoodreadsCSV } from '../utils/goodreadsExport.ts';
-import { exportToJSON, importFromJSON, exportToLibraryThingTSV, exportToStoryGraphCSV } from '../utils/exportFormats.ts';
-import { Download, Upload, Trash2, Globe, CheckCircle, Loader2, X } from 'lucide-react';
+import { exportToJSON, importFromJSON, exportToLibraryThingTSV, exportToStoryGraphCSV, exportToHTML } from '../utils/exportFormats.ts';
+import { findDuplicateIsbnGroups } from '../utils/libraryDuplicates.ts';
+import { Download, Upload, Trash2, Globe, CheckCircle, Loader2, X, GitMerge } from 'lucide-react';
 import type { BookEntry } from '../types.ts';
 import s from './DataManagement.module.css';
 
@@ -16,10 +17,10 @@ interface DataManagementProps {
     onClose?: () => void;
 }
 
-type ExportFormat = 'json' | 'goodreads' | 'librarything' | 'storygraph';
+type ExportFormat = 'json' | 'html' | 'goodreads' | 'librarything' | 'storygraph';
 
 const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
-    const { books, shelves, addBook, removeBook, setShelves } = useBookStore();
+    const { books, shelves, addBook, removeBook, setShelves, mergeBooks } = useBookStore();
     const { lookupByIsbn } = useBookLookup();
     const { toast } = useToast();
 
@@ -31,6 +32,17 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
     const [exportFormat, setExportFormat] = useState<ExportFormat>('json');
     const [deleteConfirmStep, setDeleteConfirmStep] = useState<'idle' | 'confirm'>('idle');
     const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+    const duplicateGroups = useMemo(() => findDuplicateIsbnGroups(books), [books]);
+    const [mergeKeepers, setMergeKeepers] = useState<Record<string, string>>({});
+
+    const keeperForGroup = useCallback(
+        (key: string, groupBooks: BookEntry[]) => {
+            const pick = mergeKeepers[key];
+            if (pick && groupBooks.some((b) => b.id === pick)) return pick;
+            return groupBooks[0].id;
+        },
+        [mergeKeepers],
+    );
 
     const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -157,6 +169,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
         const date = new Date().toISOString().split('T')[0];
         switch (exportFormat) {
             case 'json': downloadFile(exportToJSON(books, shelves), `spinescanner_${date}.json`, 'application/json'); break;
+            case 'html': downloadFile(exportToHTML(books, shelves), `spinescanner_${date}.html`, 'text/html'); break;
             case 'goodreads': downloadFile(exportToGoodreadsCSV(books), `spinescanner_goodreads_${date}.csv`, 'text/csv'); break;
             case 'librarything': downloadFile(exportToLibraryThingTSV(books), `spinescanner_librarything_${date}.tsv`, 'text/tab-separated-values'); break;
             case 'storygraph': downloadFile(exportToStoryGraphCSV(books), `spinescanner_storygraph_${date}.csv`, 'text/csv'); break;
@@ -198,7 +211,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                     Back up your collection. JSON preserves all data; CSV formats are for importing into other services.
                 </p>
                 <div className={s.formatRow}>
-                    {([['json', 'JSON (Full Backup)'], ['goodreads', 'Goodreads CSV'], ['librarything', 'LibraryThing TSV'], ['storygraph', 'StoryGraph CSV']] as [ExportFormat, string][]).map(([fmt, label]) => (
+                    {([['json', 'JSON (Full Backup)'], ['html', 'HTML (Print-friendly)'], ['goodreads', 'Goodreads CSV'], ['librarything', 'LibraryThing TSV'], ['storygraph', 'StoryGraph CSV']] as [ExportFormat, string][]).map(([fmt, label]) => (
                         <button key={fmt} onClick={() => setExportFormat(fmt)} className={`glass ${s.formatBtn}`}
                             style={{
                                 color: exportFormat === fmt ? 'var(--accent-blue)' : 'var(--text-muted)',
@@ -212,6 +225,58 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                     Export ({exportFormat.toUpperCase()})
                 </button>
             </section>
+
+            {duplicateGroups.length > 0 && (
+                <section className={s.sectionBorder} aria-label="Duplicate ISBN entries">
+                    <h3 className={s.sectionTitle}>
+                        <GitMerge size={20} style={{ color: '#f59e0b' }} /> Duplicate ISBNs
+                    </h3>
+                    <p className={s.sectionDesc}>
+                        These entries share the same ISBN. Pick the row to keep; others are merged into it (shelves, notes, and highlights combine).
+                    </p>
+                    <div className={s.duplicateStack}>
+                        {duplicateGroups.map((group) => {
+                            const keeper = keeperForGroup(group.key, group.books);
+                            return (
+                                <div key={group.key} className={`glass ${s.duplicateCard}`}>
+                                    <div className={s.duplicateHead}>
+                                        <strong>ISBN {group.key}</strong>
+                                        <span>{group.books.length} copies</span>
+                                    </div>
+                                    <ul className={s.duplicateList}>
+                                        {group.books.map((b) => (
+                                            <li key={b.id} className={s.duplicateRow}>
+                                                <label className={s.duplicateLabel}>
+                                                    <input
+                                                        type="radio"
+                                                        name={`merge-${group.key}`}
+                                                        checked={keeper === b.id}
+                                                        onChange={() => setMergeKeepers((m) => ({ ...m, [group.key]: b.id }))}
+                                                    />
+                                                    <span className={s.duplicateTitle}>{b.title}</span>
+                                                    <span className={s.duplicateAuthor}>{b.author}</span>
+                                                </label>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    <button
+                                        type="button"
+                                        className={`glass ${s.exportBtn}`}
+                                        onClick={() => {
+                                            const remove = group.books.filter((b) => b.id !== keeper).map((b) => b.id);
+                                            if (remove.length === 0) return;
+                                            mergeBooks(keeper, remove);
+                                            toast('Merged duplicate entries', 'success');
+                                        }}
+                                    >
+                                        Merge into selected
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
+            )}
 
             {/* File import */}
             <section className={s.sectionBorder}>

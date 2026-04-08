@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   ArrowUpDown,
@@ -84,6 +84,7 @@ const SORT_OPTIONS: Array<{ value: SortField; label: string }> = [
 
 export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenComplete }: LibraryListProps) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     books,
     shelves,
@@ -144,6 +145,14 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
       // ignore
     }
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('review') !== '1') return;
+    setReviewOnly(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('review');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     if (librarySegment === 'shelves') {
