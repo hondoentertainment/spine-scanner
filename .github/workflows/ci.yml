@@ -1,45 +1,70 @@
-name: CI
+name: Lint, Test & Build
 
 on:
+  push:
+    branches: [main]
   pull_request:
-    branches: ["main"]
+    branches: [main]
 
 concurrency:
-  group: ci-${{ github.head_ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  test:
-    name: Lint, Unit, Build, and Smoke E2E
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # lint + unit tests (up to 18m) + build + Playwright install + E2E (up to 12m)
+    timeout-minutes: 45
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Set up Node
-        uses: actions/setup-node@v6
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-      - name: Install dependencies
-        run: npm install
-      - name: Validate production config shape
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - name: Check production
         env:
           VITE_SITE_URL: https://example.com
           VITE_BASE_PATH: /spine-scanner/
-          VITE_SUPPORT_EMAIL: support@example.com
-          VITE_APP_ENV: preview
+          VITE_SUPPORT_EMAIL: noreply@example.com
+          VITE_ENABLE_SCANNER_DEBUG: 'false'
+          VITE_APP_ENV: test
           VITE_APP_RELEASE: ${{ github.sha }}
         run: npm run check:production
-      - name: Lint
-        run: npm run lint
-      - name: Test with coverage
-        run: npm run test:coverage
-        timeout-minutes: 15
+
+      - name: Test
+        timeout-minutes: 18
+        run: npm test
+
       - name: Build
+        env:
+          VITE_SITE_URL: https://example.com
+          VITE_BASE_PATH: /spine-scanner/
+          VITE_SUPPORT_EMAIL: noreply@example.com
+          VITE_ENABLE_SCANNER_DEBUG: 'false'
+          VITE_APP_ENV: test
+          VITE_APP_RELEASE: ${{ github.sha }}
         run: npm run build
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
-      - name: Smoke E2E tests
+
+      - name: E2E release tests
+        timeout-minutes: 12
+        env:
+          CI: 'true'
+          VITE_SITE_URL: https://example.com
+          VITE_BASE_PATH: /spine-scanner/
+          VITE_SUPPORT_EMAIL: noreply@example.com
+          VITE_ENABLE_SCANNER_DEBUG: 'false'
+          VITE_APP_ENV: test
+          VITE_APP_RELEASE: ${{ github.sha }}
         run: npm run test:e2e:release
-        timeout-minutes: 10

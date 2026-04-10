@@ -281,7 +281,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
       });
     }
     return chips;
-  }, [searchTerm, statusFilter, selectedShelf, reviewOnly, seriesFilter, minPages, maxPages]);
+  }, [searchTerm, statusFilter, selectedShelf, reviewOnly, seriesFilter, minPages, maxPages, setStatusFilter]);
 
   const listParentRef = useRef<HTMLDivElement>(null);
   const gridParentRef = useRef<HTMLDivElement>(null);
@@ -1271,6 +1271,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
 
       {freshSelectedBook && (
         <BookDetail
+          key={freshSelectedBook.id}
           book={freshSelectedBook}
           onClose={() => setSelectedBook(null)}
         />

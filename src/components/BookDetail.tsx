@@ -113,19 +113,6 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   };
 
   useEffect(() => {
-    if (editing) return;
-    setDraft({
-      title: book.title,
-      author: book.author,
-      isbn: book.isbn,
-      pageCount: book.pageCount,
-      coverImg: book.coverImg,
-      seriesName: book.seriesName ?? '',
-      seriesIndex: book.seriesIndex != null ? String(book.seriesIndex) : '',
-    });
-  }, [book, editing]);
-
-  useEffect(() => {
     if (!showShelfPicker) return;
     const onPointerDown = (ev: MouseEvent) => {
       if (shelfAnchorRef.current?.contains(ev.target as Node)) return;

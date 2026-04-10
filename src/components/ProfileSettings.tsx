@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore.ts';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useProfileStore } from '../store/useProfileStore.ts';
-import { useAnalyticsStore } from '../store/useAnalyticsStore.ts';
+import { useAnalyticsStore, summarizeAnalyticsEvents } from '../store/useAnalyticsStore.ts';
 import { useTheme } from '../hooks/useTheme.ts';
 import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
@@ -68,10 +68,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
   const { setTheme } = useTheme();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
   const analyticsEvents = useAnalyticsStore((s) => s.events);
-  const scanStats = useMemo(
-    () => useAnalyticsStore.getState().getSummary(),
-    [analyticsEvents],
-  );
+  const scanStats = useMemo(() => summarizeAnalyticsEvents(analyticsEvents), [analyticsEvents]);
   const displayName = profile?.username ?? profile?.displayName ?? user?.user_metadata?.full_name ?? user?.email ?? 'Local reader';
   const avatarUrl = profile?.avatarUrl ?? user?.user_metadata?.avatar_url ?? null;
   const joinedLabel = user?.created_at

@@ -2,7 +2,17 @@
 
 ## Unreleased
 
+- _Nothing yet._
+
+## [1.2.0] - 2026-04-10
+
+- **Fix:** ESLint passes under `react-hooks` rules (BookDetail resets via `key` on open; shared `summarizeAnalyticsEvents`; library filter-chip `useMemo` deps).
+
+- **CI:** "Lint, Test & Build" on push and pull request to `main`: ESLint, `check:production`, unit tests, production build, and Playwright release E2E (`test:e2e:release`).
 - **CI:** GitHub Pages deploy workflow runs on `workflow_dispatch` only (production is Vercel); avoids failing automatic Pages runs on every push.
+- **CI:** Weekly OCR integration job (`npm run test:integration`) via schedule and manual dispatch.
+- **CI:** Manual Pages build uses repository variable `VITE_SUPPORT_EMAIL` when set, otherwise `noreply@example.com`.
+- **Tooling:** Vitest `testTimeout` 180s when `CI=true`; ignore scratch base64 temp files (`tmp_b64.txt`, `*.tmp.b64.txt`).
 - **OCR:** Broader ISBN checksum repair for 4↔5 misreads so invalid candidates like `9780141036145` can suggest `9780141036144`.
 - **Library:** “All series” filter (from `seriesName` on books) plus active filter chip.
 - **Header:** When signed in and cloud sync is configured, a compact “N to sync” control mirrors the Home sync message.

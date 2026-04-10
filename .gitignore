@@ -45,6 +45,10 @@ public/tesseract/*.wasm.js
 # Environment
 .env
 
+# Scratch base64 dumps
+tmp_b64.txt
+*.tmp.b64.txt
+
 # Full-page browser saves (large, third-party assets; GitHub push protection may flag embedded tokens)
 /5-Project Audit and Prioritization Canvas _ Spine AI.html
 /5-Project Audit and Prioritization Canvas _ Spine AI_files/

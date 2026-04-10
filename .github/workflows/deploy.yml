@@ -38,7 +38,8 @@ jobs:
         env:
           VITE_SITE_URL: https://${{ github.repository_owner }}.github.io
           VITE_BASE_PATH: /spine-scanner/
-          VITE_SUPPORT_EMAIL: support@example.com
+          # Operators should set repository variable VITE_SUPPORT_EMAIL for real support address.
+          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL != '' && vars.VITE_SUPPORT_EMAIL || 'noreply@example.com' }}
           VITE_ENABLE_SCANNER_DEBUG: 'false'
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           VITE_APP_ENV: production
@@ -53,7 +54,7 @@ jobs:
         env:
           VITE_SITE_URL: https://${{ github.repository_owner }}.github.io
           VITE_BASE_PATH: /spine-scanner/
-          VITE_SUPPORT_EMAIL: support@example.com
+          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL != '' && vars.VITE_SUPPORT_EMAIL || 'noreply@example.com' }}
           VITE_ENABLE_SCANNER_DEBUG: 'false'
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           VITE_APP_ENV: production
@@ -67,7 +68,7 @@ jobs:
         env:
           VITE_SITE_URL: https://${{ github.repository_owner }}.github.io
           VITE_BASE_PATH: /spine-scanner/
-          VITE_SUPPORT_EMAIL: support@example.com
+          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL != '' && vars.VITE_SUPPORT_EMAIL || 'noreply@example.com' }}
           VITE_ENABLE_SCANNER_DEBUG: 'false'
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           VITE_APP_ENV: production
