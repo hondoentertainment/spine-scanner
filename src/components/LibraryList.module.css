@@ -420,6 +420,24 @@
   border-radius: 9999px;
 }
 
+.seriesSelect {
+  min-height: 36px;
+  padding: 0.35rem 2rem 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  cursor: pointer;
+  max-width: min(100%, 14rem);
+}
+
+.seriesSelect:focus {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
 .viewToggle {
   display: flex;
   gap: 0.35rem;

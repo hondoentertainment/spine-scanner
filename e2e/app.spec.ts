@@ -10,7 +10,8 @@ async function dismissOnboardingIfPresent(page: import('@playwright/test').Page)
 
 test.describe('SpineScanner release smoke', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    // baseURL includes /spine-scanner/ — avoid leading "/" on gotos or the path resets to origin (see Playwright baseURL rules).
+    await page.goto('./');
     await dismissOnboardingIfPresent(page);
   });
 
@@ -40,12 +41,31 @@ test.describe('SpineScanner release smoke', () => {
   });
 
   test('data route and profile load', async ({ page }) => {
-    await page.goto('/data');
+    await page.goto('./data');
     await dismissOnboardingIfPresent(page);
     await expect(page.getByRole('heading', { name: /import & export/i })).toBeVisible();
 
     await page.getByTestId(uiContracts.navTabTestId('profile')).click();
-    await expect(page.getByRole('heading', { name: /profile & settings/i })).toBeVisible();
+    await expect(page.locator('#profile-settings-title')).toBeVisible();
+  });
+
+  test('profile exposes export and local data controls', async ({ page }) => {
+    await page.getByTestId(uiContracts.navTabTestId('profile')).click();
+    await expect(page.locator('#profile-settings-title')).toBeVisible();
+    await expect(page.getByRole('button', { name: /download my data \(json\)/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /clear all local data/i })).toBeVisible();
+  });
+
+  test('library review query loads without error', async ({ page }) => {
+    await page.goto('./library?review=1');
+    await dismissOnboardingIfPresent(page);
+    await expect(page.getByRole('heading', { name: /your library, built for browsing/i })).toBeVisible();
+  });
+
+  test('privacy page mentions local clear control', async ({ page }) => {
+    await page.goto('./privacy');
+    await dismissOnboardingIfPresent(page);
+    await expect(page.getByRole('heading', { name: /clearing data on your device/i })).toBeVisible();
   });
 
   test('public support page exposes diagnostics actions', async ({ page }) => {

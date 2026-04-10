@@ -512,6 +512,30 @@
   font-size: 0.75rem;
 }
 
+.dangerOutlineBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.08);
+  color: #f87171;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.dangerOutlineBtn:hover {
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.inlineSupportLink {
+  color: var(--accent-blue);
+  font-weight: 600;
+}
+
 .toggleRow {
   display: flex;
   align-items: center;

@@ -1,28 +1,20 @@
-# Simple workflow for deploying static content to GitHub Pages
-name: Deploy static content to Pages
+# Production hosting is on Vercel (push to main). Use this workflow only when you
+# intentionally want a GitHub Pages build (e.g. fork without Vercel).
+name: Deploy static content to Pages (manual)
 
 on:
-  # Runs on pushes targeting the default branch
-  push:
-    branches: ["main"]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
 concurrency:
-  group: "pages"
+  group: pages
   cancel-in-progress: false
 
 jobs:
-  # Single deploy job since we're just deploying
   deploy:
     timeout-minutes: 45
     environment:
@@ -31,57 +23,66 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
       - name: Validate production config shape
         env:
           VITE_SITE_URL: https://${{ github.repository_owner }}.github.io
           VITE_BASE_PATH: /spine-scanner/
-          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL || 'noreply@example.com' }}
-          VITE_ENABLE_SCANNER_DEBUG: "false"
+          VITE_SUPPORT_EMAIL: support@example.com
+          VITE_ENABLE_SCANNER_DEBUG: 'false'
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           VITE_APP_ENV: production
           VITE_APP_RELEASE: ${{ github.sha }}
         run: npm run check:production
-      - name: Test
+
+      - name: Test with coverage
         run: npm run test:coverage
         timeout-minutes: 15
+
       - name: Build
         env:
           VITE_SITE_URL: https://${{ github.repository_owner }}.github.io
           VITE_BASE_PATH: /spine-scanner/
-          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL || 'noreply@example.com' }}
-          VITE_ENABLE_SCANNER_DEBUG: "false"
+          VITE_SUPPORT_EMAIL: support@example.com
+          VITE_ENABLE_SCANNER_DEBUG: 'false'
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           VITE_APP_ENV: production
           VITE_APP_RELEASE: ${{ github.sha }}
         run: npm run build
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
+
       - name: E2E tests
-        timeout-minutes: 10
         env:
           VITE_SITE_URL: https://${{ github.repository_owner }}.github.io
           VITE_BASE_PATH: /spine-scanner/
-          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL || 'noreply@example.com' }}
-          VITE_ENABLE_SCANNER_DEBUG: "false"
+          VITE_SUPPORT_EMAIL: support@example.com
+          VITE_ENABLE_SCANNER_DEBUG: 'false'
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           VITE_APP_ENV: production
           VITE_APP_RELEASE: ${{ github.sha }}
         run: npm run test:e2e:release
+        timeout-minutes: 10
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
+
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v3
         with:
-          # Upload entire repository
-          path: './dist'
+          path: ./dist
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

@@ -174,12 +174,11 @@ export const useBookStore = create<BookStore>()(
     {
       name: 'spine-scanner-storage',
       merge: (persistedState, currentState) => {
-        const persisted = persistedState as Partial<BookStore> | undefined;
+        const p = persistedState as { books?: BookEntry[]; shelves?: Shelf[] } | undefined;
         return {
           ...currentState,
-          ...persisted,
-          books: normalizeBooks(persisted?.books ?? currentState.books),
-          shelves: persisted?.shelves ?? currentState.shelves,
+          books: normalizeBooks(p?.books ?? currentState.books),
+          shelves: p?.shelves ?? currentState.shelves,
         };
       },
     }

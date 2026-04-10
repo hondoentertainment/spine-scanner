@@ -180,6 +180,25 @@
   white-space: nowrap;
 }
 
+.headerSyncPill {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.12);
+  color: var(--accent-blue);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.headerSyncPill:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 @media (max-width: 520px) {
   .headerQuickLinkText {
     position: absolute;

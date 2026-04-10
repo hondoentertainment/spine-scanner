@@ -18,6 +18,7 @@ import {
   RotateCcw,
   ScanLine,
   Search,
+  Layers,
   Settings,
   Sparkles,
   Trash2,
@@ -101,6 +102,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
   const [searchTerm, setSearchTerm] = useState('');
   const [shelfFilter, setShelfFilter] = useState<string | null>(null);
   const [reviewOnly, setReviewOnly] = useState(false);
+  const [seriesFilter, setSeriesFilter] = useState<string | null>(null);
   const [minPages, setMinPages] = useState('');
   const [maxPages, setMaxPages] = useState('');
   const [selectedBook, setSelectedBook] = useState<BookEntry | null>(null);
@@ -169,11 +171,21 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     setSearchTerm('');
     setShelfFilter(null);
     setReviewOnly(false);
+    setSeriesFilter(null);
     setMinPages('');
     setMaxPages('');
     setStatusFilter('all');
     resetActivePresets();
   }, [resetActivePresets, setStatusFilter]);
+
+  const seriesNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const book of books) {
+      const name = book.seriesName?.trim();
+      if (name) set.add(name);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }, [books]);
 
   const insights = useMemo(() => getLibraryInsights(books), [books]);
   const reviewBooks = useMemo(
@@ -200,7 +212,8 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
         const matchesReview = !reviewOnly || book.needsReview === true;
         const matchesMin = minPageValue == null || (book.pageCount || 0) >= minPageValue;
         const matchesMax = maxPageValue == null || (book.pageCount || 0) <= maxPageValue;
-        return matchesSearch && matchesStatus && matchesShelf && matchesReview && matchesMin && matchesMax;
+        const matchesSeries = !seriesFilter || (book.seriesName?.trim() === seriesFilter);
+        return matchesSearch && matchesStatus && matchesShelf && matchesReview && matchesMin && matchesMax && matchesSeries;
       })
       .sort((a, b) => {
         let cmp = 0;
@@ -220,7 +233,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
         }
         return effectiveSortAsc ? cmp : -cmp;
       });
-  }, [books, searchTerm, statusFilter, shelfFilter, reviewOnly, minPages, maxPages, sortBy, sortAsc, librarySegment]);
+  }, [books, searchTerm, statusFilter, shelfFilter, reviewOnly, seriesFilter, minPages, maxPages, sortBy, sortAsc, librarySegment]);
 
   const selectedShelf = shelves.find((shelf) => shelf.id === shelfFilter) ?? null;
   const filterChips = useMemo(() => {
@@ -246,6 +259,13 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     if (reviewOnly) {
       chips.push({ id: 'review', label: 'Needs review', onRemove: () => setReviewOnly(false) });
     }
+    if (seriesFilter) {
+      chips.push({
+        id: 'series',
+        label: `Series: ${seriesFilter}`,
+        onRemove: () => setSeriesFilter(null),
+      });
+    }
     if (minPages.trim()) {
       chips.push({
         id: 'minPages',
@@ -261,7 +281,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
       });
     }
     return chips;
-  }, [searchTerm, statusFilter, selectedShelf, reviewOnly, minPages, maxPages]);
+  }, [searchTerm, statusFilter, selectedShelf, reviewOnly, seriesFilter, minPages, maxPages]);
 
   const listParentRef = useRef<HTMLDivElement>(null);
   const gridParentRef = useRef<HTMLDivElement>(null);
@@ -913,6 +933,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
             <button
               type="button"
               className={`glass ${s.filterBtn} ${reviewOnly ? s.viewBtnActive : ''}`}
+              aria-pressed={reviewOnly}
               onClick={() => {
                 setReviewOnly(!reviewOnly);
                 resetActivePresets();
@@ -921,6 +942,29 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
               <Inbox size={14} />
               Needs review
             </button>
+            {seriesNames.length > 0 && (
+              <label className={`glass ${s.filterBtn}`} style={{ padding: '0.35rem 0.65rem', gap: '0.35rem' }}>
+                <Layers size={14} aria-hidden />
+                <span className="sr-only">Filter by series</span>
+                <select
+                  className={s.seriesSelect}
+                  aria-label="Filter by series"
+                  value={seriesFilter ?? ''}
+                  onChange={(event) => {
+                    const v = event.target.value;
+                    setSeriesFilter(v === '' ? null : v);
+                    resetActivePresets();
+                  }}
+                >
+                  <option value="">All series</option>
+                  {seriesNames.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {shelves.length > 0 && (
               <>
                 <button

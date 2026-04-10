@@ -179,6 +179,13 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
               entry you keep; other rows are removed from your library.
             </p>
           </article>
+          <article className={styles.card}>
+            <h3>Clearing data on your device</h3>
+            <p>
+              Profile includes a control to clear all local library data from this browser. That is separate from optional cloud sync and does not by itself delete a
+              registered account on the server.
+            </p>
+          </article>
         </div>
       )}
 
@@ -201,7 +208,11 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
             <p>Before major imports, deletes, or migrations, export a backup. The product includes export tools specifically so your catalog is portable.</p>
           </article>
           <article className={styles.card}>
-            <h3>Questions</h3>
+            <h3>Account removal &amp; questions</h3>
+            <p>
+              Closing the site or clearing local storage does not automatically delete a signed-in account or cloud-stored data. Use the contact below if you need help
+              removing an account after you have saved any exports you want to keep, or for other questions about these terms.
+            </p>
             <SupportContact supportEmail={supportEmail} />
           </article>
         </div>

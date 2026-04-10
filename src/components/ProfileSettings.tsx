@@ -10,7 +10,7 @@ import { isSupabaseConfigured } from '../lib/supabase.ts';
 import {
   X, User, Sun, Moon, Monitor, LayoutGrid, List, ArrowUpDown, Columns2,
   CheckCircle, Layers, BarChart3, Tag, BookOpen, Clock3, Bookmark, Flame, ScanLine,
-  Database, Share2, Target, Download,
+  Database, Share2, Target, Download, Eraser,
 } from 'lucide-react';
 import type { ProfilePreferences } from '../types.ts';
 import { getShareBaseUrl } from '../utils/shareBook.ts';
@@ -57,15 +57,21 @@ const statusSummary = [
   { key: 'dnf', label: 'DNF', accent: '#ef4444' },
 ] as const;
 
+const SUPPORT_EMAIL_ENV = (import.meta.env.VITE_SUPPORT_EMAIL as string | undefined)?.trim();
+
 const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = false }) => {
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
   const { user, profile } = useAuthStore();
   const { books, shelves } = useBookStore();
   const { preferences, updatePreferences } = useProfileStore();
   const { setTheme } = useTheme();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
-  const scanStats = useAnalyticsStore((state) => state.getSummary());
+  const analyticsEvents = useAnalyticsStore((s) => s.events);
+  const scanStats = useMemo(
+    () => useAnalyticsStore.getState().getSummary(),
+    [analyticsEvents],
+  );
   const displayName = profile?.username ?? profile?.displayName ?? user?.user_metadata?.full_name ?? user?.email ?? 'Local reader';
   const avatarUrl = profile?.avatarUrl ?? user?.user_metadata?.avatar_url ?? null;
   const joinedLabel = user?.created_at
@@ -314,6 +320,50 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           )}
         </div>
       )}
+
+      <div className={s.section}>
+        <h3 className={s.sectionTitle}>Data on this device</h3>
+        <p className={s.sectionHint}>
+          Clears books, shelves, preferences, sync queue state, and local analytics in this browser. Download a JSON backup first if you want to keep a copy.
+        </p>
+        <button
+          type="button"
+          className={s.dangerOutlineBtn}
+          onClick={async () => {
+            const ok = await confirm({
+              title: 'Clear all local data?',
+              message: 'This removes your library and settings from this browser. It does not delete your cloud account. This cannot be undone.',
+              confirmLabel: 'Clear local data',
+              danger: true,
+            });
+            if (!ok) return;
+            const { clearLocalAppData } = await import('../utils/clearLocalAppData.ts');
+            clearLocalAppData();
+            toast('Local data cleared', 'success');
+          }}
+        >
+          <Eraser size={16} aria-hidden />
+          Clear all local data
+        </button>
+      </div>
+
+      <div className={s.section}>
+        <h3 className={s.sectionTitle}>Cloud account & deletion</h3>
+        <p className={s.sectionHint}>
+          Use Sign out in the account menu to stop syncing on this device. Deleting your auth account and server-side library data is not available inside the app; contact
+          {SUPPORT_EMAIL_ENV ? (
+            <>
+              {' '}
+              <a href={`mailto:${SUPPORT_EMAIL_ENV}`} className={s.inlineSupportLink}>
+                {SUPPORT_EMAIL_ENV}
+              </a>
+            </>
+          ) : (
+            ' the site operator'
+          )}
+          {' '}to request account removal after you have exported anything you need.
+        </p>
+      </div>
 
       <div className={s.section}>
         <h3 className={s.sectionTitle}>Library data & sharing</h3>

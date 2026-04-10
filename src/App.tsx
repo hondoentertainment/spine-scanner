@@ -725,6 +725,21 @@ function App() {
                 <span className={styles.headerQuickLinkText}>Profile</span>
               </NavLink>
             </nav>
+            {isSupabaseConfigured() && user && pendingChanges > 0 && (
+              <button
+                type="button"
+                className={styles.headerSyncPill}
+                onClick={() => void handleSyncNow()}
+                disabled={flushing || !online}
+                aria-label={
+                  pendingChanges === 1
+                    ? 'Sync one pending change to the cloud'
+                    : `Sync ${pendingChanges} pending changes to the cloud`
+                }
+              >
+                {flushing ? 'Syncing…' : !online ? 'Offline' : `${pendingChanges} to sync`}
+              </button>
+            )}
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <AuthPanel
               onSyncNow={handleSyncNow}

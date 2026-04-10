@@ -54,11 +54,11 @@ export const useProfileStore = create<ProfileStore>()(
       name: STORAGE_KEY,
       partialize: (state) => ({ preferences: state.preferences }),
       merge: (persisted, current) => {
-        const p = persisted as Partial<ProfileStore> | undefined;
+        // Only merge `preferences` — persisted JSON may include zustand/version keys; spreading the whole object corrupts actions.
+        const prefs = (persisted as { preferences?: ProfilePreferences } | undefined)?.preferences;
         return {
           ...current,
-          ...p,
-          preferences: { ...DEFAULT_PREFERENCES, ...current.preferences, ...p?.preferences },
+          preferences: { ...DEFAULT_PREFERENCES, ...current.preferences, ...prefs },
         };
       },
     }
