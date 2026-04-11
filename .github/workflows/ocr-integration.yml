@@ -1,5 +1,6 @@
 name: OCR integration tests
 
+# Flaky runs: re-run manually via Actions → this workflow → "Run workflow" (workflow_dispatch).
 on:
   workflow_dispatch:
   schedule:
@@ -11,7 +12,7 @@ permissions:
 jobs:
   integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4

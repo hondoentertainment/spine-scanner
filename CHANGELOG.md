@@ -4,6 +4,13 @@
 
 - _Nothing yet._
 
+## [1.2.2] - 2026-04-10
+
+- **Docs:** `.env.example` for all `VITE_*` variables; `docs/RELEASING.md` (tags, GitHub Release, Vercel, MVP project note).
+- **DX:** `appModeMatrix` in `appMode.ts` documents MVP vs full UI; PR template checklist; OCR integration workflow timeout 45m + retry note.
+- **MVP library:** Hero highlight cards (review / reading / completion / finished this year) hidden in MVP builds.
+- **E2E:** Data route smoke test on full and MVP builds.
+
 ## [1.2.1] - 2026-04-10
 
 - **MVP build:** `VITE_APP_MODE=mvp` / `npm run build:mvp` — scan-first shell (see prior release notes for App/Profile behavior).

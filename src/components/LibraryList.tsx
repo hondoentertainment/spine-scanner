@@ -600,34 +600,36 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
           </div>
         </div>
 
-        <div className={s.highlightGrid}>
-          <button type="button" className={`glass ${s.highlightCard} ${s.highlightCardCta}`} onClick={() => setReviewOnly(true)}>
-            <span className={s.highlightLabel}>Needs review</span>
-            <strong>{insights.reviewCount}</strong>
-            <span>{insights.reviewCount === 1 ? 'Book' : 'Books'} waiting for cleanup</span>
-          </button>
-          <button
-            type="button"
-            className={`glass ${s.highlightCard} ${s.highlightCardCta}`}
-            onClick={() => setStatusFilter('reading')}
-          >
-            <span className={s.highlightLabel}>Currently reading</span>
-            <strong>{insights.readingCount}</strong>
-            <span>{insights.currentlyReading?.title ?? 'Nothing in progress yet'}</span>
-          </button>
-          <div className={`glass ${s.highlightCard}`}>
-            <span className={s.highlightLabel}>Completion rate</span>
-            <strong>{insights.completionRate}%</strong>
-            <span>{insights.totalBooks} books in your library</span>
+        {!mvp && (
+          <div className={s.highlightGrid}>
+            <button type="button" className={`glass ${s.highlightCard} ${s.highlightCardCta}`} onClick={() => setReviewOnly(true)}>
+              <span className={s.highlightLabel}>Needs review</span>
+              <strong>{insights.reviewCount}</strong>
+              <span>{insights.reviewCount === 1 ? 'Book' : 'Books'} waiting for cleanup</span>
+            </button>
+            <button
+              type="button"
+              className={`glass ${s.highlightCard} ${s.highlightCardCta}`}
+              onClick={() => setStatusFilter('reading')}
+            >
+              <span className={s.highlightLabel}>Currently reading</span>
+              <strong>{insights.readingCount}</strong>
+              <span>{insights.currentlyReading?.title ?? 'Nothing in progress yet'}</span>
+            </button>
+            <div className={`glass ${s.highlightCard}`}>
+              <span className={s.highlightLabel}>Completion rate</span>
+              <strong>{insights.completionRate}%</strong>
+              <span>{insights.totalBooks} books in your library</span>
+            </div>
+            <div className={`glass ${s.highlightCard}`}>
+              <span className={s.highlightLabel}>Finished this year</span>
+              <strong>{insights.finishedThisYear}</strong>
+              <span>
+                Mark books as read with a finish date to track {new Date().getFullYear()} progress.
+              </span>
+            </div>
           </div>
-          <div className={`glass ${s.highlightCard}`}>
-            <span className={s.highlightLabel}>Finished this year</span>
-            <strong>{insights.finishedThisYear}</strong>
-            <span>
-              Mark books as read with a finish date to track {new Date().getFullYear()} progress.
-            </span>
-          </div>
-        </div>
+        )}
       </div>
 
       {showStats && (

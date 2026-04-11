@@ -39,4 +39,13 @@ test.describe('MVP build shell', () => {
     await dismissOnboardingIfPresent(page);
     await expect(page.getByRole('heading', { name: /your library, built for browsing/i })).toBeVisible();
   });
+
+  test('data management route shows import, export, or backup affordances', async ({ page }) => {
+    await page.goto('./data');
+    await dismissOnboardingIfPresent(page);
+    const dataMarker = page
+      .getByRole('heading', { level: 2, name: /import|export|backup/i })
+      .or(page.getByRole('button', { name: /import|export|backup/i }));
+    await expect(dataMarker.first()).toBeVisible();
+  });
 });
