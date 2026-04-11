@@ -1,0 +1,46 @@
+# Manual MVP bundle verification (VITE_APP_MODE=mvp). Does not run on every push.
+name: E2E MVP build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-mvp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Production check (MVP)
+        env:
+          VITE_SITE_URL: https://example.com
+          VITE_BASE_PATH: /spine-scanner/
+          VITE_SUPPORT_EMAIL: noreply@example.com
+          VITE_ENABLE_SCANNER_DEBUG: 'false'
+          VITE_APP_ENV: test
+          VITE_APP_RELEASE: ${{ github.sha }}
+          VITE_APP_MODE: mvp
+        run: npm run check:production
+
+      - name: MVP E2E (build + Playwright)
+        timeout-minutes: 25
+        env:
+          CI: 'true'
+          VITE_SITE_URL: https://example.com
+          VITE_BASE_PATH: /spine-scanner/
+          VITE_SUPPORT_EMAIL: noreply@example.com
+          VITE_ENABLE_SCANNER_DEBUG: 'false'
+          VITE_APP_ENV: test
+          VITE_APP_RELEASE: ${{ github.sha }}
+          VITE_APP_MODE: mvp
+        run: npm run test:e2e:mvp

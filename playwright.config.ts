@@ -21,18 +21,29 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: /mvp\.spec\.ts$/,
+    },
+    /** MVP E2E: run via `npm run test:e2e:mvp` (build with `VITE_APP_MODE=mvp` first). Preview serves dist; keep `VITE_APP_MODE=mvp` on the Playwright process for parity with that build. */
+    {
+      name: 'chromium-mvp',
+      metadata: { VITE_APP_MODE: 'mvp' },
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: /mvp\.spec\.ts$/,
     },
     {
       name: 'mobile-chrome-pixel-7',
       use: { ...devices['Pixel 7'] },
+      testIgnore: /mvp\.spec\.ts$/,
     },
     {
       name: 'mobile-safari-iphone-14',
       use: { ...devices['iPhone 14'] },
+      testIgnore: /mvp\.spec\.ts$/,
     },
     {
       name: 'mobile-chrome-galaxy-s9',
       use: { ...devices['Galaxy S9+'] },
+      testIgnore: /mvp\.spec\.ts$/,
     },
   ],
   webServer: useWebServer
@@ -41,6 +52,7 @@ export default defineConfig({
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
+        env: { ...process.env },
       }
     : undefined,
 });

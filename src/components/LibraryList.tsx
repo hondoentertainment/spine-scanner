@@ -34,6 +34,7 @@ import BookCard from './BookCard.tsx';
 import BookDetail from './BookDetail.tsx';
 import ShelfManager from './ShelfManager.tsx';
 import { useToast } from './Toast.tsx';
+import { isMvpMode } from '../lib/appMode.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
 import { getBookCoverSrc, getLibraryInsights } from '../utils/bookPresentation.ts';
 import s from './LibraryList.module.css';
@@ -84,6 +85,7 @@ const SORT_OPTIONS: Array<{ value: SortField; label: string }> = [
 ];
 
 export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenComplete }: LibraryListProps) {
+  const mvp = isMvpMode();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const {
@@ -115,7 +117,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
   const [showSmartShelfForm, setShowSmartShelfForm] = useState(false);
   const [newViewName, setNewViewName] = useState('');
   const [newSmartShelfName, setNewSmartShelfName] = useState('');
-  const [librarySegment, setLibrarySegment] = useState<LibrarySegment>('foryou');
+  const [librarySegment, setLibrarySegment] = useState<LibrarySegment>(() => (isMvpMode() ? 'all' : 'foryou'));
   const [librarySessionReturn] = useState(() => {
     try {
       return sessionStorage.getItem('spine-library-session') === '1';
@@ -538,7 +540,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
 
   return (
     <section className={s.container}>
-      {!emptyLibrary && (
+      {!emptyLibrary && !mvp && (
         <div className={s.segmentBar} role="tablist" aria-label="Library scope">
           {(['foryou', 'shelves', 'all'] as const).map((seg) => (
             <button
@@ -770,7 +772,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
 
       {!emptyLibrary && (
         <>
-          {librarySegment !== 'foryou' && (
+          {!mvp && librarySegment !== 'foryou' && (
           <div className={s.savedTools}>
             <div className={s.presetGroup}>
               <div className={s.recentHeader}>

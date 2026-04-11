@@ -4,6 +4,13 @@
 
 - _Nothing yet._
 
+## [1.2.1] - 2026-04-10
+
+- **MVP build:** `VITE_APP_MODE=mvp` / `npm run build:mvp` — scan-first shell (see prior release notes for App/Profile behavior).
+- **MVP library:** All-books default; segment bar and saved views / smart shelves UI hidden in MVP.
+- **E2E:** `e2e/mvp.spec.ts`, project `chromium-mvp`, `npm run test:e2e:mvp`; `test:e2e` lists desktop+mobile projects explicitly so MVP specs do not run on a full build.
+- **CI:** Manual `e2e-mvp` workflow: `check:production` + `test:e2e:mvp`.
+
 ## [1.2.0] - 2026-04-10
 
 - **Fix:** ESLint passes under `react-hooks` rules (BookDetail resets via `key` on open; shared `summarizeAnalyticsEvents`; library filter-chip `useMemo` deps).

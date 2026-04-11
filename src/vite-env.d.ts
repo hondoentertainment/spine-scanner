@@ -11,6 +11,8 @@ interface ImportMetaEnv {
   readonly VITE_SENTRY_DSN?: string;
   readonly VITE_APP_RELEASE?: string;
   readonly VITE_APP_ENV?: string;
+  /** Set to `mvp` for a reduced shell (scan-first, lean profile). Omit or any other value = full UI. */
+  readonly VITE_APP_MODE?: string;
 }
 
 interface ImportMeta {

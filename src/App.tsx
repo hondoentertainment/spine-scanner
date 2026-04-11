@@ -27,6 +27,7 @@ import OnboardingModal from './components/OnboardingModal.tsx';
 import { DEFAULT_ONBOARDING_STEPS } from './components/onboardingContent.tsx';
 import { addBreadcrumb, captureException, isEnabled as isMonitoringEnabled, setTag, setUser as setMonitoringUser } from './lib/errorMonitoring.ts';
 import { isSupabaseConfigured } from './lib/supabase.ts';
+import { isMvpMode } from './lib/appMode.ts';
 import { buildSupportDiagnostics } from './utils/supportDiagnostics.ts';
 import styles from './components/App.module.css';
 import { uiContracts } from './testing/uiContracts.ts';
@@ -173,7 +174,7 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const publicPage = getPublicPageFromPath(location.pathname);
-  const showMarketingHero = location.pathname === '/scan';
+  const showMarketingHero = location.pathname === '/scan' && !isMvpMode();
   const brandingSubtitle = getBrandingSubtitle(location.pathname, publicPage);
   const { lookupByIsbn, loading, error } = useBookLookup();
   const { addBook, books, setBooks, shelves, setShelves } = useBookStore();
@@ -226,6 +227,10 @@ function App() {
     setMonitoringUser(user?.id ?? null);
     setTag('has_cloud_account', Boolean(user?.id));
   }, [user?.id]);
+
+  useEffect(() => {
+    setTag('app_mode', isMvpMode() ? 'mvp' : 'full');
+  }, []);
 
   useEffect(() => {
     try {
@@ -288,7 +293,7 @@ function App() {
 
   useEffect(() => {
     const preloadAll = () => {
-      void preloadHome();
+      if (!isMvpMode()) void preloadHome();
       void preloadScanner();
       void preloadLibrary();
       void preloadData();
@@ -445,6 +450,10 @@ function App() {
   }, [addBook, books, user, online, toast, track, navigate]);
 
   useEffect(() => {
+    if (isMvpMode()) {
+      setShowOnboarding(false);
+      return;
+    }
     if (publicPage) {
       setShowOnboarding(false);
       return;
@@ -629,7 +638,9 @@ function App() {
   }, [publicPage, location.pathname, location.search]);
 
   const navItems: Array<{ key: AppView; label: string; shortLabel: string; icon: ReactNode; fab?: boolean }> = [
-    { key: 'home', label: 'Home', shortLabel: 'Home', icon: <Home size={20} strokeWidth={2} aria-hidden /> },
+    ...(isMvpMode()
+      ? []
+      : [{ key: 'home' as const, label: 'Home', shortLabel: 'Home', icon: <Home size={20} strokeWidth={2} aria-hidden /> }]),
     { key: 'library', label: 'Library', shortLabel: 'Library', icon: <Library size={20} strokeWidth={2} aria-hidden /> },
     { key: 'scan', label: 'Add books', shortLabel: 'Add', icon: <Scan size={22} strokeWidth={2} aria-hidden />, fab: true },
     { key: 'profile', label: 'Profile', shortLabel: 'Profile', icon: <User size={20} strokeWidth={2} aria-hidden /> },
@@ -657,10 +668,10 @@ function App() {
         <div className={styles.headerTop}>
           <div className={styles.branding}>
             <NavLink
-              to="/home"
+              to={isMvpMode() ? '/scan' : '/home'}
               className={styles.brandLinkBlock}
-              aria-label="SpineScanner home — Feed"
-              onClick={() => setSrAnnouncement('Home feed')}
+              aria-label={isMvpMode() ? 'SpineScanner — Add books' : 'SpineScanner home — Feed'}
+              onClick={() => setSrAnnouncement(isMvpMode() ? 'Scanner view' : 'Home feed')}
             >
               <div className={styles.logoBox}>
                 <BookOpen size={28} color="white" aria-hidden />
@@ -859,7 +870,7 @@ function App() {
 
       <main ref={mainRef} id="main-content" className={styles.mainContent} tabIndex={-1}>
         <Routes>
-          <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route path="/" element={<Navigate to={isMvpMode() ? '/scan' : '/home'} replace />} />
           <Route
             path="/about"
             element={(

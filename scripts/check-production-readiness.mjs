@@ -97,6 +97,14 @@ function validateRelease(rawValue) {
   }
 }
 
+function validateAppMode(rawValue) {
+  if (!rawValue) return;
+  const allowed = new Set(['mvp', 'full']);
+  if (!allowed.has(rawValue)) {
+    addError(`VITE_APP_MODE must be empty, "mvp", or "full". Received "${rawValue}".`);
+  }
+}
+
 const siteUrl = readEnv('VITE_SITE_URL');
 const basePath = readEnv('VITE_BASE_PATH');
 const supportEmail = readEnv('VITE_SUPPORT_EMAIL');
@@ -104,6 +112,7 @@ const scannerDebug = readEnv('VITE_ENABLE_SCANNER_DEBUG');
 const sentryDsn = readEnv('VITE_SENTRY_DSN');
 const appEnvironment = readEnv('VITE_APP_ENV');
 const appRelease = readEnv('VITE_APP_RELEASE');
+const appMode = readEnv('VITE_APP_MODE');
 
 validateSiteUrl(siteUrl);
 validateBasePath(basePath);
@@ -112,6 +121,7 @@ validateDebugFlag(scannerDebug);
 validateMonitoring(sentryDsn);
 validateAppEnvironment(appEnvironment);
 validateRelease(appRelease);
+validateAppMode(appMode);
 
 if (errors.length > 0) {
   console.error('Production readiness check failed:\n');

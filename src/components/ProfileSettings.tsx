@@ -7,6 +7,7 @@ import { useAnalyticsStore, summarizeAnalyticsEvents } from '../store/useAnalyti
 import { useTheme } from '../hooks/useTheme.ts';
 import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
+import { isMvpMode } from '../lib/appMode.ts';
 import {
   X, User, Sun, Moon, Monitor, LayoutGrid, List, ArrowUpDown, Columns2,
   CheckCircle, Layers, BarChart3, Tag, BookOpen, Clock3, Bookmark, Flame, ScanLine,
@@ -118,8 +119,14 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       )}
 
       <h2 id="profile-settings-title" className={s.title}>Profile & Settings</h2>
-      <p className={s.subtitle}>Your preferences are saved locally and synced when you sign in.</p>
+      <p className={s.subtitle}>
+        {isMvpMode()
+          ? 'Essentials only: theme, data, and export. Use the full build for the home feed and advanced preferences.'
+          : 'Your preferences are saved locally and synced when you sign in.'}
+      </p>
 
+      {!isMvpMode() && (
+      <>
       <div className={s.profileHero}>
         <div className={s.profileIdentity}>
           <div className={s.profileAvatarLarge}>
@@ -157,12 +164,6 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           </div>
         </div>
       </div>
-
-      {!isSupabaseConfigured() && (
-        <div className={s.localBadge}>
-          <User size={16} /> Local profile - sign in to sync preferences across devices
-        </div>
-      )}
 
       <div className={s.summaryGrid}>
         <div className={s.summaryCard}>
@@ -317,6 +318,14 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           )}
         </div>
       )}
+      </>
+      )}
+
+      {!isSupabaseConfigured() && (
+        <div className={s.localBadge}>
+          <User size={16} /> Local profile - sign in to sync preferences across devices
+        </div>
+      )}
 
       <div className={s.section}>
         <h3 className={s.sectionTitle}>Data on this device</h3>
@@ -412,6 +421,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
         </div>
       </div>
 
+      {!isMvpMode() && (
       <div className={s.section}>
         <h3 className={s.sectionTitle}>
           <Target size={18} style={{ verticalAlign: 'middle', marginRight: 6 }} aria-hidden />
@@ -451,6 +461,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           />
         </div>
       </div>
+      )}
 
       <div className={s.section}>
         <h3 className={s.sectionTitle}>Theme</h3>
@@ -470,6 +481,8 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
         </div>
       </div>
 
+      {!isMvpMode() && (
+      <>
       <div className={s.section}>
         <h3 className={s.sectionTitle}>Library defaults</h3>
         <div className={s.field}>
@@ -598,6 +611,9 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           </div>
         </button>
       </div>
+      </>
+      )}
+
     </div>
   );
 
