@@ -1,5 +1,29 @@
 # Releasing
 
+## Branch protection (`main`)
+
+- **Required check:** **Lint, Test & Build** must pass before merge (GitHub → **Settings → Branches → Branch protection rule** for `main`).
+- **Enforce for administrators** — Keep this **enabled** so admins cannot bypass failing checks (same screen → *Do not allow bypassing the above settings*).
+
+## Vercel environment checklist (production)
+
+Confirm in the Vercel project (**Settings → Environment Variables**) for **Production** (and Preview if needed):
+
+| Variable | Notes |
+|----------|--------|
+| `VITE_SITE_URL` | Canonical origin, no trailing slash |
+| `VITE_BASE_PATH` | Usually `/` on Vercel root deploy; match your URL shape |
+| `VITE_SUPPORT_EMAIL` | Shown in Profile / legal pages |
+| `VITE_SENTRY_DSN` | Optional; omit for no-op monitoring |
+| `VITE_APP_RELEASE` | e.g. `VERCEL_GIT_COMMIT_SHA` or leave unset for fallback |
+| `VITE_APP_ENV` | `production` / `preview` as appropriate |
+| `VITE_APP_MODE` | **Omit** for full app; set `mvp` only on a dedicated MVP deployment |
+| Supabase | `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` together or both unset |
+
+See [`.env.example`](../.env.example) for descriptions of all `VITE_*` keys.
+
+---
+
 1. **Tag** the release (annotated tag):
 
    ```bash

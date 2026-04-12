@@ -1,6 +1,7 @@
 name: OCR integration tests
 
 # Flaky runs: re-run manually via Actions → this workflow → "Run workflow" (workflow_dispatch).
+# Two jobs: fast unit suite (excludes heavy scan regression file), then scan fixture regression only.
 on:
   workflow_dispatch:
   schedule:
@@ -10,23 +11,35 @@ permissions:
   contents: read
 
 jobs:
-  integration:
+  unit-without-scan-regression:
+    name: Unit tests (exclude scan regression fixtures)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+      - run: npm ci
+      - name: Vitest (exclude scanRegressionFixtures)
+        env:
+          CI: 'true'
+        run: npx vitest run --exclude "**/scanRegressionFixtures.test.ts"
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run integration tests
+  scan-regression-fixtures:
+    name: Scan regression fixtures (OCR pipeline)
+    needs: unit-without-scan-regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Scan regression fixtures only
         env:
           CI: 'true'
         run: npm run test:integration

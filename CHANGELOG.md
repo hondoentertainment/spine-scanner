@@ -4,6 +4,13 @@
 
 - _Nothing yet._
 
+## [1.2.3] - 2026-04-11
+
+- **GitHub:** **Enforce for administrators** enabled on `main` branch protection (required check **Lint, Test & Build** applies to admins too).
+- **CI:** Weekly OCR workflow split into two jobs: Vitest excluding `scanRegressionFixtures`, then `npm run test:integration` (that file only).
+- **Scripts:** `test:integration` runs only `scanRegressionFixtures.test.ts` (with `RUN_OCR_INTEGRATION=1`); `test:all` still runs full unit suite then integration.
+- **Docs:** `RELEASING.md` — branch protection notes and Vercel env checklist.
+
 ## [1.2.2] - 2026-04-10
 
 - **Docs:** `.env.example` for all `VITE_*` variables; `docs/RELEASING.md` (tags, GitHub Release, Vercel, MVP project note).
