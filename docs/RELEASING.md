@@ -5,6 +5,10 @@
 - **Required check:** **Lint, Test & Build** must pass before merge (GitHub → **Settings → Branches → Branch protection rule** for `main`).
 - **Enforce for administrators** — Keep this **enabled** so admins cannot bypass failing checks (same screen → *Do not allow bypassing the above settings*).
 
+### What PR CI tests run
+
+**Lint, Test & Build** runs Vitest with **`scanRegressionFixtures.test.ts` excluded** so the job finishes within runner limits. Heavy OCR regression still runs in **OCR integration tests** (weekly workflow, job 2) and locally via `npm test` or `npm run test:integration`.
+
 ## Vercel environment checklist (production)
 
 Confirm in the Vercel project (**Settings → Environment Variables**) for **Production** (and Preview if needed):

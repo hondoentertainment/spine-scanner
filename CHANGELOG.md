@@ -10,7 +10,7 @@
 - **CI:** Weekly OCR workflow split into two jobs: Vitest excluding `scanRegressionFixtures`, then `npm run test:integration` (that file only).
 - **Scripts:** `test:integration` runs only `scanRegressionFixtures.test.ts` (with `RUN_OCR_INTEGRATION=1`); `test:all` still runs full unit suite then integration.
 - **Docs:** `RELEASING.md` — branch protection notes and Vercel env checklist.
-- **CI:** `Lint, Test & Build` — unit test step timeout 30m, job timeout 60m (heavy Vitest suite on Ubuntu).
+- **CI:** `Lint, Test & Build` runs Vitest **excluding** `scanRegressionFixtures.test.ts` (that file runs in the weekly OCR workflow + `npm test` locally).
 
 ## [1.2.2] - 2026-04-10
 

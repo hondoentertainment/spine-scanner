@@ -16,8 +16,8 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    # lint + unit tests (up to 30m) + build + Playwright install + E2E (up to 12m)
-    timeout-minutes: 60
+    # Unit tests exclude scanRegressionFixtures (heavy OCR scenarios — see ocr-integration.yml). + build + E2E.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -41,8 +41,8 @@ jobs:
         run: npm run check:production
 
       - name: Test
-        timeout-minutes: 30
-        run: npm test
+        timeout-minutes: 22
+        run: npx vitest run --exclude "**/scanRegressionFixtures.test.ts"
 
       - name: Build
         env:
