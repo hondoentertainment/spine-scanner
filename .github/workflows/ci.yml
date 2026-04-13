@@ -22,7 +22,7 @@ jobs:
     # lint + unit tests (up to 18m) + build + Playwright install + E2E (up to 12m)
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v4
         with:
