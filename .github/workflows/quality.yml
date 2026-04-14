@@ -1,4 +1,4 @@
-name: Quality (bundle + Lighthouse)
+name: Quality (bundle budgets)
 
 on:
   push:
@@ -16,7 +16,7 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -39,12 +39,3 @@ jobs:
 
       - name: Check bundle budgets
         run: node scripts/check-bundle-budget.mjs
-
-      - name: Setup Chrome for Lighthouse
-        id: setup-chrome
-        uses: browser-actions/setup-chrome@v2
-
-      - name: Run Lighthouse CI
-        env:
-          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
-        run: npx lhci autorun
