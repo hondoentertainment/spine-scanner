@@ -90,6 +90,14 @@
   text-decoration: none;
 }
 
+.inlineCode {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+  background: rgba(148, 163, 184, 0.12);
+}
+
 .diagnosticsGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

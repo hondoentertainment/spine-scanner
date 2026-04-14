@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react';
-import { BookOpen, Copy, Download, ExternalLink, LifeBuoy, Lock, ScrollText } from 'lucide-react';
+import { BookOpen, Copy, Download, ExternalLink, LifeBuoy, Lock, ScrollText, Shield } from 'lucide-react';
 import styles from './PublicInfoPage.module.css';
 import type { SupportDiagnosticsSnapshot } from '../utils/supportDiagnostics.ts';
 import { serializeSupportDiagnostics } from '../utils/supportDiagnostics.ts';
 
-export type PublicPage = 'about' | 'privacy' | 'terms' | 'support';
+export type PublicPage = 'about' | 'privacy' | 'terms' | 'support' | 'security';
 
 interface PublicInfoPageProps {
   page: PublicPage;
   supportEmail?: string;
+  securityEmail?: string;
   diagnostics?: SupportDiagnosticsSnapshot | null;
   onClose: () => void;
 }
@@ -45,6 +46,12 @@ const PAGE_CONFIG: Record<PublicPage, PageConfig> = {
     intro: 'Most issues can be solved quickly by checking camera permissions, testing a barcode in good lighting, or exporting a local backup before larger changes.',
     icon: LifeBuoy,
   },
+  security: {
+    eyebrow: 'Security',
+    title: 'Protecting readers and their libraries.',
+    intro: 'SpineScanner is built to minimize data exposure: local-first storage, optional sync, and clear operator controls for monitoring. This page summarizes how to report issues responsibly.',
+    icon: Shield,
+  },
 };
 
 function SupportContact({ supportEmail }: { supportEmail?: string }) {
@@ -67,7 +74,28 @@ function SupportContact({ supportEmail }: { supportEmail?: string }) {
   );
 }
 
-export default function PublicInfoPage({ page, supportEmail, diagnostics, onClose }: PublicInfoPageProps) {
+function SecurityContact({ securityEmail, supportEmail }: { securityEmail?: string; supportEmail?: string }) {
+  const email = securityEmail?.trim() || supportEmail?.trim();
+  if (!email) {
+    return (
+      <p className={styles.note}>
+        This deployment has not set a dedicated security contact. Configure <code className={styles.inlineCode}>VITE_SECURITY_CONTACT_EMAIL</code> or{' '}
+        <code className={styles.inlineCode}>VITE_SUPPORT_EMAIL</code> for a mailto link.
+      </p>
+    );
+  }
+  return (
+    <p className={styles.note}>
+      Report security concerns to{' '}
+      <a href={`mailto:${email}?subject=${encodeURIComponent('SpineScanner security report')}`} className={styles.inlineLink}>
+        {email}
+      </a>
+      . Please avoid public disclosure until we have had a chance to respond.
+    </p>
+  );
+}
+
+export default function PublicInfoPage({ page, supportEmail, securityEmail, diagnostics, onClose }: PublicInfoPageProps) {
   const config = PAGE_CONFIG[page];
   const Icon = config.icon;
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
@@ -212,6 +240,35 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
             <p>
               Closing the site or clearing local storage does not automatically delete a signed-in account or cloud-stored data. Use the contact below if you need help
               removing an account after you have saved any exports you want to keep, or for other questions about these terms.
+            </p>
+            <SupportContact supportEmail={supportEmail} />
+          </article>
+        </div>
+      )}
+
+      {page === 'security' && (
+        <div className={styles.stack}>
+          <article className={styles.card}>
+            <h3>Responsible disclosure</h3>
+            <p>
+              If you believe you have found a security vulnerability in this site or its configuration, please report it privately so we can investigate
+              before details are shared widely.
+            </p>
+            <SecurityContact securityEmail={securityEmail} supportEmail={supportEmail} />
+          </article>
+          <article className={styles.card}>
+            <h3>What to include</h3>
+            <ul className={styles.list}>
+              <li>Steps to reproduce, affected URLs, and browser or device when relevant.</li>
+              <li>Whether you are testing your own deployment or a public instance.</li>
+              <li>Optional: use Support diagnostics from the Support page (no ISBNs are included in error telemetry by design).</li>
+            </ul>
+          </article>
+          <article className={styles.card}>
+            <h3>Out of scope examples</h3>
+            <p>
+              Generic scanner feedback, metadata accuracy from third-party book APIs, and social engineering are outside the scope of security handling
+              for this product — use normal support channels for those.
             </p>
             <SupportContact supportEmail={supportEmail} />
           </article>

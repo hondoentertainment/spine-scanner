@@ -18,15 +18,37 @@ function createSiteAssetsPlugin(base: string, siteUrl?: string): Plugin {
     generateBundle() {
       const normalizedSiteUrl = siteUrl?.replace(/\/$/, '');
       const rootUrl = normalizedSiteUrl ? new URL(base, `${normalizedSiteUrl}/`).toString() : null;
+      const baseTrim = base.replace(/\/$/, '');
+      const staticPaths = ['about', 'privacy', 'terms', 'support', 'security'] as const;
+      const sitemapUrls: string[] = [];
+      if (normalizedSiteUrl && rootUrl) {
+        sitemapUrls.push(
+          [
+            '  <url>',
+            `    <loc>${rootUrl}</loc>`,
+            '    <changefreq>weekly</changefreq>',
+            '    <priority>1.0</priority>',
+            '  </url>',
+          ].join('\n'),
+        );
+        for (const p of staticPaths) {
+          const loc = new URL(`${baseTrim}/${p}`, `${normalizedSiteUrl}/`).toString();
+          sitemapUrls.push(
+            [
+              '  <url>',
+              `    <loc>${loc}</loc>`,
+              '    <changefreq>monthly</changefreq>',
+              '    <priority>0.6</priority>',
+              '  </url>',
+            ].join('\n'),
+          );
+        }
+      }
       const sitemapSource = normalizedSiteUrl
         ? [
           '<?xml version="1.0" encoding="UTF-8"?>',
           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-          '  <url>',
-          `    <loc>${rootUrl}</loc>`,
-          '    <changefreq>weekly</changefreq>',
-          '    <priority>1.0</priority>',
-          '  </url>',
+          ...sitemapUrls,
           '</urlset>',
         ].join('\n')
         : [

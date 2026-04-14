@@ -132,6 +132,18 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => timers.forEach((t) => clearTimeout(t));
   }, []);
 
+  useEffect(() => {
+    if (!confirmState) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        confirmState.resolve(false);
+        setConfirmState(null);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [confirmState]);
+
   return (
     <ToastContext.Provider value={{ toast, confirm, toastDetail }}>
       {children}
@@ -185,20 +197,31 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         ))}
       </div>
 
-      {/* Confirm dialog */}
+      {/* Confirm dialog — backdrop click closes; Escape handled in effect */}
       {confirmState && (
-        <div className={styles.overlay} onClick={() => handleConfirm(false)}>
-          <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
-            <h3 className={styles.dialogTitle}>{confirmState.options.title}</h3>
+        /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */
+        <div className={styles.overlay} onClick={() => handleConfirm(false)} role="presentation">
+          <div
+            className={styles.dialog}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="toast-confirm-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="toast-confirm-title" className={styles.dialogTitle}>
+              {confirmState.options.title}
+            </h3>
             <p className={styles.dialogMessage}>{confirmState.options.message}</p>
             <div className={styles.dialogActions}>
               <button
+                type="button"
                 onClick={() => handleConfirm(false)}
                 className={styles.dialogCancel}
               >
                 {confirmState.options.cancelLabel || 'Cancel'}
               </button>
               <button
+                type="button"
                 onClick={() => handleConfirm(true)}
                 className={`${styles.dialogConfirm} ${confirmState.options.danger ? styles.dialogDanger : ''}`}
               >

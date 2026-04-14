@@ -28,9 +28,14 @@ import { DEFAULT_ONBOARDING_STEPS } from './components/onboardingContent.tsx';
 import { addBreadcrumb, captureException, isEnabled as isMonitoringEnabled, setTag, setUser as setMonitoringUser } from './lib/errorMonitoring.ts';
 import { isSupabaseConfigured } from './lib/supabase.ts';
 import { isMvpMode } from './lib/appMode.ts';
-import { buildSupportDiagnostics } from './utils/supportDiagnostics.ts';
+import { buildSupportDiagnostics, serializeSupportDiagnostics } from './utils/supportDiagnostics.ts';
 import styles from './components/App.module.css';
 import { uiContracts } from './testing/uiContracts.ts';
+import { syncDocumentLocale } from './lib/locale.ts';
+import AnalyticsConsentBanner from './components/AnalyticsConsentBanner.tsx';
+import PlausibleScript from './components/PlausibleScript.tsx';
+import FeedbackModal from './components/FeedbackModal.tsx';
+import { useConsentStore } from './store/useConsentStore.ts';
 
 const Scanner = lazy(() => import('./components/Scanner.tsx'));
 const LibraryList = lazy(() => import('./components/LibraryList.tsx'));
@@ -52,6 +57,7 @@ type ScanRequestOptions = {
 type AppView = 'home' | 'scan' | 'library' | 'profile';
 
 const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL as string | undefined;
+const SECURITY_CONTACT_EMAIL = import.meta.env.VITE_SECURITY_CONTACT_EMAIL as string | undefined;
 const SITE_URL = (import.meta.env.VITE_SITE_URL as string | undefined)?.replace(/\/$/, '');
 const APP_DESCRIPTION = 'Digitize and manage your personal book library with barcode scanning, OCR fallback, optional cloud sync, and export-friendly ownership.';
 const APP_TITLE = 'SpineScanner';
@@ -79,10 +85,15 @@ const PUBLIC_PAGE_META: Record<PublicPage, { title: string; description: string;
     description: 'Get help with scanning, syncing, exports, and recovery workflows for SpineScanner.',
     label: 'Support',
   },
+  security: {
+    title: 'Security | SpineScanner',
+    description: 'How to report security issues responsibly and what to expect from SpineScanner’s security posture.',
+    label: 'Security',
+  },
 };
 
 function getPublicPageFromHash(hash: string): PublicPage | null {
-  if (hash === 'about' || hash === 'privacy' || hash === 'terms' || hash === 'support') {
+  if (hash === 'about' || hash === 'privacy' || hash === 'terms' || hash === 'support' || hash === 'security') {
     return hash;
   }
 
@@ -92,7 +103,7 @@ function getPublicPageFromHash(hash: string): PublicPage | null {
 function getPublicPageFromPath(pathname: string): PublicPage | null {
   const parts = pathname.split('/').filter(Boolean);
   const last = parts[parts.length - 1];
-  if (last === 'about' || last === 'privacy' || last === 'terms' || last === 'support') {
+  if (last === 'about' || last === 'privacy' || last === 'terms' || last === 'support' || last === 'security') {
     return last;
   }
   return null;
@@ -213,6 +224,10 @@ function App() {
     language: typeof navigator !== 'undefined' ? navigator.language : 'unknown',
   }), [books.length, insights.reviewCount, lastSyncFailedAt, lastSyncedAt, location.pathname, online, pendingChanges, publicPage, shelves.length, user?.id]);
 
+  const feedbackDiagnosticsText = useMemo(() => serializeSupportDiagnostics(diagnostics), [diagnostics]);
+  const analyticsConsent = useConsentStore((s) => s.analyticsConsent);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+
   const mainRef = useRef<HTMLElement>(null);
   const initialSyncDone = useRef(false);
   const prevBooksRef = useRef(books);
@@ -222,6 +237,10 @@ function App() {
   useEffect(() => {
     initAuth();
   }, [initAuth]);
+
+  useEffect(() => {
+    syncDocumentLocale();
+  }, []);
 
   useEffect(() => {
     setMonitoringUser(user?.id ?? null);
@@ -597,7 +616,7 @@ function App() {
     const canonicalHref = publicPage
       ? `${siteOrigin}${basePath}/${publicPage}`
       : `${siteOrigin}${window.location.pathname}${window.location.search}`;
-    const socialImage = `${siteOrigin}${import.meta.env.BASE_URL}social-preview.svg`;
+    const socialImage = `${siteOrigin}${import.meta.env.BASE_URL}social-preview.png`;
 
     document.title = title;
 
@@ -916,6 +935,18 @@ function App() {
             )}
           />
           <Route
+            path="/security"
+            element={(
+              <PublicInfoPage
+                page="security"
+                supportEmail={SUPPORT_EMAIL}
+                securityEmail={SECURITY_CONTACT_EMAIL}
+                diagnostics={null}
+                onClose={closePublicPage}
+              />
+            )}
+          />
+          <Route
             path="/home"
             element={(
               <ErrorBoundary>
@@ -1044,6 +1075,16 @@ function App() {
 
       <PwaInstallPrompt />
 
+      <PlausibleScript enabled={analyticsConsent === 'granted'} />
+      <AnalyticsConsentBanner />
+      <FeedbackModal
+        open={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+        supportEmail={SUPPORT_EMAIL}
+        securityEmail={SECURITY_CONTACT_EMAIL}
+        diagnosticsText={feedbackDiagnosticsText}
+      />
+
       <footer className={`glass ${styles.siteFooter}`}>
         <div>
           <strong>SpineScanner</strong>
@@ -1055,6 +1096,8 @@ function App() {
           <button type="button" className={styles.footerButton} onClick={() => openPublicPage('privacy')}>Privacy</button>
           <button type="button" className={styles.footerButton} onClick={() => openPublicPage('terms')}>Terms</button>
           <button type="button" className={styles.footerButton} onClick={() => openPublicPage('support')}>Support</button>
+          <button type="button" className={styles.footerButton} onClick={() => openPublicPage('security')}>Security</button>
+          <button type="button" className={styles.footerButton} onClick={() => setFeedbackOpen(true)}>Feedback</button>
           {SUPPORT_EMAIL && (
             <a className={styles.footerButton} href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
           )}
