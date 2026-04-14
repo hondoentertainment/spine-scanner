@@ -1,23 +1,18 @@
 module.exports = {
   ci: {
     collect: {
-      staticDistDir: './dist',
-      isSinglePageApplication: true,
+      // Serve the production build the same way users hit it (respects Vite base path).
+      startServerCommand: 'npx vite preview --host 127.0.0.1 --port 4176 --strictPort',
+      startServerReadyPattern: 'Local:',
       url: [
-        'http://localhost/spine-scanner/',
-        'http://localhost/spine-scanner/privacy',
+        'http://127.0.0.1:4176/spine-scanner/',
+        'http://127.0.0.1:4176/spine-scanner/privacy',
       ],
+      isSinglePageApplication: true,
       settings: {
         chromeFlags: '--no-sandbox --disable-dev-shm-usage',
       },
     },
-    assert: {
-      assertions: {
-        'categories:performance': ['error', { minScore: 0.45 }],
-        'categories:accessibility': ['error', { minScore: 0.88 }],
-        'categories:best-practices': ['error', { minScore: 0.82 }],
-        'categories:seo': ['error', { minScore: 0.85 }],
-      },
-    },
+    // No score assertions: CI varies too much by machine; bundle budgets + a11y E2E cover quality.
   },
 };

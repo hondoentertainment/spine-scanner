@@ -40,18 +40,6 @@ jobs:
       - name: Check bundle budgets
         run: node scripts/check-bundle-budget.mjs
 
-      - name: Nest dist for Lighthouse (flat Vite output vs /spine-scanner/ asset URLs)
-        run: |
-          set -euo pipefail
-          tmp=$(mktemp -d)
-          shopt -s dotglob nullglob
-          for f in dist/*; do
-            mv "$f" "$tmp/"
-          done
-          mkdir -p dist/spine-scanner
-          mv "$tmp"/* dist/spine-scanner/
-          rmdir "$tmp"
-
       - name: Setup Chrome for Lighthouse
         id: setup-chrome
         uses: browser-actions/setup-chrome@v2
