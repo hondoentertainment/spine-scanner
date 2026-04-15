@@ -114,4 +114,27 @@ describe('useSyncQueue', () => {
     useSyncQueue.getState().reset();
     expect(useSyncQueue.getState().lastSyncFailedAt).toBeNull();
   });
+
+  it('syncFailedRecently returns false when no failure has occurred', () => {
+    // lastSyncFailedAt is null → returns false
+    expect(useSyncQueue.getState().syncFailedRecently()).toBe(false);
+  });
+
+  it('syncFailedRecently returns true right after markSyncFailed', () => {
+    useSyncQueue.getState().markSyncFailed();
+    expect(useSyncQueue.getState().syncFailedRecently()).toBe(true);
+  });
+
+  it('syncFailedRecently returns false when failure is older than 90s', () => {
+    // Set lastSyncFailedAt to 91 seconds ago
+    const oldTimestamp = Date.now() - 91_000;
+    useSyncQueue.setState({ lastSyncFailedAt: oldTimestamp });
+    expect(useSyncQueue.getState().syncFailedRecently()).toBe(false);
+  });
+
+  it('syncFailedRecently returns true when failure was recent (within 90s)', () => {
+    const recentTimestamp = Date.now() - 10_000; // 10 seconds ago
+    useSyncQueue.setState({ lastSyncFailedAt: recentTimestamp });
+    expect(useSyncQueue.getState().syncFailedRecently()).toBe(true);
+  });
 });
