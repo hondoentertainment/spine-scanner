@@ -1,5 +1,4 @@
-import { describe, it, expect } from 'vitest';
-import { mergeBooksLists, mergeShelvesLists, toBookEntry, toBookRow } from '../syncBooks';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { BookEntry, Shelf } from '../../types';
 
 const makeBook = (overrides: Partial<BookEntry> = {}): BookEntry => ({
@@ -24,9 +23,41 @@ const makeShelf = (overrides: Partial<Shelf> = {}): Shelf => ({
   ...overrides,
 });
 
+// ─── Supabase mock helpers ───────────────────────────────────────
+
+/** Builds a chainable Supabase query mock that resolves with given data/error. */
+function makeQueryMock(result: { data?: unknown; error?: unknown }) {
+  const chain: Record<string, unknown> = {};
+  const terminal = vi.fn().mockResolvedValue(result);
+  // Chainable methods that return the chain
+  ['select', 'eq', 'order', 'upsert', 'delete', 'in'].forEach((method) => {
+    chain[method] = vi.fn().mockReturnValue(chain);
+  });
+  // Terminal methods resolve the promise
+  chain['select'] = vi.fn().mockReturnValue(chain);
+  chain['eq'] = vi.fn().mockReturnValue(chain);
+  chain['order'] = vi.fn().mockReturnValue(chain);
+  chain['in'] = vi.fn().mockReturnValue(chain);
+  chain['delete'] = vi.fn().mockReturnValue(chain);
+  chain['upsert'] = vi.fn().mockResolvedValue(result);
+  // Make the chain thenable so `await chain.method()...` resolves
+  Object.defineProperty(chain, 'then', {
+    get() { return terminal.then?.bind(terminal) ?? undefined; },
+  });
+  return chain;
+}
+
 // ─── mergeBooksLists ────────────────────────────────────────────
 
 describe('mergeBooksLists', () => {
+  let mergeBooksLists: (l: BookEntry[], r: BookEntry[]) => BookEntry[];
+  beforeEach(async () => {
+    vi.doMock('../../lib/supabase', () => ({ supabase: null }));
+    const mod = await import('../syncBooks');
+    mergeBooksLists = mod.mergeBooksLists;
+  });
+  afterEach(() => vi.resetModules());
+
   it('returns empty array when both lists are empty', () => {
     expect(mergeBooksLists([], [])).toEqual([]);
   });
@@ -81,9 +112,7 @@ describe('mergeBooksLists', () => {
     ];
     const result = mergeBooksLists(local, remote);
     expect(result).toHaveLength(3);
-    // b2 should have local title
     expect(result.find(b => b.id === 'b2')?.title).toBe('Local B2');
-    // b3 from remote is included
     expect(result.find(b => b.id === 'b3')?.title).toBe('Remote B3');
   });
 
@@ -99,6 +128,14 @@ describe('mergeBooksLists', () => {
 // ─── mergeShelvesLists ──────────────────────────────────────────
 
 describe('mergeShelvesLists', () => {
+  let mergeShelvesLists: (l: Shelf[], r: Shelf[]) => Shelf[];
+  beforeEach(async () => {
+    vi.doMock('../../lib/supabase', () => ({ supabase: null }));
+    const mod = await import('../syncBooks');
+    mergeShelvesLists = mod.mergeShelvesLists;
+  });
+  afterEach(() => vi.resetModules());
+
   it('returns empty array when both lists are empty', () => {
     expect(mergeShelvesLists([], [])).toEqual([]);
   });
@@ -135,6 +172,16 @@ describe('mergeShelvesLists', () => {
 // ─── Converter round-trip ───────────────────────────────────────
 
 describe('toBookEntry / toBookRow', () => {
+  let toBookEntry: ReturnType<typeof import('../syncBooks')>['toBookEntry'];
+  let toBookRow: ReturnType<typeof import('../syncBooks')>['toBookRow'];
+  beforeEach(async () => {
+    vi.doMock('../../lib/supabase', () => ({ supabase: null }));
+    const mod = await import('../syncBooks');
+    toBookEntry = mod.toBookEntry;
+    toBookRow = mod.toBookRow;
+  });
+  afterEach(() => vi.resetModules());
+
   it('round-trips a book through row conversion', () => {
     const book = makeBook({ id: 'rt-1', shelfIds: ['s1', 's2'] });
     const row = { ...toBookRow(book, 'user-123'), updated_at: new Date().toISOString() };
@@ -163,5 +210,486 @@ describe('toBookEntry / toBookRow', () => {
     };
     const entry = toBookEntry(row);
     expect(entry.shelfIds).toEqual([]);
+  });
+
+  it('toBookEntry defaults optional reading fields to null/0 when absent', () => {
+    const row = {
+      id: 'y', user_id: 'u', isbn: '123', title: 'T', author: 'A',
+      page_count: 100, amazon_link: '', cover_img: '', status: 'read',
+      notes: '', date_added: '2026-01-01', shelf_ids: [],
+      updated_at: '', is_photo_only: undefined, needs_review: undefined,
+      review_reason: undefined, pages_finished: undefined,
+      started_at: undefined, finished_at: undefined, last_progress_at: undefined,
+    };
+    const entry = toBookEntry(row);
+    expect(entry.isPhotoOnly).toBe(false);
+    expect(entry.needsReview).toBe(false);
+    expect(entry.reviewReason).toBe('');
+    expect(entry.pagesFinished).toBe(0);
+    expect(entry.startedAt).toBeNull();
+    expect(entry.finishedAt).toBeNull();
+    expect(entry.lastProgressAt).toBeNull();
+  });
+
+  it('toBookRow defaults optional fields to null/false when absent', () => {
+    const book = makeBook();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bookWithUndefined: BookEntry = { ...book, isPhotoOnly: undefined as any, needsReview: undefined as any, reviewReason: undefined as any, pagesFinished: undefined as any, startedAt: undefined as any, finishedAt: undefined as any, lastProgressAt: undefined as any };
+    const row = toBookRow(bookWithUndefined, 'u');
+    expect(row.is_photo_only).toBe(false);
+    expect(row.needs_review).toBe(false);
+    expect(row.review_reason).toBe('');
+    expect(row.pages_finished).toBe(0);
+    expect(row.started_at).toBeNull();
+    expect(row.finished_at).toBeNull();
+    expect(row.last_progress_at).toBeNull();
+  });
+});
+
+// ─── pullBooks ──────────────────────────────────────────────────
+
+describe('pullBooks', () => {
+  afterEach(() => vi.resetModules());
+
+  it('returns null when supabase is not configured', async () => {
+    vi.doMock('../../lib/supabase', () => ({ supabase: null }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pullBooks } = await import('../syncBooks');
+
+    const result = await pullBooks('user-1');
+    expect(result).toBeNull();
+  });
+
+  it('returns null and logs on supabase error', async () => {
+    const mockSupabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: null, error: { message: 'DB error' } }),
+      }),
+    };
+    vi.doMock('../../lib/supabase', () => ({ supabase: mockSupabase }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pullBooks } = await import('../syncBooks');
+
+    const result = await pullBooks('user-1');
+    expect(result).toBeNull();
+  });
+
+  it('returns mapped book entries on success', async () => {
+    const fakeRow = {
+      id: 'b1', user_id: 'u', isbn: '123', title: 'T', author: 'A',
+      page_count: 10, amazon_link: '', cover_img: '', status: 'to-read',
+      notes: '', date_added: '2026-01-01', shelf_ids: [], updated_at: '',
+    };
+    const mockSupabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: [fakeRow], error: null }),
+      }),
+    };
+    vi.doMock('../../lib/supabase', () => ({ supabase: mockSupabase }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pullBooks } = await import('../syncBooks');
+
+    const result = await pullBooks('user-1');
+    expect(result).toHaveLength(1);
+    expect(result![0].id).toBe('b1');
+  });
+});
+
+// ─── pullShelves ────────────────────────────────────────────────
+
+describe('pullShelves', () => {
+  afterEach(() => vi.resetModules());
+
+  it('returns null when supabase is not configured', async () => {
+    vi.doMock('../../lib/supabase', () => ({ supabase: null }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pullShelves } = await import('../syncBooks');
+
+    const result = await pullShelves('user-1');
+    expect(result).toBeNull();
+  });
+
+  it('returns null on supabase error', async () => {
+    const mockSupabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ data: null, error: { message: 'error' } }),
+      }),
+    };
+    vi.doMock('../../lib/supabase', () => ({ supabase: mockSupabase }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pullShelves } = await import('../syncBooks');
+
+    const result = await pullShelves('user-1');
+    expect(result).toBeNull();
+  });
+
+  it('returns mapped shelves on success', async () => {
+    const fakeShelf = { id: 's1', user_id: 'u', name: 'Fiction', color: '#fff' };
+    const mockSupabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ data: [fakeShelf], error: null }),
+      }),
+    };
+    vi.doMock('../../lib/supabase', () => ({ supabase: mockSupabase }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pullShelves } = await import('../syncBooks');
+
+    const result = await pullShelves('user-1');
+    expect(result).toHaveLength(1);
+    expect(result![0].id).toBe('s1');
+  });
+});
+
+// ─── pushBooks ──────────────────────────────────────────────────
+
+describe('pushBooks', () => {
+  afterEach(() => vi.resetModules());
+
+  it('returns false when supabase is not configured', async () => {
+    vi.doMock('../../lib/supabase', () => ({ supabase: null }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pushBooks } = await import('../syncBooks');
+
+    const result = await pushBooks('user-1', [makeBook()]);
+    expect(result).toBe(false);
+  });
+
+  it('skips upsert when books array is empty and deletes nothing when no stale IDs', async () => {
+    const mockFrom = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+    });
+    const mockSupabase = { from: mockFrom };
+    vi.doMock('../../lib/supabase', () => ({ supabase: mockSupabase }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pushBooks } = await import('../syncBooks');
+
+    const result = await pushBooks('user-1', []);
+    expect(result).toBe(true);
+  });
+
+  it('returns false on upsert error', async () => {
+    const mockFrom = vi.fn().mockReturnValue({
+      upsert: vi.fn().mockResolvedValue({ error: { message: 'upsert error' } }),
+    });
+    const mockSupabase = { from: mockFrom };
+    vi.doMock('../../lib/supabase', () => ({ supabase: mockSupabase }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pushBooks } = await import('../syncBooks');
+
+    const result = await pushBooks('user-1', [makeBook()]);
+    expect(result).toBe(false);
+  });
+
+  it('returns false on fetch remote IDs error', async () => {
+    let callCount = 0;
+    const mockFrom = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        // First call: upsert succeeds
+        return { upsert: vi.fn().mockResolvedValue({ error: null }) };
+      }
+      // Second call: select remote IDs fails
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ data: null, error: { message: 'fetch error' } }),
+      };
+    });
+    const mockSupabase = { from: mockFrom };
+    vi.doMock('../../lib/supabase', () => ({ supabase: mockSupabase }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pushBooks } = await import('../syncBooks');
+
+    const result = await pushBooks('user-1', [makeBook({ id: 'b1' })]);
+    expect(result).toBe(false);
+  });
+
+  it('deletes stale books and returns true on success', async () => {
+    const deleteMock = vi.fn().mockReturnThis();
+    const inMock = vi.fn().mockResolvedValue({ error: null });
+    let callCount = 0;
+    const mockFrom = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return { upsert: vi.fn().mockResolvedValue({ error: null }) };
+      }
+      // Remote has b1 + b2; local only has b1 → b2 is stale
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ data: [{ id: 'b1' }, { id: 'b2' }], error: null }),
+        delete: deleteMock,
+        in: inMock,
+      };
+    });
+    // deleteMock chain: .delete().in(...)
+    deleteMock.mockReturnValue({ in: inMock });
+
+    const mockSupabase = { from: mockFrom };
+    vi.doMock('../../lib/supabase', () => ({ supabase: mockSupabase }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pushBooks } = await import('../syncBooks');
+
+    const result = await pushBooks('user-1', [makeBook({ id: 'b1' })]);
+    expect(result).toBe(true);
+  });
+
+  it('returns false on delete stale error', async () => {
+    const inMock = vi.fn().mockResolvedValue({ error: { message: 'delete error' } });
+    const deleteMock = vi.fn().mockReturnValue({ in: inMock });
+    let callCount = 0;
+    const mockFrom = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return { upsert: vi.fn().mockResolvedValue({ error: null }) };
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ data: [{ id: 'b1' }, { id: 'stale' }], error: null }),
+        delete: deleteMock,
+      };
+    });
+    const mockSupabase = { from: mockFrom };
+    vi.doMock('../../lib/supabase', () => ({ supabase: mockSupabase }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pushBooks } = await import('../syncBooks');
+
+    const result = await pushBooks('user-1', [makeBook({ id: 'b1' })]);
+    expect(result).toBe(false);
+  });
+});
+
+// ─── pushShelves ────────────────────────────────────────────────
+
+describe('pushShelves', () => {
+  afterEach(() => vi.resetModules());
+
+  it('returns false when supabase is not configured', async () => {
+    vi.doMock('../../lib/supabase', () => ({ supabase: null }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pushShelves } = await import('../syncBooks');
+
+    const result = await pushShelves('user-1', [makeShelf()]);
+    expect(result).toBe(false);
+  });
+
+  it('returns false on upsert error', async () => {
+    const mockFrom = vi.fn().mockReturnValue({
+      upsert: vi.fn().mockResolvedValue({ error: { message: 'upsert fail' } }),
+    });
+    vi.doMock('../../lib/supabase', () => ({ supabase: { from: mockFrom } }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pushShelves } = await import('../syncBooks');
+
+    const result = await pushShelves('user-1', [makeShelf()]);
+    expect(result).toBe(false);
+  });
+
+  it('skips upsert and delete when shelves is empty and remote is empty', async () => {
+    const mockFrom = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+    });
+    vi.doMock('../../lib/supabase', () => ({ supabase: { from: mockFrom } }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pushShelves } = await import('../syncBooks');
+
+    const result = await pushShelves('user-1', []);
+    expect(result).toBe(true);
+  });
+
+  it('returns false on fetch remote shelf IDs error', async () => {
+    let callCount = 0;
+    const mockFrom = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return { upsert: vi.fn().mockResolvedValue({ error: null }) };
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ data: null, error: { message: 'fetch error' } }),
+      };
+    });
+    vi.doMock('../../lib/supabase', () => ({ supabase: { from: mockFrom } }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pushShelves } = await import('../syncBooks');
+
+    const result = await pushShelves('user-1', [makeShelf()]);
+    expect(result).toBe(false);
+  });
+
+  it('deletes stale shelves and returns true', async () => {
+    const inMock = vi.fn().mockResolvedValue({ error: null });
+    const deleteMock = vi.fn().mockReturnValue({ in: inMock });
+    let callCount = 0;
+    const mockFrom = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return { upsert: vi.fn().mockResolvedValue({ error: null }) };
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ data: [{ id: 's1' }, { id: 'stale' }], error: null }),
+        delete: deleteMock,
+      };
+    });
+    vi.doMock('../../lib/supabase', () => ({ supabase: { from: mockFrom } }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pushShelves } = await import('../syncBooks');
+
+    const result = await pushShelves('user-1', [makeShelf({ id: 's1' })]);
+    expect(result).toBe(true);
+  });
+
+  it('returns false on delete stale shelves error', async () => {
+    const inMock = vi.fn().mockResolvedValue({ error: { message: 'delete error' } });
+    const deleteMock = vi.fn().mockReturnValue({ in: inMock });
+    let callCount = 0;
+    const mockFrom = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return { upsert: vi.fn().mockResolvedValue({ error: null }) };
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ data: [{ id: 's1' }, { id: 'stale' }], error: null }),
+        delete: deleteMock,
+      };
+    });
+    vi.doMock('../../lib/supabase', () => ({ supabase: { from: mockFrom } }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { pushShelves } = await import('../syncBooks');
+
+    const result = await pushShelves('user-1', [makeShelf({ id: 's1' })]);
+    expect(result).toBe(false);
+  });
+});
+
+// ─── mergeSync ──────────────────────────────────────────────────
+
+describe('mergeSync', () => {
+  afterEach(() => vi.resetModules());
+
+  it('returns null when supabase is not configured', async () => {
+    vi.doMock('../../lib/supabase', () => ({ supabase: null }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { mergeSync } = await import('../syncBooks');
+
+    const result = await mergeSync('user-1', []);
+    expect(result).toBeNull();
+  });
+
+  it('returns null when pullBooks fails', async () => {
+    // pullBooks calls from('books').select().eq().order()
+    let callIdx = 0;
+    const mockFrom = vi.fn().mockImplementation(() => {
+      callIdx++;
+      if (callIdx === 1) {
+        // pullBooks → error
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({ data: null, error: { message: 'pull error' } }),
+        };
+      }
+      return {};
+    });
+    vi.doMock('../../lib/supabase', () => ({ supabase: { from: mockFrom } }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { mergeSync } = await import('../syncBooks');
+
+    const result = await mergeSync('user-1', [makeBook()]);
+    expect(result).toBeNull();
+  });
+
+  it('returns null when pushBooks fails', async () => {
+    let callIdx = 0;
+    const mockFrom = vi.fn().mockImplementation(() => {
+      callIdx++;
+      if (callIdx === 1) {
+        // pullBooks → success (empty remote books)
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({ data: [], error: null }),
+        };
+      }
+      if (callIdx === 2) {
+        // pullShelves → success (empty)
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+        };
+      }
+      if (callIdx === 3) {
+        // pushBooks upsert → error
+        return {
+          upsert: vi.fn().mockResolvedValue({ error: { message: 'push error' } }),
+        };
+      }
+      return {};
+    });
+    vi.doMock('../../lib/supabase', () => ({ supabase: { from: mockFrom } }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { mergeSync } = await import('../syncBooks');
+
+    const result = await mergeSync('user-1', [makeBook()]);
+    expect(result).toBeNull();
+  });
+
+  it('returns merged books and shelves on full success', async () => {
+    const fakeBook = {
+      id: 'b1', user_id: 'u', isbn: '123', title: 'T', author: 'A',
+      page_count: 10, amazon_link: '', cover_img: '', status: 'to-read',
+      notes: '', date_added: '2026-01-01', shelf_ids: [], updated_at: '',
+    };
+    let callIdx = 0;
+    const mockFrom = vi.fn().mockImplementation(() => {
+      callIdx++;
+      if (callIdx === 1) {
+        // pullBooks
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({ data: [fakeBook], error: null }),
+        };
+      }
+      if (callIdx === 2) {
+        // pullShelves
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+        };
+      }
+      if (callIdx === 3) {
+        // pushBooks upsert
+        return { upsert: vi.fn().mockResolvedValue({ error: null }) };
+      }
+      if (callIdx === 4) {
+        // pushBooks fetch remote IDs
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockResolvedValue({ data: [{ id: 'b1' }], error: null }),
+        };
+      }
+      // pushShelves (empty, no upsert) + fetch remote shelf IDs
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+      };
+    });
+    vi.doMock('../../lib/supabase', () => ({ supabase: { from: mockFrom } }));
+    vi.doMock('../../lib/errorMonitoring', () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }));
+    const { mergeSync } = await import('../syncBooks');
+
+    const result = await mergeSync('user-1', []);
+    expect(result).not.toBeNull();
+    expect(result!.books).toHaveLength(1);
+    expect(result!.shelves).toHaveLength(0);
   });
 });

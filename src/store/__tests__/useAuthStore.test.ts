@@ -42,7 +42,7 @@ vi.mock('../../lib/supabase', () => ({
   },
 }));
 
-const fakeUser = { id: 'user-1', email: 'test@example.com' };
+const fakeUser = { id: 'user-1', email: 'test@example.com', user_metadata: {} };
 const fakeSession = { user: fakeUser, access_token: 'tok' };
 
 describe('useAuthStore', () => {
@@ -103,6 +103,61 @@ describe('useAuthStore', () => {
       expect(state.loading).toBe(false);
       expect(state.user).toBeNull();
     });
+
+    it('fires onAuthStateChange with PASSWORD_RECOVERY event and sets recoveryMode', async () => {
+      mockGetSession.mockResolvedValue({ data: { session: null } });
+
+      let capturedCb: (event: string, session: unknown) => void = () => {};
+      mockOnAuthStateChange.mockImplementation((cb) => {
+        capturedCb = cb;
+        return { data: { subscription: { unsubscribe: vi.fn() } } };
+      });
+
+      await useAuthStore.getState().initialize();
+
+      // Simulate PASSWORD_RECOVERY event
+      capturedCb('PASSWORD_RECOVERY', fakeSession);
+
+      const state = useAuthStore.getState();
+      expect(state.recoveryMode).toBe(true);
+      // profile should be preserved (not cleared) during recovery
+    });
+
+    it('fires onAuthStateChange with SIGNED_IN event and loads profile', async () => {
+      mockGetSession.mockResolvedValue({ data: { session: null } });
+
+      let capturedCb: (event: string, session: unknown) => void = () => {};
+      mockOnAuthStateChange.mockImplementation((cb) => {
+        capturedCb = cb;
+        return { data: { subscription: { unsubscribe: vi.fn() } } };
+      });
+
+      await useAuthStore.getState().initialize();
+
+      // Simulate SIGNED_IN event
+      capturedCb('SIGNED_IN', fakeSession);
+
+      const state = useAuthStore.getState();
+      expect(state.user).toEqual(fakeUser);
+    });
+
+    it('fires onAuthStateChange with SIGNED_OUT event and clears user', async () => {
+      mockGetSession.mockResolvedValue({ data: { session: null } });
+
+      let capturedCb: (event: string, session: unknown) => void = () => {};
+      mockOnAuthStateChange.mockImplementation((cb) => {
+        capturedCb = cb;
+        return { data: { subscription: { unsubscribe: vi.fn() } } };
+      });
+
+      await useAuthStore.getState().initialize();
+
+      capturedCb('SIGNED_OUT', null);
+
+      const state = useAuthStore.getState();
+      expect(state.user).toBeNull();
+      expect(state.session).toBeNull();
+    });
   });
 
   /* ── signUp ──────────────────────────────────────────────── */
@@ -138,6 +193,29 @@ describe('useAuthStore', () => {
       expect(state.error).toBe('Email already registered');
       expect(state.loading).toBe(false);
     });
+
+    it('sets session when signUp returns user and session (auto-confirmed)', async () => {
+      const sessionUser = { id: 'user-789', email: 'a@b.com', user_metadata: {} };
+      const sessionData = { user: sessionUser, access_token: 'tok2' };
+      mockSignUp.mockResolvedValue({ data: { user: sessionUser, session: sessionData }, error: null });
+
+      const userId = await useAuthStore.getState().signUp('a@b.com', 'pass1234');
+
+      const state = useAuthStore.getState();
+      expect(userId).toBe('user-789');
+      expect(state.session).toEqual(sessionData);
+      expect(state.confirmationPending).toBe(false);
+    });
+
+    it('sets session when signUp with username returns user and session', async () => {
+      const sessionUser = { id: 'user-890', email: 'a@b.com', user_metadata: {} };
+      const sessionData = { user: sessionUser, access_token: 'tok3' };
+      mockSignUp.mockResolvedValue({ data: { user: sessionUser, session: sessionData }, error: null });
+
+      const userId = await useAuthStore.getState().signUp('a@b.com', 'pass1234', 'bob');
+
+      expect(userId).toBe('user-890');
+    });
   });
 
   /* ── signIn ──────────────────────────────────────────────── */
@@ -169,6 +247,18 @@ describe('useAuthStore', () => {
       expect(state.error).toBe('Invalid login credentials');
       expect(state.loading).toBe(false);
       expect(state.user).toBeNull();
+    });
+
+    it('sets a friendly message when email is not confirmed', async () => {
+      mockSignInWithPassword.mockResolvedValue({
+        data: { session: null, user: null },
+        error: { message: 'Email not confirmed' },
+      });
+
+      await useAuthStore.getState().signIn('test@test.com', 'password');
+
+      const state = useAuthStore.getState();
+      expect(state.error).toBe('Please check your email and confirm your account before signing in.');
     });
   });
 
@@ -268,6 +358,64 @@ describe('useAuthStore', () => {
       expect(state.error).toBe('Sign out failed');
       expect(state.loading).toBe(false);
     });
+
+    it('clears recoveryMode on successful sign-out', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      useAuthStore.setState({ user: fakeUser as any, session: fakeSession as any, loading: false, recoveryMode: true });
+      mockSignOut.mockResolvedValue({ error: null });
+
+      await useAuthStore.getState().signOut();
+
+      expect(useAuthStore.getState().recoveryMode).toBe(false);
+    });
+  });
+
+  /* ── loadProfile ─────────────────────────────────────────── */
+  describe('loadProfile', () => {
+    it('does nothing when no user is set', async () => {
+      useAuthStore.setState({ user: null });
+      // Should not throw
+      await useAuthStore.getState().loadProfile();
+      expect(useAuthStore.getState().profile).toBeNull();
+    });
+
+    it('sets profile when getProfile returns data', async () => {
+      const { getProfile } = await import('../../lib/profiles');
+      vi.mocked(getProfile).mockResolvedValue({
+        username: 'alice',
+        displayName: 'Alice Smith',
+        avatarUrl: 'https://example.com/avatar.jpg',
+        preferences: null,
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      useAuthStore.setState({ user: fakeUser as any });
+
+      await useAuthStore.getState().loadProfile();
+
+      const state = useAuthStore.getState();
+      expect(state.profile?.username).toBe('alice');
+      expect(state.profile?.displayName).toBe('Alice Smith');
+    });
+
+    it('upserts OAuth metadata when user has avatar_url', async () => {
+      const { getProfile, upsertProfile } = await import('../../lib/profiles');
+      vi.mocked(getProfile).mockResolvedValue(null);
+      vi.mocked(upsertProfile).mockResolvedValue(true);
+
+      const oauthUser = {
+        id: 'oauth-1', email: 'o@a.com',
+        user_metadata: { avatar_url: 'https://avatar.url', full_name: 'OAuth User' },
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      useAuthStore.setState({ user: oauthUser as any });
+
+      await useAuthStore.getState().loadProfile();
+
+      expect(upsertProfile).toHaveBeenCalledWith('oauth-1', {
+        displayName: 'OAuth User',
+        avatarUrl: 'https://avatar.url',
+      });
+    });
   });
 
   /* ── clearError ──────────────────────────────────────────── */
@@ -289,6 +437,17 @@ describe('useAuthStore', () => {
       useAuthStore.getState().clearMagicLinkSent();
 
       expect(useAuthStore.getState().magicLinkSent).toBe(false);
+    });
+  });
+
+  /* ── clearConfirmation ─────────────────────────────────── */
+  describe('clearConfirmation', () => {
+    it('resets confirmationPending to false', () => {
+      useAuthStore.setState({ confirmationPending: true });
+
+      useAuthStore.getState().clearConfirmation();
+
+      expect(useAuthStore.getState().confirmationPending).toBe(false);
     });
   });
 
@@ -369,3 +528,4 @@ describe('useAuthStore', () => {
     });
   });
 });
+

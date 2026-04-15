@@ -5,6 +5,7 @@ import {
   preprocessImage,
   cropForBarcode,
   assessFrameQuality,
+  assessVideoFrameQuality,
   hasLowOcrResolution,
   buildOcrPasses,
   getQualityHints,
@@ -13,6 +14,7 @@ import {
   CROP_WIDE,
   CROP_FULL,
   CROP_CENTER,
+  BLUR_VARIANCE_THRESHOLD,
   type ScanProgress,
 } from '../useScanPipeline';
 
@@ -973,5 +975,260 @@ describe('useScanPipeline — runPipeline', () => {
 
     expect(pipelineResult?.suggestions?.length).toBeGreaterThanOrEqual(0);
   }, 25000);
+
+  it('skips barcode phase when scanMode is ocr', async () => {
+    const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
+    const runOcr = vi.fn().mockResolvedValue({ isbn: null, allCandidates: [] });
+    const addLog = vi.fn();
+
+    const { result } = renderHook(() =>
+      useScanPipeline({
+        addLog,
+        setStatus: vi.fn(),
+        runOcr,
+        tryBarcodeDecode,
+        scanMode: 'ocr',
+      }),
+    );
+
+    const img = new Image();
+    img.width = 640;
+    img.height = 480;
+    const canvas = document.createElement('canvas');
+
+    await act(async () => {
+      await result.current.runPipeline(img, canvas, 'test');
+    });
+
+    expect(tryBarcodeDecode).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(expect.stringContaining('Phase 1 skipped'));
+  }, 15000);
+
+  it('returns suggestions and no barcode for scanMode barcode when nothing found', async () => {
+    const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
+    const runOcr = vi.fn();
+    const addLog = vi.fn();
+
+    const { result } = renderHook(() =>
+      useScanPipeline({
+        addLog,
+        setStatus: vi.fn(),
+        runOcr,
+        tryBarcodeDecode,
+        scanMode: 'barcode',
+      }),
+    );
+
+    const img = new Image();
+    img.width = 640;
+    img.height = 480;
+    const canvas = document.createElement('canvas');
+
+    let pipelineResult: { isbn: string | null; diagnostics?: { barcodeAttempted?: boolean } } | null = null;
+    await act(async () => {
+      pipelineResult = await result.current.runPipeline(img, canvas, 'test');
+    });
+
+    expect(runOcr).not.toHaveBeenCalled();
+    expect(pipelineResult?.isbn).toBeNull();
+    expect(addLog).toHaveBeenCalledWith(expect.stringContaining('Phase 2 skipped'));
+  });
+
+  it('repairs invalid barcode ISBN with single-digit checksum fix', async () => {
+    // Provide an ISBN that is invalid but single-digit-fixable
+    const invalidIsbn = '9780141036140'; // Invalid checksum (correct is ...144)
+    const tryBarcodeDecode = vi.fn().mockResolvedValue(invalidIsbn);
+    const runOcr = vi.fn();
+
+    const { result } = renderHook(() =>
+      useScanPipeline({
+        addLog: vi.fn(),
+        setStatus: vi.fn(),
+        runOcr,
+        tryBarcodeDecode,
+      }),
+    );
+
+    const img = new Image();
+    img.width = 640;
+    img.height = 480;
+    const canvas = document.createElement('canvas');
+
+    let pipelineResult: { isbn: string | null } | null = null;
+    await act(async () => {
+      pipelineResult = await result.current.runPipeline(img, canvas, 'test');
+    });
+
+    // tryFixChecksum should repair the ISBN
+    expect(pipelineResult?.isbn).not.toBeNull();
+    expect(runOcr).not.toHaveBeenCalled();
+  });
+
+  it('barcode phase catches errors and continues to OCR', async () => {
+    const tryBarcodeDecode = vi.fn().mockRejectedValue(new Error('Barcode decode failed'));
+    const runOcr = vi.fn().mockResolvedValue({ isbn: null, allCandidates: [] });
+    const addLog = vi.fn();
+
+    const { result } = renderHook(() =>
+      useScanPipeline({
+        addLog,
+        setStatus: vi.fn(),
+        runOcr,
+        tryBarcodeDecode,
+      }),
+    );
+
+    const img = new Image();
+    img.width = 640;
+    img.height = 480;
+    const canvas = document.createElement('canvas');
+
+    await act(async () => {
+      await result.current.runPipeline(img, canvas, 'test');
+    });
+
+    expect(addLog).toHaveBeenCalledWith(expect.stringContaining('Barcode phase error'));
+    expect(runOcr).toHaveBeenCalled();
+  }, 15000);
 });
 
+/* ================================================================
+ *  assessVideoFrameQuality
+ * ================================================================ */
+
+describe('useScanPipeline — assessVideoFrameQuality', () => {
+  it('returns default quality when video readyState < 2', () => {
+    const canvas = document.createElement('canvas');
+    const video = { readyState: 1, videoWidth: 640, videoHeight: 480 };
+
+    const quality = assessVideoFrameQuality(video, canvas);
+    expect(quality.brightness).toBe(128);
+    expect(quality.isDark).toBe(false);
+    expect(quality.isBlurry).toBe(false);
+    expect(quality.blurVariance).toBe(BLUR_VARIANCE_THRESHOLD);
+  });
+
+  it('returns default quality when video readyState is 0', () => {
+    const canvas = document.createElement('canvas');
+    const video = { readyState: 0, videoWidth: 1280, videoHeight: 720 };
+
+    const quality = assessVideoFrameQuality(video, canvas);
+    expect(quality.brightness).toBe(128);
+  });
+
+  it('returns default quality when video has no dimensions', () => {
+    const canvas = document.createElement('canvas');
+    const video = { readyState: 4, videoWidth: 0, videoHeight: 0 };
+
+    const quality = assessVideoFrameQuality(video, canvas);
+    expect(quality.brightness).toBe(128);
+    expect(quality.blurVariance).toBe(BLUR_VARIANCE_THRESHOLD);
+  });
+
+  it('computes quality when video is ready with valid dimensions', () => {
+    const canvas = document.createElement('canvas');
+    const video = { readyState: 4, videoWidth: 640, videoHeight: 480 };
+
+    const quality = assessVideoFrameQuality(video, canvas);
+    expect(quality).toHaveProperty('brightness');
+    expect(quality).toHaveProperty('blurVariance');
+    expect(quality).toHaveProperty('isDark');
+    expect(quality).toHaveProperty('isBlurry');
+    expect(quality).toHaveProperty('effectiveShortDimPixels');
+    expect(quality).toHaveProperty('dpiLabel');
+  });
+
+  it('returns default when video has no readyState property', () => {
+    const canvas = document.createElement('canvas');
+    // No readyState → getFrameDimensions might return 0,0
+    const video = { videoWidth: 640, videoHeight: 480 };
+
+    // readyState defaults to 0 when not present
+    const quality = assessVideoFrameQuality(video, canvas);
+    expect(quality.brightness).toBe(128);
+  });
+});
+
+/* ================================================================
+ *  getQualityHints — additional branches
+ * ================================================================ */
+
+describe('useScanPipeline — getQualityHints additional branches', () => {
+  it('returns low_contrast when isLowContrast is true', () => {
+    const quality = { brightness: 128, blurVariance: 150, isDark: false, isBlurry: false, isLowContrast: true };
+    const hints = getQualityHints(quality, false);
+    expect(hints).toContain('low_contrast');
+  });
+
+  it('includes move_closer when blurry even if not low resolution', () => {
+    const quality = { brightness: 128, blurVariance: 80, isDark: false, isBlurry: true };
+    const hints = getQualityHints(quality, false);
+    expect(hints).toContain('move_closer');
+  });
+
+  it('includes move_closer when dpiLabel is low (from quality object)', () => {
+    const quality = { brightness: 128, blurVariance: 150, isDark: false, isBlurry: false, dpiLabel: 'low' as const };
+    const hints = getQualityHints(quality, false);
+    expect(hints).toContain('move_closer');
+    expect(hints).toContain('low_resolution');
+  });
+
+  it('does not push ok when hints are non-empty', () => {
+    const quality = { brightness: 50, blurVariance: 150, isDark: true, isBlurry: false };
+    const hints = getQualityHints(quality, false);
+    expect(hints).not.toContain('ok');
+  });
+
+  it('includes both hold_steady and improve_lighting when blurry and dark', () => {
+    const quality = { brightness: 50, blurVariance: 80, isDark: true, isBlurry: true };
+    const hints = getQualityHints(quality, false);
+    expect(hints).toContain('hold_steady');
+    expect(hints).toContain('improve_lighting');
+  });
+});
+
+/* ================================================================
+ *  buildOcrPasses — additional branches
+ * ================================================================ */
+
+describe('useScanPipeline — buildOcrPasses additional branches', () => {
+  it('puts clahe first when isLowContrast is true', () => {
+    const quality = { brightness: 128, blurVariance: 150, isDark: false, isBlurry: false, contrast: 20, isLowContrast: true };
+    const passes = buildOcrPasses(quality, 'lc-');
+    expect(passes[0].label).toBe('lc-center-clahe');
+  });
+
+  it('includes invertBoost and invertPass for very dark', () => {
+    const quality = { brightness: 40, blurVariance: 150, isDark: true, isBlurry: false };
+    const passes = buildOcrPasses(quality, 'vd-');
+    const labels = passes.map(p => p.label);
+    expect(labels).toContain('vd-narrow-invBoost');
+    expect(labels).toContain('vd-narrow-inv');
+  });
+
+  it('includes only invertPass (not invertBoost) when borderline dark', () => {
+    // brightness 100: isDark=false (>=90), isBorderlineDark=true (>=90 && <115), isVeryDark=false (>=60)
+    const quality = { brightness: 100, blurVariance: 150, isDark: false, isBlurry: false };
+    const passes = buildOcrPasses(quality, 'bd-');
+    const labels = passes.map(p => p.label);
+    expect(labels).toContain('bd-narrow-inv');
+    expect(labels).not.toContain('bd-narrow-invBoost');
+  });
+
+  it('includes skew correction passes (85° and 95°)', () => {
+    const quality = { brightness: 128, blurVariance: 150, isDark: false, isBlurry: false };
+    const passes = buildOcrPasses(quality, 'sk-');
+    const labels = passes.map(p => p.label);
+    expect(labels).toContain('sk-narrow-85');
+    expect(labels).toContain('sk-narrow-95');
+  });
+
+  it('includes advanced preprocessing passes (otsu, adaptive, denoise)', () => {
+    const quality = { brightness: 128, blurVariance: 150, isDark: false, isBlurry: false };
+    const passes = buildOcrPasses(quality, 'adv-');
+    const labels = passes.map(p => p.label);
+    expect(labels).toContain('adv-narrow-otsu');
+    expect(labels).toContain('adv-narrow-adaptive');
+    expect(labels).toContain('adv-narrow-denoise');
+  });
+});

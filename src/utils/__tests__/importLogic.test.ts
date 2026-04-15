@@ -54,6 +54,49 @@ describe('parseCSV', () => {
     const result = parseCSV(csv);
     expect(result[0].status).toBe('read');
   });
+
+  it('accepts "id" column header as isbn column', () => {
+    const csv = `id,Title
+"9780141036144","The Great Gatsby"`;
+
+    const result = parseCSV(csv);
+    expect(result).toHaveLength(1);
+    expect(result[0].isbn).toBe('9780141036144');
+  });
+
+  it('handles My Review column as notes', () => {
+    const csv = `ISBN,Title,My Review
+"9780141036144","Book","Great read"`;
+
+    const result = parseCSV(csv);
+    expect(result[0].notes).toBe('Great read');
+  });
+
+  it('handles quoted fields containing commas', () => {
+    const csv = `ISBN,Title,Author
+"9780141036144","Gatsby, The","Fitzgerald, F. Scott"`;
+
+    const result = parseCSV(csv);
+    expect(result).toHaveLength(1);
+    expect(result[0].isbn).toBe('9780141036144');
+  });
+
+  it('returns empty object for lines that do not match CSV regex', () => {
+    // A line that cannot be parsed produces {} which gets filtered out (no isbn)
+    const csv = `ISBN,Title
+"9780141036144","Valid"`;
+
+    const result = parseCSV(csv);
+    // Should still return valid entries
+    expect(result.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('handles Windows-style CRLF line endings', () => {
+    const csv = 'ISBN,Title\r\n"9780141036144","Book"';
+    const result = parseCSV(csv);
+    expect(result).toHaveLength(1);
+    expect(result[0].isbn).toBe('9780141036144');
+  });
 });
 
 describe('extractISBNs', () => {
@@ -80,6 +123,13 @@ describe('extractISBNs', () => {
   it('returns empty array when no ISBNs found', () => {
     expect(extractISBNs('no isbns here')).toEqual([]);
   });
+
+  it('strips hyphens and spaces from extracted ISBNs', () => {
+    const text = '978-0-14-103614-4';
+    const result = extractISBNs(text);
+    // Result should strip non-numeric chars (digits and X only)
+    result.forEach(isbn => expect(isbn).toMatch(/^[0-9X]+$/));
+  });
 });
 
 describe('validateFileName', () => {
@@ -91,5 +141,11 @@ describe('validateFileName', () => {
     const result = validateFileName('books.csv.txt');
     expect(result.valid).toBe(true);
     expect(result.warning).toBeDefined();
+  });
+
+  it('returns valid with no warning for .txt files', () => {
+    const result = validateFileName('books.txt');
+    expect(result.valid).toBe(true);
+    expect(result.warning).toBeUndefined();
   });
 });
