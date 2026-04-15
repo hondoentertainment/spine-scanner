@@ -453,4 +453,28 @@ describe('useBookStore', () => {
     useBookStore.getState().mergeBooks('keep', ['drop']);
     expect(useBookStore.getState().books[0].seriesIndex).toBe(3);
   });
+
+  it('mergeBooks handles null/undefined shelfIds and highlights gracefully', () => {
+    // Books with missing optional arrays
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const keepBook = makeBook({ id: 'keep', shelfIds: undefined as any, notes: undefined as any });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dropBook = makeBook({ id: 'drop', shelfIds: undefined as any, highlights: undefined as any });
+    useBookStore.getState().addBook(keepBook);
+    useBookStore.getState().addBook(dropBook);
+    useBookStore.getState().mergeBooks('keep', ['drop']);
+    const merged = useBookStore.getState().books[0];
+    expect(Array.isArray(merged.shelfIds)).toBe(true);
+  });
+
+  it('mergeBooks handles null pageCount correctly', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const keepBook = makeBook({ id: 'keep', pageCount: 0 as any });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dropBook = makeBook({ id: 'drop', pageCount: null as any });
+    useBookStore.getState().addBook(keepBook);
+    useBookStore.getState().addBook(dropBook);
+    useBookStore.getState().mergeBooks('keep', ['drop']);
+    expect(useBookStore.getState().books[0].pageCount).toBe(0);
+  });
 });
