@@ -76,6 +76,16 @@ function validateDebugFlag(rawValue) {
 function validateMonitoring(rawValue) {
   if (!rawValue) {
     addWarning('VITE_SENTRY_DSN is not set. Production monitoring will be limited.');
+    return;
+  }
+
+  try {
+    const parsed = new URL(rawValue);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      addError('VITE_SENTRY_DSN must use http or https when set.');
+    }
+  } catch {
+    addError('VITE_SENTRY_DSN must be a valid URL when set.');
   }
 }
 
@@ -105,6 +115,64 @@ function validateAppMode(rawValue) {
   }
 }
 
+function isPlaceholderHost(rawValue) {
+  if (!rawValue) return false;
+  try {
+    const parsed = new URL(rawValue);
+    return parsed.hostname === 'example.com' || parsed.hostname.endsWith('.example.com');
+  } catch {
+    return false;
+  }
+}
+
+function isLocalhostHost(rawValue) {
+  if (!rawValue) return false;
+  try {
+    const parsed = new URL(rawValue);
+    return ['localhost', '127.0.0.1', '0.0.0.0'].includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isPlaceholderSupportEmail(rawValue) {
+  if (!rawValue) return false;
+  const normalized = rawValue.toLowerCase();
+  return (
+    normalized === 'noreply@example.com' ||
+    normalized.endsWith('@example.com') ||
+    normalized.endsWith('@example.org') ||
+    normalized.endsWith('@example.net')
+  );
+}
+
+function validateProductionValues(appEnvironment, siteUrl, supportEmail, appRelease) {
+  if (appEnvironment !== 'production') {
+    return;
+  }
+
+  if (!siteUrl) {
+    addError('VITE_SITE_URL must be set to the real production origin when VITE_APP_ENV=production.');
+  } else {
+    if (isPlaceholderHost(siteUrl)) {
+      addError('VITE_SITE_URL cannot use example.com in production.');
+    }
+    if (isLocalhostHost(siteUrl)) {
+      addError('VITE_SITE_URL cannot target localhost in production.');
+    }
+  }
+
+  if (!supportEmail) {
+    addError('VITE_SUPPORT_EMAIL must be set to a monitored inbox when VITE_APP_ENV=production.');
+  } else if (isPlaceholderSupportEmail(supportEmail)) {
+    addError('VITE_SUPPORT_EMAIL cannot use example.* placeholder domains in production.');
+  }
+
+  if (!appRelease) {
+    addError('VITE_APP_RELEASE must be set when VITE_APP_ENV=production.');
+  }
+}
+
 const siteUrl = readEnv('VITE_SITE_URL');
 const basePath = readEnv('VITE_BASE_PATH');
 const supportEmail = readEnv('VITE_SUPPORT_EMAIL');
@@ -122,6 +190,7 @@ validateMonitoring(sentryDsn);
 validateAppEnvironment(appEnvironment);
 validateRelease(appRelease);
 validateAppMode(appMode);
+validateProductionValues(appEnvironment, siteUrl, supportEmail, appRelease);
 
 if (errors.length > 0) {
   console.error('Production readiness check failed:\n');

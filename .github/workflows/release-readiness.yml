@@ -1,0 +1,90 @@
+name: Release readiness
+
+on:
+  workflow_dispatch:
+    inputs:
+      site_url:
+        description: Canonical production origin (for example https://app.example.com)
+        required: true
+        type: string
+      base_path:
+        description: Served base path (must start and end with /)
+        required: true
+        default: /
+        type: string
+      support_email:
+        description: Monitored public support inbox
+        required: true
+        type: string
+
+concurrency:
+  group: release-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      VITE_SITE_URL: ${{ inputs.site_url }}
+      VITE_BASE_PATH: ${{ inputs.base_path }}
+      VITE_SUPPORT_EMAIL: ${{ inputs.support_email }}
+      VITE_ENABLE_SCANNER_DEBUG: 'false'
+      VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+      VITE_APP_ENV: production
+      VITE_APP_RELEASE: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Check production config
+        run: npm run check:production
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: E2E release smoke
+        env:
+          CI: 'true'
+          PLAYWRIGHT_HTML_REPORT: playwright-report-release-smoke
+        run: npm run test:e2e:release
+
+      - name: E2E desktop baseline
+        env:
+          CI: 'true'
+          PLAYWRIGHT_HTML_REPORT: playwright-report-desktop
+        run: npm run test:e2e:desktop
+
+      - name: E2E mobile matrix
+        env:
+          CI: 'true'
+          PLAYWRIGHT_HTML_REPORT: playwright-report-mobile
+        run: npm run test:e2e:mobile
+
+      - name: Upload Playwright reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-reports-${{ github.run_id }}
+          path: |
+            playwright-report-release-smoke
+            playwright-report-desktop
+            playwright-report-mobile

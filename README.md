@@ -136,7 +136,9 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 ## Deployment
 
-The app auto-deploys to GitHub Pages on push to `main` via GitHub Actions. The workflow installs dependencies, builds, and uploads to Pages.
+The default production deployment target is Vercel. Pushes to `main` trigger Vercel production deploys for the connected project (`docs/RELEASING.md`).
+
+The repository still includes a manual GitHub Pages workflow (`.github/workflows/deploy.yml`) for fallback/static-hosting scenarios.
 
 ### Public Launch Configuration
 
@@ -150,7 +152,7 @@ VITE_ENABLE_SCANNER_DEBUG=false
 VITE_APP_ENV=production
 ```
 
-The app now includes footer-linked About, Privacy, Terms, and Support pages, plus social metadata, a share preview image, generated `robots.txt`, and a generated `sitemap.xml`. If you deploy somewhere other than GitHub Pages, keep one canonical public URL, set `VITE_SITE_URL` to it, and set `VITE_BASE_PATH` to the path segment you actually serve from.
+The app now includes footer-linked About, Privacy, Terms, and Support pages, plus social metadata, a share preview image, generated `robots.txt`, and a generated `sitemap.xml`. Keep one canonical public URL, set `VITE_SITE_URL` to it, and set `VITE_BASE_PATH` to the path segment you actually serve from.
 
 For monitoring, `VITE_APP_RELEASE` can be injected by CI so Sentry events can be grouped by deployed revision.
 
@@ -161,6 +163,7 @@ For monitoring, `VITE_APP_RELEASE` can be injected by CI so Sentry events can be
 
 Run `npm run check:production` before production builds to catch missing or risky public-site configuration.
 Run `npm run test:e2e:release` before launch candidates to verify the current release shell, navigation, and support diagnostics path.
+For a full pre-release gate (lint, unit tests, build, desktop + mobile E2E), run the manual GitHub Action `.github/workflows/release-readiness.yml`.
 
 ## Mobile Validation
 
