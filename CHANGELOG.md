@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- _Nothing yet._
+- **Phase 25:** `npm run benchmark:scan` — CSV benchmark for OCR pass planning and resolution gates (`scripts/benchmark-scan.ts`, `tsx`). `useOcrEngine` resolves Tesseract asset base lazily so `import.meta.env` is not required when the pipeline module loads under Node.
+- **Phase 26:** Metadata source (`google_books` | `open_library` | `manual`), peer snapshots for cross-provider comparison, per-field `metadataUserEdited` guards, book detail source badge + conflict banner + **Refresh metadata** (respects user-edited fields). Parallel Google + Open Library lookup; Supabase migration `005_books_metadata_layer.sql` for sync columns.
 
 ## [1.2.3] - 2026-04-11
 

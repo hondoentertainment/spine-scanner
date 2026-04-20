@@ -9,6 +9,7 @@ import { isbnExistsInLibrary, isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { exportToGoodreadsCSV } from '../utils/goodreadsExport.ts';
 import { exportToJSON, importFromJSON, exportToLibraryThingTSV, exportToStoryGraphCSV, exportToHTML } from '../utils/exportFormats.ts';
 import { findDuplicateIsbnGroups } from '../utils/libraryDuplicates.ts';
+import { peersFromApiSnapshots } from '../lib/metadataPeers.ts';
 import { Download, Upload, Trash2, Globe, CheckCircle, Loader2, X, GitMerge } from 'lucide-react';
 import type { BookEntry } from '../types.ts';
 import s from './DataManagement.module.css';
@@ -134,6 +135,8 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                 const newBook: BookEntry = {
                     id: crypto.randomUUID(),
                     isbn: storedIsbn,
+                    metadataSource: metadata.metadataSource,
+                    metadataPeers: peersFromApiSnapshots(metadata.google, metadata.openLibrary),
                     title: metadata.title,
                     author: metadata.authors.join(', '),
                     pageCount: metadata.pageCount,

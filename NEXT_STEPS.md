@@ -27,22 +27,22 @@ Added a **Scan statistics panel** to `ProfileSettings.tsx`. It uses `useAnalytic
 
 The panel is hidden when `totalScans === 0` to avoid cluttering new installs. Responsive grid collapses to 2 columns on narrow viewports.
 
-### 3. Phase 25 — Scan Accuracy Hardening (in progress)
+### 3. Phase 25 — Scan Accuracy Hardening (complete)
 
 Progress within Phase 25:
 
 1. **Confidence scoring** ✅ Already done — `ScanConfidenceBand` (`low` / `medium` / `high`) computed in `useScanPipeline` and surfaced in the Scanner UI via the `scanHealthCard` panel. Tests existed in `useScanPipeline.test.ts`.
 2. **Regression fixture test suite** ✅ Added — `src/hooks/__tests__/scanRegressionFixtures.test.ts` covers: dim-light capture, glossy/over-exposed cover, partial barcode with checksum-repair, rotated spine (90°/270° pass), low-resolution (move-closer), and confidence band mapping (low/medium/high).
 3. **OCR diagnostics panel** ✅ Already done — `DebugPanel.tsx` exposes live telemetry and timestamped scan logs, toggled by the terminal icon in the scanner toolbar.
-4. **Device benchmark runner** — still pending. A `scripts/benchmark-scan.ts` script that runs the pipeline against the fixture set and outputs a CSV would complete this phase.
+4. **Device benchmark runner** ✅ Complete — `scripts/benchmark-scan.ts` via `npm run benchmark:scan` outputs CSV (OCR pass-plan scenarios + resolution gates; set `SCAN_BENCHMARK_DEVICE` for a stable device label column).
 
-### 4. Phase 26 — Metadata Quality Layer (follow-on)
+### 4. Phase 26 — Metadata Quality Layer (in progress)
 
-Once scan accuracy is solid, focus on data trust. Priority items:
+Core metadata trust shipped; optional follow-ons remain in roadmap notes below.
 
-- Store `metadataSource` (`google_books` | `open_library` | `manual`) per book entry.
-- Show a source badge in `BookDetail` and flag entries where Google Books and Open Library disagree on author or page count.
-- Add a "Refresh metadata" action per book that re-queries APIs but never overwrites user-edited fields (check a `userEdited` flag per field).
+- Store `metadataSource` (`google_books` | `open_library` | `manual`) per book entry ✅
+- Show a source badge in `BookDetail` and flag entries where Google Books and Open Library disagree on author or page count ✅
+- Add a "Refresh metadata" action per book that re-queries APIs but never overwrites user-edited fields (`metadataUserEdited` per field) ✅
 
 ---
 

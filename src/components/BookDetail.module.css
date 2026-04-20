@@ -183,6 +183,72 @@
   background: rgba(56, 189, 248, 0.2);
 }
 
+.shareBtn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.metadataStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.15rem;
+}
+
+.sourceBadge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.22);
+  color: #c7d2fe;
+  border: 1px solid rgba(129, 140, 248, 0.35);
+}
+
+.conflictBanner {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.55rem;
+  line-height: 1.35;
+}
+
+.peerPickRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+}
+
+.peerPickBtn {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(129, 140, 248, 0.45);
+  background: rgba(99, 102, 241, 0.18);
+  color: #e0e7ff;
+  cursor: pointer;
+}
+
+.peerPickBtn:hover {
+  background: rgba(99, 102, 241, 0.32);
+}
+
+.spinIcon {
+  animation: spinIcon 0.85s linear infinite;
+}
+
+@keyframes spinIcon {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ---- Edit mode ---- */
 .editFields {
   display: flex;

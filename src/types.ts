@@ -1,8 +1,48 @@
+/** Where the displayed title/author/pages/cover came from (Phase 26 metadata layer). */
+export type MetadataSource = 'google_books' | 'open_library' | 'manual';
+
+/** Raw metadata from a single provider (Google Books or Open Library). */
+export interface BookMetadata {
+  title: string;
+  authors: string[];
+  pageCount: number;
+  thumbnail: string;
+  isbn: string;
+}
+
+/** Result of a full ISBN lookup (primary fields + both providers when available). */
+export interface BookLookupResult extends BookMetadata {
+  metadataSource: MetadataSource;
+  google: BookMetadata | null;
+  openLibrary: BookMetadata | null;
+}
+
+/** Snapshot from one provider for conflict hints and one-tap resolution. */
+export interface MetadataPeerSnapshot {
+  /** Omitted in older exports; treat as unknown when missing. */
+  title?: string;
+  author: string;
+  pageCount: number;
+  thumbnail?: string;
+}
+
 export interface BookEntry {
   id: string;
   isbn: string;
   /** True when the book was added by photo only (no ISBN). isbn will be photo-{uuid}. */
   isPhotoOnly?: boolean;
+  /** Primary metadata API used for the current displayed fields, when known. */
+  metadataSource?: MetadataSource;
+  /** Side-by-side author/page snapshots when both Google Books and Open Library returned data. */
+  metadataPeers?: {
+    google?: MetadataPeerSnapshot;
+    openLibrary?: MetadataPeerSnapshot;
+  };
+  /**
+   * Per-field guard: refresh metadata will not overwrite fields the user has edited
+   * in book detail (Save from Edit Details).
+   */
+  metadataUserEdited?: Partial<Record<'title' | 'author' | 'pageCount' | 'coverImg', true>>;
   title: string;
   author: string;
   pageCount: number;

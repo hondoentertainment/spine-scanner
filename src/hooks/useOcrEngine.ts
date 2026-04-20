@@ -42,11 +42,14 @@ const WORKER_CREATION_TIMEOUT = (typeof navigator !== 'undefined' && (navigator.
     ? 45000
     : 30000;
 
-/** Tesseract asset base — works with any Vite base (/, /spine-scanner/, etc.) */
-const TESS_ASSET_BASE = (() => {
-    const base = (import.meta.env.BASE_URL ?? '/').replace(/\/?$/, '/');
+/** Tesseract asset base — works with any Vite base (/, /spine-scanner/, etc.). Lazy for Node/tsx scripts that import pipeline-only modules. */
+function getTessAssetBase(): string {
+    const env = typeof import.meta !== 'undefined'
+        ? (import.meta as ImportMeta & { env?: { BASE_URL?: string } }).env
+        : undefined;
+    const base = (env?.BASE_URL ?? '/').replace(/\/?$/, '/');
     return `${base}tesseract/`;
-})();
+}
 const MAX_WORKER_RETRIES = 3;
 /** Base delay (ms) for exponential backoff between worker creation retries. */
 const RETRY_BASE_DELAY = 500;
@@ -169,8 +172,9 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
                     return null;
                 }
 
-                const workerURL = new URL(`${TESS_ASSET_BASE}worker.min.js`, window.location.href).href;
-                const coreURL = new URL(TESS_ASSET_BASE, window.location.href).href;
+                const base = getTessAssetBase();
+                const workerURL = new URL(`${base}worker.min.js`, window.location.href).href;
+                const coreURL = new URL(base, window.location.href).href;
                 addLog(`Creating OCR worker (attempt ${workerRetries.current + 1}/${MAX_WORKER_RETRIES}, assets: ${workerURL.substring(0, 50)}...)`);
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -315,8 +319,9 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
                 const tess = await loadTessModule();
                 if (tess.recognize) {
                     addLog(`[${label}] Using one-shot recognize() fallback`);
-                    const workerURL = new URL(`${TESS_ASSET_BASE}worker.min.js`, window.location.href).href;
-                    const coreURL = new URL(TESS_ASSET_BASE, window.location.href).href;
+                    const base = getTessAssetBase();
+                    const workerURL = new URL(`${base}worker.min.js`, window.location.href).href;
+                    const coreURL = new URL(base, window.location.href).href;
                     const recognizeOptions: Record<string, unknown> = {
                         workerPath: workerURL,
                         corePath: coreURL,
@@ -411,8 +416,9 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
             const tess = await loadTessModule();
             if (!tess.recognize) return { isbn: null, allCandidates: [], confidence };
             addLog(`[${label}] OCR with lang=${lang} (multi-language fallback)`);
-            const workerURL = new URL(`${TESS_ASSET_BASE}worker.min.js`, window.location.href).href;
-            const coreURL = new URL(TESS_ASSET_BASE, window.location.href).href;
+            const base = getTessAssetBase();
+            const workerURL = new URL(`${base}worker.min.js`, window.location.href).href;
+            const coreURL = new URL(base, window.location.href).href;
             const recognizeOptions: Record<string, unknown> = {
                 workerPath: workerURL,
                 corePath: coreURL,

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useBookLookup } from '../useBookLookup';
+import { useBookLookup, clearBookLookupCache } from '../useBookLookup.ts';
 
 /**
  * ─── 1b. The Re-issue Paradox ────────────────────────────────────
@@ -56,6 +56,7 @@ const OL_RARE_EDITION_RESPONSE = {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  clearBookLookupCache();
 });
 
 describe('The Re-issue Paradox — edition-specific metadata', () => {
@@ -85,6 +86,8 @@ describe('The Re-issue Paradox — edition-specific metadata', () => {
     expect(metadata!.pageCount).toBe(188); // Edition-specific
     expect(metadata!.pageCount).not.toBe(218); // NOT the modern hardcover
     expect(metadata!.isbn).toBe(PENGUIN_1990s_ISBN);
+    expect(metadata!.metadataSource).toBe('google_books');
+    expect(metadata!.google).not.toBeNull();
   });
 
   it('two different ISBNs for the same book return different page counts', async () => {
@@ -165,6 +168,9 @@ describe('The Re-issue Paradox — edition-specific metadata', () => {
     expect(metadata).not.toBeNull();
     expect(metadata!.pageCount).toBe(182);
     expect(metadata!.isbn).toBe(rareIsbn);
+    expect(metadata!.metadataSource).toBe('open_library');
+    expect(metadata!.google).toBeNull();
+    expect(metadata!.openLibrary).not.toBeNull();
   });
 
   it('sends the exact scanned ISBN to the API (no normalization that would lose edition)', async () => {
@@ -193,10 +199,9 @@ describe('The Re-issue Paradox — edition-specific metadata', () => {
       await result.current.lookupByIsbn(uniqueIsbn);
     });
 
-    // Verify the API was called with the exact ISBN
+    // Verify the API was called with the exact ISBN (Google + Open Library run in parallel)
     expect(fetchMock).toHaveBeenCalled();
-    const firstCallUrl = fetchMock.mock.calls[0][0] as string;
-    expect(firstCallUrl).toContain(uniqueIsbn);
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes(uniqueIsbn))).toBe(true);
   });
 
   it('handles API returning 0 page count for unknown editions', async () => {

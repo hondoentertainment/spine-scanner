@@ -1,8 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
+import { useBookLookup } from '../hooks/useBookLookup.ts';
 import { useToast } from './Toast.tsx';
 import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import type { BookEntry } from '../types.ts';
+import { applyMetadataRefresh } from '../lib/metadataRefresh.ts';
+import {
+  applyMetadataPeerChoice,
+  getMetadataConflictFlags,
+  labelForMetadataSource,
+} from '../lib/metadataPeers.ts';
 import { generateAmazonLink } from '../utils/amazonLink.ts';
 import { getBookCoverSrc } from '../utils/bookPresentation.ts';
 import { shareBook } from '../utils/shareBook.ts';
@@ -10,7 +17,7 @@ import { isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
 import {
   X, ExternalLink, BookOpen, CheckCircle, Clock, XCircle,
-  Pencil, Save, Tag, Trash2, Share2
+  Pencil, Save, Tag, Trash2, Share2, RefreshCw, Image as ImageIcon,
 } from 'lucide-react';
 import styles from './BookDetail.module.css';
 
@@ -46,8 +53,12 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
     unassignShelf,
   } = useBookStore();
   const { toast, confirm } = useToast();
+  const { lookupByIsbn } = useBookLookup();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
   const shelfAnchorRef = useRef<HTMLDivElement>(null);
+  const editBaselineRef = useRef({ title: '', author: '', pageCount: 0, coverImg: '' });
+  const [refreshingMeta, setRefreshingMeta] = useState(false);
+  const [fetchingCover, setFetchingCover] = useState(false);
   const [editing, setEditing] = useState(false);
   const [showShelfPicker, setShowShelfPicker] = useState(false);
   const [draft, setDraft] = useState({
@@ -67,6 +78,12 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   const progressValue = book.pagesFinished || 0;
 
   const handleEdit = () => {
+    editBaselineRef.current = {
+      title: book.title,
+      author: book.author,
+      pageCount: book.pageCount,
+      coverImg: book.coverImg,
+    };
     setDraft({
       title: book.title,
       author: book.author,
@@ -82,6 +99,13 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   const handleSave = () => {
     const idxRaw = draft.seriesIndex.trim();
     const parsedIdx = idxRaw === '' ? undefined : Number(idxRaw);
+    const base = editBaselineRef.current;
+    const nextUserEdited: BookEntry['metadataUserEdited'] = { ...book.metadataUserEdited };
+    if (draft.title.trim() !== base.title) nextUserEdited.title = true;
+    if (draft.author.trim() !== base.author) nextUserEdited.author = true;
+    if ((draft.pageCount || 0) !== base.pageCount) nextUserEdited.pageCount = true;
+    if (draft.coverImg.trim() !== base.coverImg) nextUserEdited.coverImg = true;
+
     updateBook(book.id, {
       title: draft.title.trim() || book.title,
       author: draft.author.trim() || book.author,
@@ -91,6 +115,7 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
       amazonLink: generateAmazonLink(draft.isbn.trim() || book.isbn),
       seriesName: draft.seriesName.trim() || undefined,
       seriesIndex: parsedIdx !== undefined && Number.isFinite(parsedIdx) ? parsedIdx : undefined,
+      metadataUserEdited: nextUserEdited,
     });
     setEditing(false);
     toast('Book updated', 'success');
@@ -121,6 +146,72 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
     document.addEventListener('mousedown', onPointerDown);
     return () => document.removeEventListener('mousedown', onPointerDown);
   }, [showShelfPicker]);
+
+  const conflictFlags = getMetadataConflictFlags(book);
+  const conflictAny = conflictFlags.author || conflictFlags.pageCount || conflictFlags.title;
+  const hasBothPeers = Boolean(book.metadataPeers?.google && book.metadataPeers?.openLibrary);
+  const missingCover = !isBookPhotoOnly(book) && !book.coverImg?.trim();
+  const conflictSummary = (() => {
+    if (!conflictAny) return '';
+    const parts: string[] = [];
+    if (conflictFlags.title) parts.push('title');
+    if (conflictFlags.author) parts.push('author');
+    if (conflictFlags.pageCount) parts.push('page count');
+    if (parts.length === 1) return `Google Books and Open Library disagree on ${parts[0]}.`;
+    if (parts.length === 2) return `Google Books and Open Library disagree on ${parts[0]} and ${parts[1]}.`;
+    return `Google Books and Open Library disagree on ${parts[0]}, ${parts[1]}, and ${parts[2]}.`;
+  })();
+
+  const handleRefreshMetadata = async () => {
+    if (isBookPhotoOnly(book)) {
+      toast('Photo-only entries need an ISBN before metadata refresh.', 'error');
+      return;
+    }
+    setRefreshingMeta(true);
+    try {
+      const lookup = await lookupByIsbn(book.isbn, { bypassCache: true });
+      if (!lookup) {
+        toast('No metadata found for this ISBN.', 'error');
+        return;
+      }
+      const updates = applyMetadataRefresh(book, lookup);
+      updateBook(book.id, updates);
+      toast('Metadata refreshed from APIs', 'success');
+    } finally {
+      setRefreshingMeta(false);
+    }
+  };
+
+  const handleFetchCover = async () => {
+    if (isBookPhotoOnly(book)) return;
+    if (book.metadataUserEdited?.coverImg) {
+      toast('Cover is marked user-edited. Use Edit Details or Refresh metadata.', 'info');
+      return;
+    }
+    setFetchingCover(true);
+    try {
+      const lookup = await lookupByIsbn(book.isbn, { bypassCache: true });
+      const thumb = lookup?.thumbnail?.trim();
+      if (!thumb) {
+        toast('No cover image URL found for this ISBN.', 'error');
+        return;
+      }
+      updateBook(book.id, { coverImg: thumb, amazonLink: generateAmazonLink(book.isbn) });
+      toast('Cover image updated', 'success');
+    } finally {
+      setFetchingCover(false);
+    }
+  };
+
+  const handleApplyPeer = (provider: 'google_books' | 'open_library') => {
+    const updates = applyMetadataPeerChoice(book, provider);
+    if (!updates) {
+      toast('No saved snapshot for that provider.', 'error');
+      return;
+    }
+    updateBook(book.id, updates);
+    toast(`Applied ${provider === 'google_books' ? 'Google Books' : 'Open Library'} metadata`, 'success');
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -252,6 +343,32 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                   {book.startedAt && <span>Started {new Date(book.startedAt).toLocaleDateString()}</span>}
                   {book.finishedAt && <span>Finished {new Date(book.finishedAt).toLocaleDateString()}</span>}
                 </div>
+                <div className={styles.metadataStrip} role="status" aria-live="polite">
+                  <span className={styles.sourceBadge}>
+                    Metadata: {labelForMetadataSource(book.metadataSource)}
+                  </span>
+                  {conflictAny && (
+                    <span className={styles.conflictBanner}>{conflictSummary}</span>
+                  )}
+                </div>
+                {hasBothPeers && conflictAny && (
+                  <div className={styles.peerPickRow}>
+                    <button
+                      type="button"
+                      className={styles.peerPickBtn}
+                      onClick={() => handleApplyPeer('google_books')}
+                    >
+                      Use Google Books
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.peerPickBtn}
+                      onClick={() => handleApplyPeer('open_library')}
+                    >
+                      Use Open Library
+                    </button>
+                  </div>
+                )}
                 <div className={styles.linkRow}>
                   {generateAmazonLink(book.isbn) && (
                     <a
@@ -274,6 +391,32 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                   >
                     <Share2 size={12} /> Share
                   </button>
+                  {!isBookPhotoOnly(book) && (
+                    <button
+                      type="button"
+                      onClick={() => void handleRefreshMetadata()}
+                      className={styles.shareBtn}
+                      disabled={refreshingMeta}
+                      aria-busy={refreshingMeta}
+                      aria-label="Refresh metadata from Google Books and Open Library"
+                    >
+                      <RefreshCw size={12} className={refreshingMeta ? styles.spinIcon : undefined} />
+                      {refreshingMeta ? 'Refreshing…' : 'Refresh metadata'}
+                    </button>
+                  )}
+                  {missingCover && (
+                    <button
+                      type="button"
+                      onClick={() => void handleFetchCover()}
+                      className={styles.shareBtn}
+                      disabled={fetchingCover}
+                      aria-busy={fetchingCover}
+                      aria-label="Fetch cover image from metadata APIs"
+                    >
+                      <ImageIcon size={12} className={fetchingCover ? styles.spinIcon : undefined} />
+                      {fetchingCover ? 'Fetching…' : 'Fetch cover'}
+                    </button>
+                  )}
                 </div>
               </div>
             </>

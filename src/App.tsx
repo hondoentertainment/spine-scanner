@@ -15,6 +15,7 @@ import { useToast } from './components/Toast.tsx';
 import { mergeSync, pushBooks } from './lib/syncBooks.ts';
 import { formatRelativeTime } from './utils/formatRelativeTime.ts';
 import type { BookEntry } from './types.ts';
+import { peersFromApiSnapshots } from './lib/metadataPeers.ts';
 import { BookOpen, Library, Scan, AlertCircle, Layers, User, Sparkles, Cloud, BookMarked, ChevronRight, Home } from 'lucide-react';
 import { generateAmazonLink } from './utils/amazonLink.ts';
 import { isValidIsbn, normalizeToIsbn13 } from './utils/isbnValidation.ts';
@@ -447,6 +448,7 @@ function App() {
       id,
       isbn: photoIsbn,
       isPhotoOnly: true,
+      metadataSource: 'manual',
       title: 'Unknown Title',
       author: 'Unknown Author',
       pageCount: 0,
@@ -538,6 +540,7 @@ function App() {
       const reviewBook: BookEntry = {
         id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2),
         isbn: normalizedInput,
+        metadataSource: 'manual',
         title: 'Review ISBN Entry',
         author: 'Manual Entry',
         pageCount: 0,
@@ -562,6 +565,8 @@ function App() {
         const newBook: BookEntry = {
           id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2),
           isbn: storedIsbn,
+          metadataSource: metadata.metadataSource,
+          metadataPeers: peersFromApiSnapshots(metadata.google, metadata.openLibrary),
           title: metadata.title,
           author: metadata.authors.join(', '),
           pageCount: metadata.pageCount,
@@ -585,6 +590,7 @@ function App() {
           const newBook: BookEntry = {
             id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2),
             isbn: storedIsbn,
+            metadataSource: 'manual',
             title: 'Unknown Title',
             author: 'Unknown Author',
             pageCount: 0,

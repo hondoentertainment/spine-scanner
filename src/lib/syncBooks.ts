@@ -1,5 +1,5 @@
 import { supabase } from './supabase.ts';
-import type { BookEntry, Shelf } from '../types.ts';
+import type { BookEntry, MetadataSource, Shelf } from '../types.ts';
 import { addBreadcrumb, captureException } from './errorMonitoring.ts';
 
 /** Row shape in the Supabase `books` table */
@@ -23,6 +23,9 @@ interface BookRow {
   started_at?: string | null;
   finished_at?: string | null;
   last_progress_at?: string | null;
+  metadata_source?: string | null;
+  metadata_peers?: BookEntry['metadataPeers'] | null;
+  metadata_user_edited?: BookEntry['metadataUserEdited'] | null;
   updated_at: string;
 }
 
@@ -56,6 +59,9 @@ export function toBookEntry(row: BookRow): BookEntry {
     startedAt: row.started_at ?? null,
     finishedAt: row.finished_at ?? null,
     lastProgressAt: row.last_progress_at ?? null,
+    metadataSource: (row.metadata_source as MetadataSource | undefined) ?? undefined,
+    metadataPeers: row.metadata_peers ?? undefined,
+    metadataUserEdited: row.metadata_user_edited ?? undefined,
   };
 }
 
@@ -80,6 +86,9 @@ export function toBookRow(book: BookEntry, userId: string): Omit<BookRow, 'updat
     started_at: book.startedAt ?? null,
     finished_at: book.finishedAt ?? null,
     last_progress_at: book.lastProgressAt ?? null,
+    metadata_source: book.metadataSource ?? null,
+    metadata_peers: book.metadataPeers ?? null,
+    metadata_user_edited: book.metadataUserEdited ?? null,
   };
 }
 
