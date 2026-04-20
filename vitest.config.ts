@@ -5,7 +5,9 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'jsdom',
-    ...(process.env.CI ? { testTimeout: 180000, maxWorkers: 1 } : {}),
+    // On GitHub Actions, the forks pool has been observed to hang ~35m after tests finish
+    // (orphan vitest/node processes until the job step timeout). Threads pool exits reliably on ubuntu.
+    ...(process.env.CI ? { testTimeout: 180000, pool: 'threads' as const, maxWorkers: 4 } : {}),
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     exclude: ['e2e/**', 'node_modules/**'],
