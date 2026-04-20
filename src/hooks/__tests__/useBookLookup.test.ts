@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useBookLookup } from '../useBookLookup';
+import { useBookLookup, clearBookLookupCache } from '../useBookLookup.ts';
 
 const mockApiResponse = {
   totalItems: 1,
@@ -16,6 +16,7 @@ const mockApiResponse = {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  clearBookLookupCache();
 });
 
 describe('useBookLookup', () => {

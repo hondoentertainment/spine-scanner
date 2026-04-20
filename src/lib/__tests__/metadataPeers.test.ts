@@ -46,7 +46,7 @@ describe('getMetadataConflictFlags', () => {
       shelfIds: [],
       metadataPeers: { google: { author: 'A', pageCount: 10 } },
     };
-    expect(getMetadataConflictFlags(book)).toEqual({ author: false, pageCount: false });
+    expect(getMetadataConflictFlags(book)).toEqual({ author: false, pageCount: false, title: false });
   });
 
   it('detects author disagreement', () => {

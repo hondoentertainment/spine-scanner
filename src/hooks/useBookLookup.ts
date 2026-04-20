@@ -160,7 +160,7 @@ export async function fetchBookLookupByIsbn(
     return result;
   } catch (error) {
     captureException(error, { area: 'fetchBookLookupByIsbn', isbnLength: isbn.length });
-    return null;
+    throw error;
   }
 }
 
