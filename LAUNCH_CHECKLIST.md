@@ -2,52 +2,81 @@
 
 Use this before the first public launch and before major production changes.
 
-## Configuration
+## 1) Launch metadata and ownership
 
-- Set `VITE_SITE_URL` to the real production origin
-- Set `VITE_BASE_PATH` to the real served path
-- Set `VITE_SUPPORT_EMAIL` to a monitored address
-- Set `VITE_ENABLE_SCANNER_DEBUG=false`
-- Configure `VITE_SENTRY_DSN` for production
-- Configure `VITE_APP_ENV=production`
-- Ensure `VITE_APP_RELEASE` is injected by CI/deploy
-- Confirm Supabase production keys and project are correct
+Fill this out first so responsibility is explicit:
 
-## Product Trust
+- Release version:
+- Commit SHA:
+- Deploy target (Vercel production, Pages manual, etc.):
+- Canonical URL:
+- Launch verifier owner:
+- Rollback owner:
+- Support owner:
+
+## 2) Configuration gate
+
+### Required environment values
+
+- `VITE_SITE_URL` set to the real production origin
+- `VITE_BASE_PATH` set to the actual served path
+- `VITE_SUPPORT_EMAIL` set to a monitored inbox
+- `VITE_ENABLE_SCANNER_DEBUG=false`
+- `VITE_SENTRY_DSN` set for production monitoring
+- `VITE_APP_ENV=production`
+- `VITE_APP_RELEASE` injected by CI/deploy
+- Supabase production URL/key pair is correct for this deployment
+
+### Validation command
+
+- Run `npm run check:production` in the same environment used for the build.
+
+## 3) Product trust and policy pass
 
 - Review About, Privacy, Terms, and Support pages for final wording
-- Confirm support email is shown correctly in the footer and support page
-- Verify canonical URL, Open Graph image, and structured data in production HTML
+- Confirm support email appears in footer and Support page
+- Verify canonical URL, Open Graph tags, and structured data in production HTML
+- Verify `robots.txt` and `sitemap.xml` are generated and reachable
 - Submit `sitemap.xml` to Search Console after first deploy
 
-## Data and Recovery
+## 4) Data and recovery readiness
 
-- Apply all required Supabase migrations in production
-- Verify database backup/restore plan exists
+- Apply all required Supabase migrations in production (001-004 in `supabase/migrations/`)
+- Verify automated backup/restore plan exists for production database
 - Test sign-in, sync, export, and import on production config
-- Confirm account recovery/password reset flow works
+- Confirm password reset/account recovery flow works
+- Export and restore a JSON backup as a dry-run recovery drill
 
-## Release Verification
+## 5) Release verification gate
 
-- Run `npm run lint`
-- Run `npm run test`
-- Run `npm run build`
-- Run `npm run test:e2e:release`
-- Run `npm run test:e2e:desktop`
-- Run mobile validation against the release build
+### Required automated checks
+
+- Run `npm run release:verify` (lint + unit tests + build + release E2E + desktop E2E)
+- Run `npm run release:verify:mobile` (mobile Playwright projects)
+
+### Required manual checks
+
+- Run the real-device matrix in `e2e/MOBILE_TEST_MATRIX.md` (iPhone Safari + Android Chrome)
 - Manually test scan, photo fallback, manual ISBN, review inbox, export, and offline recovery
 
-## Deployment
+## 6) Deploy and rollback readiness
 
-- Confirm the deploy target and canonical URL match
-- Confirm monitoring is enabled before shipping
-- Record the version or commit being deployed
-- Assign one owner for launch verification and one for rollback
+- Confirm deploy target and canonical URL match
+- Confirm Sentry monitoring is enabled before shipping
+- Record version/commit in release notes and deploy log
+- Confirm rollback owner has the prior known-good revision and rollback steps
+- Confirm launch verifier and rollback owner are both online for rollout window
 
-## Post-Deploy
+## 7) Post-deploy verification (first 30 minutes)
 
-- Verify the home page, library page, and trust pages load correctly
-- Verify the service worker registers cleanly
-- Verify `robots.txt` and `sitemap.xml` are reachable
-- Confirm no spike in Sentry errors after deploy
-- Confirm support inbox is monitored for launch week
+- Verify home, library, and public trust pages load correctly
+- Verify service worker registration is clean (no update loop)
+- Verify `robots.txt` and `sitemap.xml` return 200
+- Check Sentry for error spikes/regressions vs baseline
+- Confirm support inbox is monitored and responding
+
+## 8) Post-launch operations (first 7 days)
+
+- Track scan success rate and sync failure trends daily
+- Review top support issues and update troubleshooting notes
+- Capture any rollback incidents, mitigations, and follow-up tasks

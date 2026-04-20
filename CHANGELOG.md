@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-- _Nothing yet._
+- **Release ops:** Added `npm run release:verify`, `release:verify:mobile`, and `release:verify:all` scripts to run the launch verification gate in one command.
+- **Docs:** Expanded `LAUNCH_CHECKLIST.md` into an owner-based launch runbook (configuration, data/recovery, deploy, and post-launch checks).
+- **Docs:** Added `docs/OPERATIONS_RUNBOOK.md` with rollback procedure, support triage flow, and launch-week monitoring guidance.
+- **Docs:** Expanded `docs/RELEASING.md` with explicit ownership, release gating, and post-deploy verification steps.
 
 ## [1.2.2] - 2026-04-10
 

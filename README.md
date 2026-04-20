@@ -126,6 +126,9 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 | `npm run test:e2e:ui` | Run Playwright with UI |
 | `npm run test:e2e:mobile` | Run mobile Playwright matrix projects |
 | `npm run test:e2e:desktop` | Run desktop Playwright baseline |
+| `npm run release:verify` | Run required release gate (lint + test + build + release/desktop E2E) |
+| `npm run release:verify:mobile` | Run mobile automated release gate |
+| `npm run release:verify:all` | Run full automated release gate including mobile projects |
 | `npm run lint` | Lint with ESLint |
 
 ### E2E Setup
@@ -136,7 +139,7 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 ## Deployment
 
-The app auto-deploys to GitHub Pages on push to `main` via GitHub Actions. The workflow installs dependencies, builds, and uploads to Pages.
+Default production hosting is Vercel (pushes to `main` deploy the connected project). A manual GitHub Pages workflow is available for environments that intentionally use Pages.
 
 ### Public Launch Configuration
 
@@ -158,9 +161,11 @@ For monitoring, `VITE_APP_RELEASE` can be injected by CI so Sentry events can be
 
 - Phased roadmap: `PRODUCTION_PLAN.md`
 - Release checklist: `LAUNCH_CHECKLIST.md`
+- Release and tagging runbook: `docs/RELEASING.md`
+- Launch operations and rollback runbook: `docs/OPERATIONS_RUNBOOK.md`
 
 Run `npm run check:production` before production builds to catch missing or risky public-site configuration.
-Run `npm run test:e2e:release` before launch candidates to verify the current release shell, navigation, and support diagnostics path.
+Run `npm run release:verify` before launch candidates to validate the required automated gate.
 
 ## Mobile Validation
 
