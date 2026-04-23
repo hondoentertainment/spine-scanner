@@ -17,7 +17,8 @@ export type AnalyticsEventType =
   | 'book_removed'
   | 'import_performed'
   | 'export_performed'
-  | 'sync_performed';
+  | 'sync_performed'
+  | 'metadata_conflict';
 
 /** Aggregated summary stats derived from events. */
 export interface AnalyticsSummary {
@@ -32,6 +33,7 @@ export interface AnalyticsSummary {
   imports: number;
   exports: number;
   syncs: number;
+  metadataConflicts: number;
 }
 
 interface AnalyticsStore {
@@ -69,6 +71,7 @@ export function summarizeAnalyticsEvents(events: AnalyticsEvent[]): AnalyticsSum
     imports: events.filter((e) => e.type === 'import_performed').length,
     exports: events.filter((e) => e.type === 'export_performed').length,
     syncs: events.filter((e) => e.type === 'sync_performed').length,
+    metadataConflicts: events.filter((e) => e.type === 'metadata_conflict').length,
   };
 }
 

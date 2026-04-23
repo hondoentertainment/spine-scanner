@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useToast } from './Toast.tsx';
 import { useFocusTrap } from '../hooks/useFocusTrap.ts';
+import { useBookLookup } from '../hooks/useBookLookup.ts';
 import type { BookEntry } from '../types.ts';
 import { generateAmazonLink } from '../utils/amazonLink.ts';
 import { getBookCoverSrc } from '../utils/bookPresentation.ts';
@@ -10,7 +11,7 @@ import { isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
 import {
   X, ExternalLink, BookOpen, CheckCircle, Clock, XCircle,
-  Pencil, Save, Tag, Trash2, Share2
+  Pencil, Save, Tag, Trash2, Share2, RefreshCw, AlertTriangle
 } from 'lucide-react';
 import styles from './BookDetail.module.css';
 
@@ -33,6 +34,12 @@ const statusIcons: Record<BookEntry['status'], React.ReactNode> = {
   dnf: <XCircle size={16} />,
 };
 
+const sourceLabels: Record<string, string> = {
+  google_books: 'Google Books',
+  open_library: 'Open Library',
+  manual: 'Manual entry',
+};
+
 const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   const {
     updateBook,
@@ -46,6 +53,7 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
     unassignShelf,
   } = useBookStore();
   const { toast, confirm } = useToast();
+  const { refreshMetadata, loading: refreshLoading } = useBookLookup();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
   const shelfAnchorRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState(false);
@@ -82,6 +90,16 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   const handleSave = () => {
     const idxRaw = draft.seriesIndex.trim();
     const parsedIdx = idxRaw === '' ? undefined : Number(idxRaw);
+
+    // Track which fields the user changed so they are preserved on metadata refresh
+    const changedFields: string[] = [];
+    if (draft.title.trim() !== book.title) changedFields.push('title');
+    if (draft.author.trim() !== book.author) changedFields.push('author');
+    if (draft.isbn.trim() !== book.isbn) changedFields.push('isbn');
+    if ((draft.pageCount || 0) !== book.pageCount) changedFields.push('pageCount');
+    if (draft.coverImg.trim() !== book.coverImg) changedFields.push('coverImg');
+    const userEditedFields = [...new Set([...(book.userEditedFields ?? []), ...changedFields])];
+
     updateBook(book.id, {
       title: draft.title.trim() || book.title,
       author: draft.author.trim() || book.author,
@@ -91,6 +109,7 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
       amazonLink: generateAmazonLink(draft.isbn.trim() || book.isbn),
       seriesName: draft.seriesName.trim() || undefined,
       seriesIndex: parsedIdx !== undefined && Number.isFinite(parsedIdx) ? parsedIdx : undefined,
+      userEditedFields,
     });
     setEditing(false);
     toast('Book updated', 'success');
@@ -110,6 +129,54 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
       onClose();
       toast('Book removed', 'info');
     }
+  };
+
+  const handleRefreshMetadata = async () => {
+    const newMeta = await refreshMetadata(book);
+    if (!newMeta) {
+      toast('Could not find updated metadata for this ISBN', 'error');
+      return;
+    }
+
+    const editedFields = book.userEditedFields ?? [];
+    const REFRESHABLE = ['title', 'author', 'pageCount', 'coverImg'] as const;
+
+    const willUpdate = REFRESHABLE.filter((f) => {
+      if (editedFields.includes(f)) return false;
+      const newVal = f === 'title' ? newMeta.title
+        : f === 'author' ? (newMeta.authors[0] ?? '')
+        : f === 'pageCount' ? newMeta.pageCount
+        : newMeta.thumbnail;
+      const curVal = f === 'author' ? book.author : book[f];
+      return newVal !== curVal;
+    });
+    const willKeep = REFRESHABLE.filter((f) => editedFields.includes(f));
+
+    if (willUpdate.length === 0) {
+      toast('Metadata is already up to date', 'info');
+      return;
+    }
+
+    const updateSummary = willUpdate.join(', ');
+    const keepSummary = willKeep.length > 0 ? ` Your edits to ${willKeep.join(', ')} will be kept.` : '';
+    const yes = await confirm({
+      title: 'Refresh Metadata',
+      message: `Will update: ${updateSummary}.${keepSummary}`,
+      confirmLabel: 'Refresh',
+    });
+    if (!yes) return;
+
+    const updates: Partial<Omit<BookEntry, 'id'>> = {
+      metadataSource: newMeta.metadataSource,
+      metadataConflicts: newMeta.metadataConflicts,
+    };
+    if (willUpdate.includes('title')) updates.title = newMeta.title;
+    if (willUpdate.includes('author')) updates.author = newMeta.authors[0] ?? book.author;
+    if (willUpdate.includes('pageCount')) updates.pageCount = newMeta.pageCount;
+    if (willUpdate.includes('coverImg')) updates.coverImg = newMeta.thumbnail;
+
+    updateBook(book.id, updates);
+    toast('Metadata refreshed', 'success');
   };
 
   useEffect(() => {
@@ -251,7 +318,18 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                   <span>Added {new Date(book.dateAdded).toLocaleDateString()}</span>
                   {book.startedAt && <span>Started {new Date(book.startedAt).toLocaleDateString()}</span>}
                   {book.finishedAt && <span>Finished {new Date(book.finishedAt).toLocaleDateString()}</span>}
+                  {book.metadataSource && (
+                    <span className={styles.sourceBadge}>
+                      via {sourceLabels[book.metadataSource] ?? book.metadataSource}
+                    </span>
+                  )}
                 </div>
+                {book.metadataConflicts && book.metadataConflicts.length > 0 && (
+                  <div className={styles.conflictWarning} role="status" aria-label="Metadata conflict">
+                    <AlertTriangle size={13} />
+                    <span>Sources disagree on {book.metadataConflicts.map(c => c.field).join(', ')}</span>
+                  </div>
+                )}
                 <div className={styles.linkRow}>
                   {generateAmazonLink(book.isbn) && (
                     <a
@@ -399,6 +477,16 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
           {!editing && (
             <button onClick={handleEdit} className={styles.editBtn}>
               <Pencil size={14} /> Edit Details
+            </button>
+          )}
+          {!editing && !isBookPhotoOnly(book) && (
+            <button
+              onClick={handleRefreshMetadata}
+              className={styles.refreshBtn}
+              disabled={refreshLoading}
+              aria-label="Refresh metadata from APIs"
+            >
+              <RefreshCw size={14} /> Refresh
             </button>
           )}
           <button onClick={handleRemove} className={styles.removeBtn}>

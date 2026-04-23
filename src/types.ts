@@ -1,3 +1,13 @@
+/** Where a book's metadata was originally sourced from. */
+export type MetadataSource = 'google_books' | 'open_library' | 'manual';
+
+/** A field-level disagreement between Google Books and Open Library for the same ISBN. */
+export interface MetadataConflict {
+  field: 'author' | 'pageCount' | 'title';
+  googleBooks?: string | number;
+  openLibrary?: string | number;
+}
+
 export interface BookEntry {
   id: string;
   isbn: string;
@@ -24,6 +34,12 @@ export interface BookEntry {
   seriesIndex?: number;
   /** Short quotes or reading notes kept as separate lines. */
   highlights?: string[];
+  /** Where this book's metadata came from. */
+  metadataSource?: MetadataSource;
+  /** Fields that Google Books and Open Library disagreed on at lookup time. */
+  metadataConflicts?: MetadataConflict[];
+  /** Fields the user has manually edited — these are preserved on metadata refresh. */
+  userEditedFields?: string[];
 }
 
 export interface Shelf {
