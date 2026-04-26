@@ -4,6 +4,7 @@ import { useBookLookup } from '../hooks/useBookLookup.ts';
 import { useToast } from './Toast.tsx';
 import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import type { BookEntry } from '../types.ts';
+import { mergeMetadataUserEditedAfterSave } from '../lib/mergeMetadataUserEditedAfterSave.ts';
 import { applyMetadataRefresh } from '../lib/metadataRefresh.ts';
 import {
   applyMetadataPeerChoice,
@@ -12,12 +13,12 @@ import {
 } from '../lib/metadataPeers.ts';
 import { generateAmazonLink } from '../utils/amazonLink.ts';
 import { getBookCoverSrc } from '../utils/bookPresentation.ts';
-import { shareBook } from '../utils/shareBook.ts';
+import { shareBook, shareOrDownloadBookShareCard } from '../utils/shareBook.ts';
 import { isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
 import {
   X, ExternalLink, BookOpen, CheckCircle, Clock, XCircle,
-  Pencil, Save, Tag, Trash2, Share2, RefreshCw, Image as ImageIcon,
+  Pencil, Save, Tag, Trash2, Share2, RefreshCw, Image as ImageIcon, ImageDown,
 } from 'lucide-react';
 import styles from './BookDetail.module.css';
 
@@ -100,11 +101,12 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
     const idxRaw = draft.seriesIndex.trim();
     const parsedIdx = idxRaw === '' ? undefined : Number(idxRaw);
     const base = editBaselineRef.current;
-    const nextUserEdited: BookEntry['metadataUserEdited'] = { ...book.metadataUserEdited };
-    if (draft.title.trim() !== base.title) nextUserEdited.title = true;
-    if (draft.author.trim() !== base.author) nextUserEdited.author = true;
-    if ((draft.pageCount || 0) !== base.pageCount) nextUserEdited.pageCount = true;
-    if (draft.coverImg.trim() !== base.coverImg) nextUserEdited.coverImg = true;
+    const nextUserEdited = mergeMetadataUserEditedAfterSave(book.metadataUserEdited, base, {
+      title: draft.title,
+      author: draft.author,
+      pageCount: draft.pageCount || 0,
+      coverImg: draft.coverImg,
+    });
 
     updateBook(book.id, {
       title: draft.title.trim() || book.title,
@@ -390,6 +392,14 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                     aria-label={`Share ${book.title}`}
                   >
                     <Share2 size={12} /> Share
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void shareOrDownloadBookShareCard(book, toast)}
+                    className={styles.shareBtn}
+                    aria-label={`Download or share a card image for ${book.title}`}
+                  >
+                    <ImageDown size={12} /> Share card
                   </button>
                   {!isBookPhotoOnly(book) && (
                     <button

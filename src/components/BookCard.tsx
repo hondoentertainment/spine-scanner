@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useToast } from './Toast.tsx';
 import type { BookEntry } from '../types.ts';
-import { Trash2, ExternalLink, BookOpen, CheckCircle, Clock, XCircle, Pencil, X, Save, Tag, Share2 } from 'lucide-react';
+import { Trash2, ExternalLink, BookOpen, CheckCircle, Clock, XCircle, Pencil, X, Save, Tag, Share2, ImageDown } from 'lucide-react';
+import { mergeMetadataUserEditedAfterSave } from '../lib/mergeMetadataUserEditedAfterSave.ts';
 import { generateAmazonLink } from '../utils/amazonLink.ts';
-import { shareBook } from '../utils/shareBook.ts';
+import { shareBook, shareOrDownloadBookShareCard } from '../utils/shareBook.ts';
 import { getBookCoverSrc } from '../utils/bookPresentation.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
 import s from './BookCard.module.css';
@@ -15,6 +16,11 @@ export interface BookCardProps {
     onClick?: () => void;
     /** Stable handler — avoids per-row inline lambdas in virtualized lists. */
     onActivateBookId?: (id: string) => void;
+}
+
+function metadataUserEditedKey(m?: BookEntry['metadataUserEdited']): string {
+    if (!m) return '';
+    return `${m.title ? 't' : ''}${m.author ? 'a' : ''}${m.pageCount ? 'p' : ''}${m.coverImg ? 'c' : ''}`;
 }
 
 function bookVisualEqual(a: BookEntry, b: BookEntry): boolean {
@@ -30,6 +36,7 @@ function bookVisualEqual(a: BookEntry, b: BookEntry): boolean {
         && a.isbn === b.isbn
         && a.needsReview === b.needsReview
         && (a.shelfIds?.join(',') ?? '') === (b.shelfIds?.join(',') ?? '')
+        && metadataUserEditedKey(a.metadataUserEdited) === metadataUserEditedKey(b.metadataUserEdited)
     );
 }
 
@@ -48,6 +55,7 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
     const { toast, confirm } = useToast();
     const shelfAnchorRef = useRef<HTMLDivElement>(null);
     const shelfTriggerRef = useRef<HTMLButtonElement>(null);
+    const editBaselineRef = useRef({ title: '', author: '', pageCount: 0, coverImg: '' });
     const [editing, setEditing] = useState(false);
     const [showShelfPicker, setShowShelfPicker] = useState(false);
 
@@ -98,6 +106,12 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
 
     const handleEdit = (e: React.MouseEvent) => {
         e.stopPropagation();
+        editBaselineRef.current = {
+            title: book.title,
+            author: book.author,
+            pageCount: book.pageCount,
+            coverImg: book.coverImg,
+        };
         setDraft({
             title: book.title,
             author: book.author,
@@ -109,6 +123,13 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
     };
 
     const handleSave = () => {
+        const base = editBaselineRef.current;
+        const nextUserEdited = mergeMetadataUserEditedAfterSave(book.metadataUserEdited, base, {
+            title: draft.title,
+            author: draft.author,
+            pageCount: draft.pageCount || 0,
+            coverImg: draft.coverImg,
+        });
         updateBook(book.id, {
             title: draft.title.trim() || book.title,
             author: draft.author.trim() || book.author,
@@ -116,6 +137,7 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
             pageCount: draft.pageCount || 0,
             coverImg: draft.coverImg.trim(),
             amazonLink: generateAmazonLink(draft.isbn.trim() || book.isbn),
+            metadataUserEdited: nextUserEdited,
         });
         setEditing(false);
         toast('Book updated', 'success');
@@ -235,6 +257,13 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                         }} className={`glass ${s.amazonBtn}`}
                             aria-label={`Share ${book.title}`} title="Share book">
                             <Share2 size={12} /> Share
+                        </button>
+                        <button type="button" onClick={(e) => {
+                            e.stopPropagation();
+                            void shareOrDownloadBookShareCard(book, toast);
+                        }} className={`glass ${s.amazonBtn}`}
+                            aria-label={`Share or download card image for ${book.title}`} title="Share card image">
+                            <ImageDown size={12} /> Card
                         </button>
                     </div>
                 </div>

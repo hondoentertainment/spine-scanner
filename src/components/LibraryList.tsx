@@ -16,6 +16,8 @@ import {
   List,
   Columns2,
   RotateCcw,
+  RefreshCw,
+  Image,
   ScanLine,
   Search,
   Layers,
@@ -37,6 +39,10 @@ import { useToast } from './Toast.tsx';
 import { isMvpMode } from '../lib/appMode.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
 import { getBookCoverSrc, getLibraryInsights } from '../utils/bookPresentation.ts';
+import { fetchBookLookupByIsbn } from '../hooks/useBookLookup.ts';
+import { applyMetadataRefresh } from '../lib/metadataRefresh.ts';
+import { isBookPhotoOnly } from '../utils/libraryUtils.ts';
+import { generateAmazonLink } from '../utils/amazonLink.ts';
 import s from './LibraryList.module.css';
 
 type SortField = 'title' | 'author' | 'dateAdded' | 'pageCount';
@@ -97,6 +103,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     bulkAssignShelf,
     bulkRemoveBooks,
     bulkUpdateBooks,
+    updateBook,
   } = useBookStore();
   const { preferences, updatePreferences } = useProfileStore();
   const { toast, confirm } = useToast();
@@ -111,6 +118,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectionMode, setSelectionMode] = useState(false);
   const [bulkShelfId, setBulkShelfId] = useState('');
+  const [bulkMetaBusy, setBulkMetaBusy] = useState(false);
   const [activeSavedViewId, setActiveSavedViewId] = useState<string | null>(null);
   const [activeSmartShelfId, setActiveSmartShelfId] = useState<string | null>(null);
   const [showSaveViewForm, setShowSaveViewForm] = useState(false);
@@ -537,6 +545,96 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     toast(`Added selected books to ${shelf?.name ?? 'shelf'}`, 'success');
     setBulkShelfId('');
   }, [bulkAssignShelf, bulkShelfId, selectedIds, shelves, toast]);
+
+  const handleBulkRefreshMetadata = useCallback(async () => {
+    const targetIds = selectedIds.filter((id) => {
+      const b = books.find((x) => x.id === id);
+      return Boolean(b && !isBookPhotoOnly(b));
+    });
+    if (targetIds.length === 0) {
+      toast('No selected books have an ISBN to refresh.', 'info');
+      return;
+    }
+    const yes = await confirm({
+      title: 'Refresh metadata',
+      message: `Look up Google Books and Open Library for ${targetIds.length} book(s)? This runs in sequence and may take a little while.`,
+      confirmLabel: 'Refresh',
+    });
+    if (!yes) return;
+    setBulkMetaBusy(true);
+    let ok = 0;
+    let fail = 0;
+    try {
+      for (const id of targetIds) {
+        const b = useBookStore.getState().books.find((x) => x.id === id);
+        if (!b || isBookPhotoOnly(b)) continue;
+        try {
+          const lookup = await fetchBookLookupByIsbn(b.isbn, { bypassCache: true });
+          if (!lookup) {
+            fail += 1;
+            continue;
+          }
+          const updates = applyMetadataRefresh(b, lookup);
+          updateBook(b.id, updates);
+          ok += 1;
+        } catch {
+          fail += 1;
+        }
+      }
+      toast(
+        `Metadata refreshed for ${ok} book(s)${fail ? `; ${fail} had no data or failed` : ''}.`,
+        fail ? 'info' : 'success',
+      );
+    } finally {
+      setBulkMetaBusy(false);
+    }
+  }, [books, selectedIds, confirm, toast, updateBook]);
+
+  const handleBulkFetchCovers = useCallback(async () => {
+    const targetIds = selectedIds.filter((id) => {
+      const b = books.find((x) => x.id === id);
+      if (!b || isBookPhotoOnly(b)) return false;
+      if (b.metadataUserEdited?.coverImg) return false;
+      return !b.coverImg?.trim();
+    });
+    if (targetIds.length === 0) {
+      toast('No selected books are missing a cover (or cover is user-edited).', 'info');
+      return;
+    }
+    const yes = await confirm({
+      title: 'Fetch cover images',
+      message: `Fetch cover art from metadata APIs for ${targetIds.length} book(s)? This runs in sequence.`,
+      confirmLabel: 'Fetch covers',
+    });
+    if (!yes) return;
+    setBulkMetaBusy(true);
+    let ok = 0;
+    let fail = 0;
+    try {
+      for (const id of targetIds) {
+        const b = useBookStore.getState().books.find((x) => x.id === id);
+        if (!b || isBookPhotoOnly(b) || b.metadataUserEdited?.coverImg || b.coverImg?.trim()) continue;
+        try {
+          const lookup = await fetchBookLookupByIsbn(b.isbn, { bypassCache: true });
+          const thumb = lookup?.thumbnail?.trim();
+          if (!thumb) {
+            fail += 1;
+            continue;
+          }
+          updateBook(b.id, { coverImg: thumb, amazonLink: generateAmazonLink(b.isbn) });
+          ok += 1;
+        } catch {
+          fail += 1;
+        }
+      }
+      toast(
+        `Updated covers for ${ok} book(s)${fail ? `; ${fail} had no cover URL or failed` : ''}.`,
+        fail ? 'info' : 'success',
+      );
+    } finally {
+      setBulkMetaBusy(false);
+    }
+  }, [books, selectedIds, confirm, toast, updateBook]);
 
   return (
     <section className={s.container}>
@@ -1089,6 +1187,28 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
             </button>
             <button type="button" className={`glass ${s.bulkBtn}`} onClick={handleBulkResolveReview}>
               Resolve review
+            </button>
+            <button
+              type="button"
+              className={`glass ${s.bulkBtn}`}
+              onClick={() => void handleBulkRefreshMetadata()}
+              disabled={bulkMetaBusy}
+              aria-busy={bulkMetaBusy}
+              aria-label="Refresh metadata for selected books"
+            >
+              <RefreshCw size={14} />
+              Refresh metadata
+            </button>
+            <button
+              type="button"
+              className={`glass ${s.bulkBtn}`}
+              onClick={() => void handleBulkFetchCovers()}
+              disabled={bulkMetaBusy}
+              aria-busy={bulkMetaBusy}
+              aria-label="Fetch missing cover images for selected books"
+            >
+              <Image size={14} />
+              Fetch covers
             </button>
             <select
               aria-label="Bulk assign shelf"

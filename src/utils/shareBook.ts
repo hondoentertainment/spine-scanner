@@ -2,7 +2,9 @@
  * Share/copy utilities for individual books.
  * Deep link: /library?isbn=… (legacy #book-{isbn} still redirects on load).
  */
+import type { BookEntry } from '../types.ts';
 import { generateAmazonLink } from './amazonLink.ts';
+import { bookShareCardFilename, renderBookShareCardPng } from './bookShareCardImage.ts';
 
 /** Base URL for shareable links (origin + base path, no trailing slash). */
 export function getShareBaseUrl(): string {
@@ -57,4 +59,42 @@ export async function shareBook(
   const ok = await copyBookLink(isbn, title, author);
   if (ok) onCopyFallback();
   return ok;
+}
+
+type ToastFn = (message: string, variant: 'success' | 'error' | 'info') => void;
+
+/** Create a PNG share card; Web Share with file when supported, otherwise trigger download. */
+export async function shareOrDownloadBookShareCard(
+  book: Pick<BookEntry, 'title' | 'author' | 'isbn' | 'coverImg'>,
+  toast: ToastFn,
+): Promise<void> {
+  try {
+    const blob = await renderBookShareCardPng(book);
+    if (!blob) {
+      toast('Could not create image', 'error');
+      return;
+    }
+    const name = bookShareCardFilename(book);
+    const file = new File([blob], name, { type: 'image/png' });
+    const payload: ShareData = { files: [file], title: book.title, text: `${book.title} by ${book.author}` };
+    if (navigator.share && navigator.canShare?.(payload)) {
+      try {
+        await navigator.share(payload);
+        toast('Image shared', 'success');
+        return;
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') return;
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.rel = 'noopener';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Image downloaded', 'success');
+  } catch {
+    toast('Could not share or download image', 'error');
+  }
 }
