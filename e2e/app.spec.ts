@@ -56,6 +56,16 @@ test.describe('SpineScanner release smoke', () => {
     await expect(page.getByRole('button', { name: /clear all local data/i })).toBeVisible();
   });
 
+  test('profile route renders after visiting scanner', async ({ page }) => {
+    await page.getByTestId(uiContracts.navTabTestId('scan')).click();
+    await expect(page.getByRole('heading', { name: /three easy ways to capture a book/i })).toBeVisible();
+
+    await page.getByTestId(uiContracts.navTabTestId('profile')).click();
+    await expect(page).toHaveURL(/\/spine-scanner\/profile$/);
+    await expect(page.locator('#profile-settings-title')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /three easy ways to capture a book/i })).toBeHidden();
+  });
+
   test('library review query loads without error', async ({ page }) => {
     await page.goto('./library?review=1');
     await dismissOnboardingIfPresent(page);

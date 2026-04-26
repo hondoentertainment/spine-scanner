@@ -12,7 +12,7 @@ initErrorMonitoring();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter basename={getRouterBasename()}>
+    <BrowserRouter basename={getRouterBasename()} unstable_useTransitions={false}>
       <ToastProvider>
         <App />
       </ToastProvider>
