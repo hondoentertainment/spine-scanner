@@ -133,6 +133,7 @@ function AppLibraryRoute({
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const isbn = searchParams.get('isbn');
+  const series = searchParams.get('series');
   const onOpenComplete = useCallback(() => {
     if (!isbn) return;
     const next = new URLSearchParams(searchParams);
@@ -145,6 +146,7 @@ function AppLibraryRoute({
       onStartScanning={onStartScanning}
       initialOpenIsbn={isbn}
       onOpenComplete={onOpenComplete}
+      initialSeriesFilter={series}
     />
   );
 }

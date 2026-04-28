@@ -89,6 +89,12 @@ export interface ProfilePreferences {
   readingGoalPagesPerYear: number | null;
   /** When true, warn before adding a second copy of the same ISBN. */
   warnOnDuplicateIsbn: boolean;
+  /** Consecutive days with reading activity. */
+  currentStreak: number;
+  /** All-time best streak. */
+  longestStreak: number;
+  /** ISO date string (YYYY-MM-DD) of the last day reading activity was recorded. */
+  lastStreakDate: string | null;
 }
 
 export const DEFAULT_PREFERENCES: ProfilePreferences = {
@@ -106,4 +112,7 @@ export const DEFAULT_PREFERENCES: ProfilePreferences = {
   readingGoalBooksPerYear: null,
   readingGoalPagesPerYear: null,
   warnOnDuplicateIsbn: true,
+  currentStreak: 0,
+  longestStreak: 0,
+  lastStreakDate: null,
 };
