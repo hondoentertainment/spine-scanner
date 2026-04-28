@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore.ts';
 import { useBookStore } from '../store/useBookStore.ts';
+import { useSyncQueue } from '../store/useSyncQueue.ts';
 import { useProfileStore } from '../store/useProfileStore.ts';
 import { useAnalyticsStore, summarizeAnalyticsEvents } from '../store/useAnalyticsStore.ts';
 import { useTheme } from '../hooks/useTheme.ts';
@@ -70,6 +71,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
   const analyticsEvents = useAnalyticsStore((s) => s.events);
   const scanStats = useMemo(() => summarizeAnalyticsEvents(analyticsEvents), [analyticsEvents]);
+  const { pendingChanges, lastSyncedAt, lastSyncFailedAt, flushing } = useSyncQueue();
   const displayName = profile?.username ?? profile?.displayName ?? user?.user_metadata?.full_name ?? user?.email ?? 'Local reader';
   const avatarUrl = profile?.avatarUrl ?? user?.user_metadata?.avatar_url ?? null;
   const joinedLabel = user?.created_at
@@ -324,6 +326,46 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       {!isSupabaseConfigured() && (
         <div className={s.localBadge}>
           <User size={16} /> Local profile - sign in to sync preferences across devices
+        </div>
+      )}
+
+      {user !== null && (
+        <div className={s.syncSection}>
+          <h3 className={s.sectionTitle}>Sync status</h3>
+          <div className={s.syncRow}>
+            <span>Last synced:</span>
+            <span>
+              {lastSyncedAt === null
+                ? 'Never'
+                : (() => {
+                    const diffSec = Math.floor((Date.now() - new Date(lastSyncedAt).getTime()) / 1000);
+                    if (diffSec < 60) return 'Just now';
+                    if (diffSec < 3600) return `${Math.floor(diffSec / 60)} minutes ago`;
+                    return new Date(lastSyncedAt).toLocaleDateString();
+                  })()}
+            </span>
+          </div>
+          {flushing ? (
+            <div className={s.syncRow}>
+              <span className={s.syncMuted}>Syncing…</span>
+            </div>
+          ) : pendingChanges > 0 ? (
+            <div className={s.syncRow}>
+              <span className={s.syncMuted}>{pendingChanges} change{pendingChanges !== 1 ? 's' : ''} pending</span>
+            </div>
+          ) : null}
+          {lastSyncFailedAt !== null && (
+            <div className={s.syncWarningRow}>
+              <span>Sync failed — check your connection</span>
+              <button
+                type="button"
+                className={s.retryBtn}
+                onClick={() => window.location.reload()}
+              >
+                Retry
+              </button>
+            </div>
+          )}
         </div>
       )}
 
