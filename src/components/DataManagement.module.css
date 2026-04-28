@@ -305,3 +305,33 @@
   color: var(--text-muted);
   font-size: 0.82rem;
 }
+
+/* ---- Goodreads import ---- */
+.goodreadsMsg {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #22c55e;
+}
+
+/* ---- Bulk refresh ---- */
+.refreshProgress {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.refreshCancelBtn {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-main);
+  background: var(--glass-bg);
+}
+
+.refreshResult {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}

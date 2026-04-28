@@ -1,15 +1,15 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useBookLookup } from '../hooks/useBookLookup.ts';
 import { useToast } from './Toast.tsx';
-import { parseCSV, extractISBNs } from '../utils/importLogic.ts';
+import { parseCSV, extractISBNs, importFromGoodreadsCSV } from '../utils/importLogic.ts';
 import type { ImportResult } from '../utils/importLogic.ts';
 import { normalizeToIsbn13 } from '../utils/isbnValidation.ts';
 import { isbnExistsInLibrary, isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { exportToGoodreadsCSV } from '../utils/goodreadsExport.ts';
 import { exportToJSON, importFromJSON, exportToLibraryThingTSV, exportToStoryGraphCSV, exportToHTML } from '../utils/exportFormats.ts';
 import { findDuplicateIsbnGroups } from '../utils/libraryDuplicates.ts';
-import { Download, Upload, Trash2, Globe, CheckCircle, Loader2, X, GitMerge } from 'lucide-react';
+import { Download, Upload, Trash2, Globe, CheckCircle, Loader2, X, GitMerge, RefreshCw } from 'lucide-react';
 import type { BookEntry } from '../types.ts';
 import s from './DataManagement.module.css';
 
@@ -20,12 +20,20 @@ interface DataManagementProps {
 type ExportFormat = 'json' | 'html' | 'goodreads' | 'librarything' | 'storygraph';
 
 const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
-    const { books, shelves, addBook, removeBook, setShelves, mergeBooks } = useBookStore();
-    const { lookupByIsbn } = useBookLookup();
+    const { books, shelves, addBook, removeBook, setShelves, mergeBooks, updateBook } = useBookStore();
+    const { lookupByIsbn, refreshMetadata } = useBookLookup();
     const { toast } = useToast();
 
     const [importing, setImporting] = useState(false);
     const [result, setResult] = useState<ImportResult | null>(null);
+    const [goodreadsMsg, setGoodreadsMsg] = useState<string | null>(null);
+
+    // Bulk metadata refresh state
+    const [refreshRunning, setRefreshRunning] = useState(false);
+    const [refreshProgress, setRefreshProgress] = useState(0);
+    const [refreshTotal, setRefreshTotal] = useState(0);
+    const [refreshResultMsg, setRefreshResultMsg] = useState<string | null>(null);
+    const cancelRefreshRef = useRef(false);
     const [url, setUrl] = useState('');
     const [webImportStep, setWebImportStep] = useState<'idle' | 'fetching' | 'confirm'>('idle');
     const [foundIsbns, setFoundIsbns] = useState<string[]>([]);
@@ -118,6 +126,65 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
             toast('Failed to fetch page. Ensure it is a public URL.', 'error');
             setWebImportStep('idle');
         }
+    };
+
+    const handleGoodreadsImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result as string;
+            const { imported, skipped } = importFromGoodreadsCSV(text, books);
+            for (const entry of imported) {
+                addBook(entry);
+            }
+            const msg = `Imported ${imported.length} book${imported.length !== 1 ? 's' : ''} (${skipped} duplicate${skipped !== 1 ? 's' : ''} skipped)`;
+            setGoodreadsMsg(msg);
+            toast(msg, 'success');
+        };
+        reader.readAsText(file);
+        // reset input so same file can be re-imported
+        e.target.value = '';
+    };
+
+    const handleBulkRefresh = async () => {
+        const targets = books.filter((b) => b.metadataSource === undefined);
+        if (targets.length === 0) {
+            setRefreshResultMsg('No books without a metadata source found.');
+            return;
+        }
+        cancelRefreshRef.current = false;
+        setRefreshRunning(true);
+        setRefreshProgress(0);
+        setRefreshTotal(targets.length);
+        setRefreshResultMsg(null);
+
+        let updatedCount = 0;
+        for (let i = 0; i < targets.length; i++) {
+            if (cancelRefreshRef.current) {
+                setRefreshResultMsg(`Cancelled after ${updatedCount} book${updatedCount !== 1 ? 's' : ''} updated`);
+                setRefreshRunning(false);
+                return;
+            }
+            setRefreshProgress(i);
+            const book = targets[i];
+            const updatedFields = await refreshMetadata(book);
+            if (updatedFields) {
+                updateBook(book.id, updatedFields);
+                updatedCount++;
+            }
+            if (i < targets.length - 1) {
+                await new Promise<void>((r) => setTimeout(r, 500));
+            }
+        }
+
+        setRefreshProgress(targets.length);
+        setRefreshResultMsg(`Done — updated ${updatedCount} book${updatedCount !== 1 ? 's' : ''}`);
+        setRefreshRunning(false);
+    };
+
+    const handleCancelRefresh = () => {
+        cancelRefreshRef.current = true;
     };
 
     const processEntries = async (entries: Partial<BookEntry>[]) => {
@@ -293,6 +360,49 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                         {importing ? <Loader2 className="animate-spin mx-auto" /> : 'Drop file here or click to browse'}
                     </div>
                 </div>
+            </section>
+
+            {/* Goodreads CSV import */}
+            <section className={s.sectionBorder}>
+                <h3 className={s.sectionTitle}>
+                    <Upload size={20} style={{ color: '#22c55e' }} /> Import Goodreads CSV
+                </h3>
+                <p className={s.sectionDesc}>
+                    Import your Goodreads library export. Go to Goodreads → My Books → Import/Export → Export Library.
+                </p>
+                <div className={s.fileWrap}>
+                    <input type="file" accept=".csv" onChange={handleGoodreadsImport}
+                        aria-label="Import Goodreads CSV export" className={s.fileInput} />
+                    <div className={`glass ${s.fileDrop}`}>
+                        Import Goodreads CSV
+                    </div>
+                </div>
+                {goodreadsMsg && (
+                    <p className={s.goodreadsMsg}>{goodreadsMsg}</p>
+                )}
+            </section>
+
+            {/* Bulk metadata refresh */}
+            <section className={s.sectionBorder}>
+                <h3 className={s.sectionTitle}>
+                    <RefreshCw size={20} style={{ color: '#f59e0b' }} /> Refresh Metadata
+                </h3>
+                <p className={s.sectionDesc}>
+                    Fetch updated metadata from APIs for books that have no metadata source recorded (added before Phase 26).
+                </p>
+                {refreshRunning ? (
+                    <div className={s.refreshProgress}>
+                        <span>Refreshing {refreshProgress} / {refreshTotal} books…</span>
+                        <button onClick={handleCancelRefresh} className={`glass ${s.refreshCancelBtn}`}>Cancel</button>
+                    </div>
+                ) : (
+                    <button onClick={handleBulkRefresh} className={`glass ${s.exportBtn}`}>
+                        Refresh all books without metadata source
+                    </button>
+                )}
+                {refreshResultMsg && !refreshRunning && (
+                    <p className={s.refreshResult}>{refreshResultMsg}</p>
+                )}
             </section>
 
             {/* Web import */}

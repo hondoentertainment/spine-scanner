@@ -201,10 +201,8 @@ export const useBookLookup = () => {
         }
     };
 
-    /**
-     * Re-fetch metadata for a book. The caller filters by userEditedFields before applying.
-     */
-    const refreshMetadata = async (book: BookEntry): Promise<BookMetadata | null> => {
+    const refreshMetadata = async (book: BookEntry): Promise<Partial<BookEntry> | null> => {
+        if (!book.isbn || book.isbn.startsWith('photo-')) return null;
         setLoading(true);
         setError(null);
         try {
@@ -213,9 +211,15 @@ export const useBookLookup = () => {
                 setError('No book found with this ISBN');
                 return null;
             }
-            return result;
+            return {
+                title: result.title,
+                author: result.authors.join(', '),
+                pageCount: result.pageCount,
+                coverImg: result.thumbnail,
+                metadataSource: 'google_books' as MetadataSource,
+            };
         } catch (err) {
-            setError('Failed to fetch book metadata');
+            setError('Failed to refresh metadata');
             captureException(err, { area: 'useBookLookup.refreshMetadata', isbnLength: book.isbn.length });
             return null;
         } finally {

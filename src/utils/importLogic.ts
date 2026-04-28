@@ -52,6 +52,123 @@ export const extractISBNs = (text: string): string[] => {
 };
 
 /**
+ * Parses a single CSV line into an array of field strings,
+ * correctly handling quoted fields with embedded commas and escaped quotes.
+ */
+const parseCSVLine = (line: string): string[] => {
+    const fields: string[] = [];
+    let i = 0;
+    while (i < line.length) {
+        if (line[i] === '"') {
+            // Quoted field
+            let val = '';
+            i++; // skip opening quote
+            while (i < line.length) {
+                if (line[i] === '"' && line[i + 1] === '"') {
+                    val += '"';
+                    i += 2;
+                } else if (line[i] === '"') {
+                    i++; // skip closing quote
+                    break;
+                } else {
+                    val += line[i++];
+                }
+            }
+            fields.push(val);
+            // skip comma separator
+            if (i < line.length && line[i] === ',') i++;
+        } else {
+            // Unquoted field
+            const end = line.indexOf(',', i);
+            if (end === -1) {
+                fields.push(line.slice(i).trim());
+                break;
+            } else {
+                fields.push(line.slice(i, end).trim());
+                i = end + 1;
+            }
+        }
+    }
+    // Handle trailing comma
+    if (line.endsWith(',')) fields.push('');
+    return fields;
+};
+
+/**
+ * Strips the Goodreads `="..."` ISBN wrapper.
+ */
+const stripIsbnWrapper = (raw: string): string =>
+    raw.replace(/^="?/, '').replace(/"?$/, '').replace(/"/g, '').trim();
+
+/**
+ * Imports books from a Goodreads library export CSV.
+ * Returns new BookEntry objects (not yet added to store) and a count of skipped duplicates.
+ */
+export const importFromGoodreadsCSV = (
+    csvText: string,
+    existingBooks: BookEntry[],
+): { imported: BookEntry[]; skipped: number } => {
+    const lines = csvText.split(/\r?\n/).filter((l) => l.trim() !== '');
+    if (lines.length < 2) return { imported: [], skipped: 0 };
+
+    const headers = parseCSVLine(lines[0]).map((h) => h.trim());
+
+    const col = (row: string[], name: string): string => {
+        const idx = headers.indexOf(name);
+        return idx !== -1 ? (row[idx] ?? '').trim() : '';
+    };
+
+    const imported: BookEntry[] = [];
+    let skipped = 0;
+
+    // Track ISBNs added in this import to avoid intra-batch duplicates
+    const addedIsbns = new Set(existingBooks.map((b) => b.isbn));
+
+    for (const line of lines.slice(1)) {
+        const row = parseCSVLine(line);
+
+        // Prefer ISBN13, fall back to ISBN
+        const rawIsbn13 = col(row, 'ISBN13');
+        const rawIsbn = col(row, 'ISBN');
+        let isbn = stripIsbnWrapper(rawIsbn13) || stripIsbnWrapper(rawIsbn);
+
+        if (!isbn) { skipped++; continue; }
+
+        if (addedIsbns.has(isbn)) { skipped++; continue; }
+
+        const shelfRaw = col(row, 'Exclusive Shelf');
+        let status: BookEntry['status'];
+        if (shelfRaw === 'read') status = 'read';
+        else if (shelfRaw === 'currently-reading') status = 'reading';
+        else status = 'to-read';
+
+        const dateReadRaw = col(row, 'Date Read');
+        const dateAddedRaw = col(row, 'Date Added');
+
+        const entry: BookEntry = {
+            id: crypto.randomUUID(),
+            isbn,
+            title: col(row, 'Title') || 'Unknown Title',
+            author: col(row, 'Author') || 'Unknown Author',
+            pageCount: parseInt(col(row, 'Number of Pages'), 10) || 0,
+            amazonLink: '',
+            coverImg: '',
+            status,
+            notes: col(row, 'My Review'),
+            dateAdded: dateAddedRaw ? new Date(dateAddedRaw).toISOString() : new Date().toISOString(),
+            finishedAt: dateReadRaw ? new Date(dateReadRaw).toISOString() : null,
+            shelfIds: [],
+            metadataSource: 'manual',
+        };
+
+        imported.push(entry);
+        addedIsbns.add(isbn);
+    }
+
+    return { imported, skipped };
+};
+
+/**
  * Validates file names for extra extensions.
  */
 export const validateFileName = (fileName: string): { valid: boolean; warning?: string } => {
