@@ -24,6 +24,8 @@ export interface BookEntry {
   seriesIndex?: number;
   /** Short quotes or reading notes kept as separate lines. */
   highlights?: string[];
+  /** Where the metadata was sourced from; undefined means pre-Phase-26 / unknown. */
+  metadataSource?: 'api' | 'manual' | 'scan';
 }
 
 export interface Shelf {

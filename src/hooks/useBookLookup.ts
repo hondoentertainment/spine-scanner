@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { isbn13To10, isbn10To13 } from '../utils/isbnValidation.ts';
 import { addBreadcrumb, captureException } from '../lib/errorMonitoring.ts';
+import type { BookEntry } from '../types.ts';
 
 export interface BookMetadata {
     title: string;
@@ -134,5 +135,22 @@ export const useBookLookup = () => {
         }
     };
 
-    return { lookupByIsbn, loading, error };
+    const refreshMetadata = async (book: BookEntry): Promise<Partial<BookEntry> | null> => {
+        if (!book.isbn || book.isbn.startsWith('photo-')) return null;
+        try {
+            const result = await lookupByIsbn(book.isbn);
+            if (!result) return null;
+            return {
+                title: result.title,
+                author: result.authors.join(', '),
+                pageCount: result.pageCount,
+                coverImg: result.thumbnail,
+                metadataSource: 'api' as const,
+            };
+        } catch {
+            return null;
+        }
+    };
+
+    return { lookupByIsbn, refreshMetadata, loading, error };
 };
