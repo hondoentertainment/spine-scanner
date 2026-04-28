@@ -484,6 +484,25 @@
   border-color: var(--accent-purple);
 }
 
+/* ---- Progress line (view mode) ---- */
+.progressLine {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent-purple);
+  margin: 0.1rem 0 0.5rem;
+}
+
+/* ---- Pages read input (edit mode) ---- */
+.pagesReadRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.pagesReadRow .input {
+  max-width: 130px;
+}
+
 /* ---- Actions ---- */
 .actions {
   display: flex;

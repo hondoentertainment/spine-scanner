@@ -216,6 +216,23 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                   onChange={(e) => setDraft({ ...draft, coverImg: e.target.value })}
                   placeholder="https://..."
                 />
+                {book.status === 'reading' && (
+                  <div className={styles.pagesReadRow}>
+                    <label className={styles.label} htmlFor={`pages-read-${book.id}`}>Pages read</label>
+                    <input
+                      id={`pages-read-${book.id}`}
+                      className={styles.input}
+                      type="number"
+                      min={0}
+                      max={book.pageCount || undefined}
+                      value={progressValue || ''}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        if (!Number.isNaN(val)) updateReadingProgress(book.id, val);
+                      }}
+                    />
+                  </div>
+                )}
                 <div className={styles.editActions}>
                   <button onClick={handleSave} className={styles.saveBtn}>
                     <Save size={14} /> Save
@@ -252,6 +269,11 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                   {book.startedAt && <span>Started {new Date(book.startedAt).toLocaleDateString()}</span>}
                   {book.finishedAt && <span>Finished {new Date(book.finishedAt).toLocaleDateString()}</span>}
                 </div>
+                {book.status === 'reading' && book.pageCount > 0 && (
+                  <p className={styles.progressLine}>
+                    {progressValue} of {book.pageCount} pages ({progressPercent}%)
+                  </p>
+                )}
                 <div className={styles.linkRow}>
                   {generateAmazonLink(book.isbn) && (
                     <a
