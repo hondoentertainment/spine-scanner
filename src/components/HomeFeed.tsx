@@ -59,6 +59,34 @@ export default function HomeFeed() {
   const bookGoalPct = showBookGoal ? Math.min(100, Math.round((insights.finishedThisYear / bookGoalTarget) * 100)) : 0;
   const pageGoalPct = showPageGoal ? Math.min(100, Math.round((insights.pagesReadThisYear / pageGoalTarget) * 100)) : 0;
 
+  const currentStreak = preferences.currentStreak ?? 0;
+  const longestStreak = preferences.longestStreak ?? 0;
+
+  interface SeriesSummary {
+    name: string;
+    owned: number;
+    read: number;
+  }
+
+  const topSeries = useMemo((): SeriesSummary | null => {
+    const map = new Map<string, SeriesSummary>();
+    for (const b of books) {
+      if (!b.seriesName) continue;
+      const key = b.seriesName;
+      const entry = map.get(key) ?? { name: key, owned: 0, read: 0 };
+      entry.owned += 1;
+      if (b.status === 'read') entry.read += 1;
+      map.set(key, entry);
+    }
+    let best: SeriesSummary | null = null;
+    for (const s of map.values()) {
+      if (s.owned < 2) continue;
+      if (s.read >= s.owned) continue;
+      if (!best || s.owned > best.owned) best = s;
+    }
+    return best;
+  }, [books]);
+
   const suggestions = useMemo(() => {
     const out: { book: BookEntry; reason: string }[] = [];
     const reading = books.filter((b) => b.status === 'reading');
@@ -164,6 +192,53 @@ export default function HomeFeed() {
           )}
           <button type="button" className={s.goalLink} onClick={() => navigate('/profile')}>
             Adjust goals in profile
+          </button>
+        </section>
+      )}
+
+      {currentStreak >= 1 && (
+        <section className={`glass ${s.streak}`} aria-label="Reading streak">
+          <div className={s.streakMain}>
+            <span className={s.streakEmoji} aria-hidden>🔥</span>
+            <div className={s.streakInfo}>
+              <span className={s.streakValue}>{currentStreak}-day streak</span>
+              {longestStreak > currentStreak && (
+                <span className={s.streakBest}>Best: {longestStreak} days</span>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {topSeries && (
+        <section className={`glass ${s.seriesCard}`} aria-label="Continue a series">
+          <div className={s.sectionHead}>
+            <span className={s.seriesHeading}>Continue a series</span>
+          </div>
+          <strong className={s.seriesName}>{topSeries.name}</strong>
+          <div className={s.goalRow}>
+            <div className={s.goalMeta}>
+              <span>{topSeries.read} of {topSeries.owned} books read</span>
+            </div>
+            <div
+              className={s.goalTrack}
+              role="progressbar"
+              aria-valuenow={Math.round((topSeries.read / topSeries.owned) * 100)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <span
+                className={s.goalFill}
+                style={{ width: `${Math.round((topSeries.read / topSeries.owned) * 100)}%` }}
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            className={s.goalLink}
+            onClick={() => navigate(`/library?series=${encodeURIComponent(topSeries.name)}`)}
+          >
+            View series
           </button>
         </section>
       )}

@@ -48,6 +48,7 @@ interface LibraryListProps {
   onStartScanning?: () => void;
   initialOpenIsbn?: string | null;
   onOpenComplete?: () => void;
+  initialSeriesFilter?: string | null;
 }
 
 function createId(): string {
@@ -84,7 +85,7 @@ const SORT_OPTIONS: Array<{ value: SortField; label: string }> = [
   { value: 'pageCount', label: 'Page count' },
 ];
 
-export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenComplete }: LibraryListProps) {
+export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenComplete, initialSeriesFilter }: LibraryListProps) {
   const mvp = isMvpMode();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -104,7 +105,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
   const [searchTerm, setSearchTerm] = useState('');
   const [shelfFilter, setShelfFilter] = useState<string | null>(null);
   const [reviewOnly, setReviewOnly] = useState(false);
-  const [seriesFilter, setSeriesFilter] = useState<string | null>(null);
+  const [seriesFilter, setSeriesFilter] = useState<string | null>(initialSeriesFilter ?? null);
   const [minPages, setMinPages] = useState('');
   const [maxPages, setMaxPages] = useState('');
   const [selectedBook, setSelectedBook] = useState<BookEntry | null>(null);
@@ -328,6 +329,10 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     if (book) setSelectedBook(book);
     onOpenComplete?.();
   }, [initialOpenIsbn, books, onOpenComplete]);
+
+  useEffect(() => {
+    if (initialSeriesFilter) setSeriesFilter(initialSeriesFilter);
+  }, [initialSeriesFilter]);
 
   useEffect(() => {
     if (!selectionMode) {
