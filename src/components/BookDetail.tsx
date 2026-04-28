@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useBookLookup } from '../hooks/useBookLookup.ts';
 import { useToast } from './Toast.tsx';
@@ -42,6 +42,16 @@ const statusIcons: Record<BookEntry['status'], React.ReactNode> = {
 };
 
 const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
+  const formId = useId();
+  const fieldIds = {
+    title: `${formId}-title`,
+    author: `${formId}-author`,
+    isbn: `${formId}-isbn`,
+    pages: `${formId}-pages`,
+    series: `${formId}-series`,
+    seriesIndex: `${formId}-series-index`,
+    cover: `${formId}-cover`,
+  };
   const {
     updateBook,
     updateBookStatus,
@@ -232,8 +242,22 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   };
 
   return (
-    <div className={styles.overlay} onClick={onClose} role="dialog" aria-modal="true" aria-label={`Details for ${book.title}`}>
-      <div ref={focusTrapRef} className={styles.modal} onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
+    <div
+      className={styles.overlay}
+      role="presentation"
+      onPointerDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={focusTrapRef}
+        className={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Details for ${book.title}`}
+        onPointerDown={(e) => e.stopPropagation()}
+        onKeyDown={handleKeyDown}
+      >
         <button onClick={onClose} className={styles.closeBtn} aria-label="Close detail view">
           <X size={20} />
         </button>
@@ -247,31 +271,35 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                 className={styles.coverSmall}
               />
               <div className={styles.editFields}>
-                <label className={styles.label}>Title</label>
+                <label htmlFor={fieldIds.title} className={styles.label}>Title</label>
                 <input
+                  id={fieldIds.title}
                   className={styles.input}
                   value={draft.title}
                   onChange={(e) => setDraft({ ...draft, title: e.target.value })}
                   autoFocus
                 />
-                <label className={styles.label}>Author</label>
+                <label htmlFor={fieldIds.author} className={styles.label}>Author</label>
                 <input
+                  id={fieldIds.author}
                   className={styles.input}
                   value={draft.author}
                   onChange={(e) => setDraft({ ...draft, author: e.target.value })}
                 />
                 <div className={styles.row}>
                   <div style={{ flex: 1 }}>
-                    <label className={styles.label}>ISBN</label>
+                    <label htmlFor={fieldIds.isbn} className={styles.label}>ISBN</label>
                     <input
+                      id={fieldIds.isbn}
                       className={styles.input}
                       value={draft.isbn}
                       onChange={(e) => setDraft({ ...draft, isbn: e.target.value })}
                     />
                   </div>
                   <div style={{ width: '90px' }}>
-                    <label className={styles.label}>Pages</label>
+                    <label htmlFor={fieldIds.pages} className={styles.label}>Pages</label>
                     <input
+                      id={fieldIds.pages}
                       className={styles.input}
                       type="number"
                       value={draft.pageCount || ''}
@@ -282,8 +310,9 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                 </div>
                 <div className={styles.row}>
                   <div style={{ flex: 1 }}>
-                    <label className={styles.label}>Series</label>
+                    <label htmlFor={fieldIds.series} className={styles.label}>Series</label>
                     <input
+                      id={fieldIds.series}
                       className={styles.input}
                       value={draft.seriesName}
                       onChange={(e) => setDraft({ ...draft, seriesName: e.target.value })}
@@ -291,8 +320,9 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                     />
                   </div>
                   <div style={{ width: '90px' }}>
-                    <label className={styles.label}>Vol.#</label>
+                    <label htmlFor={fieldIds.seriesIndex} className={styles.label}>Vol.#</label>
                     <input
+                      id={fieldIds.seriesIndex}
                       className={styles.input}
                       inputMode="decimal"
                       value={draft.seriesIndex}
@@ -301,8 +331,9 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                     />
                   </div>
                 </div>
-                <label className={styles.label}>Cover URL</label>
+                <label htmlFor={fieldIds.cover} className={styles.label}>Cover URL</label>
                 <input
+                  id={fieldIds.cover}
                   className={styles.input}
                   type="url"
                   value={draft.coverImg}

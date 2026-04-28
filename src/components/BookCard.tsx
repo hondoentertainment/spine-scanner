@@ -85,6 +85,21 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
         pageCount: book.pageCount,
         coverImg: book.coverImg,
     });
+    const coverPreviewRef = useRef<HTMLImageElement | null>(null);
+    const [coverPreviewHidden, setCoverPreviewHidden] = useState(false);
+
+    useEffect(() => {
+        setCoverPreviewHidden(false);
+    }, [draft.coverImg]);
+
+    useEffect(() => {
+        if (!editing || !draft.coverImg || coverPreviewHidden) return undefined;
+        const el = coverPreviewRef.current;
+        if (!el) return undefined;
+        const onErr = () => { setCoverPreviewHidden(true); };
+        el.addEventListener('error', onErr);
+        return () => { el.removeEventListener('error', onErr); };
+    }, [draft.coverImg, coverPreviewHidden, editing]);
 
     const bookShelfIds = book.shelfIds || [];
     const bookShelves = shelves.filter((sh) => bookShelfIds.includes(sh.id));
@@ -170,16 +185,16 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                 <div className={s.editHeader}>
                     <span className={s.editLabel}>Edit Book</span>
                     <div className={s.editBtnGroup}>
-                        <button onClick={handleSave} aria-label="Save changes" className={s.saveBtn}>
+                        <button type="submit" aria-label="Save changes" className={s.saveBtn}>
                             <Save size={14} /> Save
                         </button>
-                        <button onClick={handleCancel} aria-label="Cancel editing" className={s.cancelBtn}>
+                        <button type="button" onClick={handleCancel} aria-label="Cancel editing" className={s.cancelBtn}>
                             <X size={14} /> Cancel
                         </button>
                     </div>
                 </div>
 
-                <div className={s.editForm} onKeyDown={handleKeyDown}>
+                <form className={s.editForm} onSubmit={(e) => { e.preventDefault(); handleSave(); }} onKeyDown={handleKeyDown}>
                     <div>
                         <div className={s.fieldLabel}>Title</div>
                         <input className={s.input} type="text" value={draft.title}
@@ -207,13 +222,17 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                         <input className={s.input} type="url" value={draft.coverImg}
                             onChange={(e) => setDraft({ ...draft, coverImg: e.target.value })} placeholder="https://..." />
                     </div>
-                    {draft.coverImg && (
+                    {draft.coverImg && !coverPreviewHidden && (
                         <div className={s.coverPreview}>
-                            <img src={draft.coverImg} alt="Cover preview" className={s.coverPreviewImg}
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                            <img
+                                ref={coverPreviewRef}
+                                src={draft.coverImg}
+                                alt="Cover preview"
+                                className={s.coverPreviewImg}
+                            />
                         </div>
                     )}
-                </div>
+                </form>
             </div>
         );
     }
@@ -270,7 +289,7 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
             </div>
 
             {/* Shelf chips */}
-            <div className={s.shelfRow} onClick={(e) => e.stopPropagation()}>
+            <div className={s.shelfRow} onPointerDown={(e) => e.stopPropagation()}>
                 {bookShelves.map((shelf) => (
                     <span key={shelf.id} className={s.shelfChip}
                           style={{ background: `${shelf.color}20`, color: shelf.color }}>
@@ -314,7 +333,7 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                 )}
             </div>
 
-            <div className={s.statusRow} onClick={(e) => e.stopPropagation()}>
+            <div className={s.statusRow} onPointerDown={(e) => e.stopPropagation()}>
                 {statusChips.map(({ status, icon, label }) => (
                     <button key={status} onClick={() => updateBookStatus(book.id, status)}
                         className={`status-badge ${book.status === status ? `status-${status}` : ''} ${s.statusBtn}`}
@@ -324,7 +343,7 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                 ))}
             </div>
 
-            <div className={s.progressBlock} onClick={(e) => e.stopPropagation()}>
+            <div className={s.progressBlock} onPointerDown={(e) => e.stopPropagation()}>
                 <div className={s.progressHeader}>
                     <span>Progress</span>
                     <span>{progressPercent}%</span>
@@ -357,9 +376,9 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
             <textarea placeholder="Add your notes or quotes..." value={book.notes}
                 onChange={(e) => updateBookNotes(book.id, e.target.value)}
                 className={`glass ${s.notes}`}
-                onClick={(e) => e.stopPropagation()} />
+                onPointerDown={(e) => e.stopPropagation()} />
 
-            <div className={s.actionsRow} onClick={(e) => e.stopPropagation()}>
+            <div className={s.actionsRow} onPointerDown={(e) => e.stopPropagation()}>
                 <button onClick={handleEdit} aria-label={`Edit ${book.title}`} className={s.editBtn}>
                     <Pencil size={14} /> Edit
                 </button>

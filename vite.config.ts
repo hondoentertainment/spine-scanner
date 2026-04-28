@@ -167,4 +167,9 @@ export default defineConfig({
       },
     },
   },
+  test: {
+    environment: 'jsdom',
+    // Fork pool avoids flaky hangs on some Windows setups with Vitest's default threads pool.
+    pool: 'forks',
+  },
 });

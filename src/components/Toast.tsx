@@ -199,14 +199,19 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       {/* Confirm dialog — backdrop click closes; Escape handled in effect */}
       {confirmState && (
-        /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */
-        <div className={styles.overlay} onClick={() => handleConfirm(false)} role="presentation">
+        <div
+          className={styles.overlay}
+          role="presentation"
+          onPointerDown={(e) => {
+            if (e.target === e.currentTarget) handleConfirm(false);
+          }}
+        >
           <div
             className={styles.dialog}
             role="dialog"
             aria-modal="true"
             aria-labelledby="toast-confirm-title"
-            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
           >
             <h3 id="toast-confirm-title" className={styles.dialogTitle}>
               {confirmState.options.title}
