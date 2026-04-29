@@ -85,6 +85,30 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
         pageCount: book.pageCount,
         coverImg: book.coverImg,
     });
+    const coverPreviewRef = useRef<HTMLImageElement | null>(null);
+    const [coverPreviewHidden, setCoverPreviewHidden] = useState(false);
+
+    useEffect(() => {
+        setCoverPreviewHidden(false);
+    }, [draft.coverImg]);
+
+    useEffect(() => {
+        if (!editing || !draft.coverImg || coverPreviewHidden) return undefined;
+        const el = coverPreviewRef.current;
+        if (!el) return undefined;
+        const onErr = () => { setCoverPreviewHidden(true); };
+        el.addEventListener('error', onErr);
+        return () => { el.removeEventListener('error', onErr); };
+    }, [editing, draft.coverImg, coverPreviewHidden]);
+
+    useEffect(() => {
+        if (!editing) return undefined;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setEditing(false);
+        };
+        document.addEventListener('keydown', onKey);
+        return () => { document.removeEventListener('keydown', onKey); };
+    }, [editing]);
 
     const bookShelfIds = book.shelfIds || [];
     const bookShelves = shelves.filter((sh) => bookShelfIds.includes(sh.id));
@@ -170,7 +194,15 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                 <div className={s.editHeader}>
                     <span className={s.editLabel}>Edit Book</span>
                     <div className={s.editBtnGroup}>
-                        <button type="submit" aria-label="Save changes" className={s.saveBtn}>
+                        <button
+                            type="button"
+                            aria-label="Save changes"
+                            className={s.saveBtn}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleSave();
+                            }}
+                        >
                             <Save size={14} /> Save
                         </button>
                         <button type="button" onClick={handleCancel} aria-label="Cancel editing" className={s.cancelBtn}>
@@ -207,14 +239,14 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                         <input className={s.input} type="url" value={draft.coverImg}
                             onChange={(e) => setDraft({ ...draft, coverImg: e.target.value })} placeholder="https://..." />
                     </div>
-                    {draft.coverImg && (
+                    {draft.coverImg && !coverPreviewHidden && (
                         <div className={s.coverPreview}>
                             <img
+                                ref={coverPreviewRef}
                                 key={draft.coverImg}
                                 src={draft.coverImg}
                                 alt="Cover preview"
                                 className={s.coverPreviewImg}
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                             />
                         </div>
                     )}

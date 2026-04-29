@@ -255,13 +255,10 @@ describe('ToastProvider', () => {
         fireEvent.click(screen.getByText('Open Confirm'));
       });
 
-      // Click the overlay (the parent of the dialog)
-      const overlay = screen.getByText('Confirm Action').closest('div')?.parentElement;
-      if (overlay) {
-        await act(async () => {
-          fireEvent.click(overlay);
-        });
-      }
+      const overlay = screen.getByRole('dialog').parentElement as HTMLElement;
+      await act(async () => {
+        fireEvent.pointerDown(overlay, { buttons: 1 });
+      });
 
       expect(onResult).toHaveBeenCalledWith(false);
     });
