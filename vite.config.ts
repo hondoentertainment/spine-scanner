@@ -169,7 +169,17 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    // Fork pool avoids flaky hangs on some Windows setups with Vitest's default threads pool.
-    pool: 'forks',
+    // Threads on CI: fork workers sometimes never exit on Linux runners after all tests pass.
+    // Forks locally: avoids occasional hangs on some Windows setups with the default thread pool.
+    pool: process.env.CI === 'true' ? 'threads' : 'forks',
+    ...(process.env.CI === 'true'
+      ? {}
+      : {
+          poolOptions: {
+            forks: {
+              singleFork: true,
+            },
+          },
+        }),
   },
 });

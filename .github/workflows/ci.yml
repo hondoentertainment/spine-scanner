@@ -41,7 +41,7 @@ jobs:
         run: npm run check:production
 
       - name: Test
-        timeout-minutes: 35
+        timeout-minutes: 44
         run: npx vitest run --exclude "**/scanRegressionFixtures.test.ts"
 
       - name: Build
