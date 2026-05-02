@@ -16,8 +16,8 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    # lint + unit tests (up to 18m) + build + Playwright install + E2E (up to 12m)
-    timeout-minutes: 45
+    # lint + unit tests + build + Playwright install + E2E — allow headroom for slower runners
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -41,7 +41,7 @@ jobs:
         run: npm run check:production
 
       - name: Test
-        timeout-minutes: 18
+        timeout-minutes: 28
         run: npm test
 
       - name: Build
