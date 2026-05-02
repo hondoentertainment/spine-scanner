@@ -130,7 +130,7 @@ export const importFromGoodreadsCSV = (
         // Prefer ISBN13, fall back to ISBN
         const rawIsbn13 = col(row, 'ISBN13');
         const rawIsbn = col(row, 'ISBN');
-        let isbn = stripIsbnWrapper(rawIsbn13) || stripIsbnWrapper(rawIsbn);
+        const isbn = stripIsbnWrapper(rawIsbn13) || stripIsbnWrapper(rawIsbn);
 
         if (!isbn) { skipped++; continue; }
 
