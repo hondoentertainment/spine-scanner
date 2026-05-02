@@ -41,7 +41,7 @@ jobs:
         run: npm run check:production
 
       - name: Test
-        timeout-minutes: 28
+        timeout-minutes: 35
         run: npm test
 
       - name: Build
