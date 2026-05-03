@@ -7,12 +7,7 @@ import { uiContracts } from '../src/testing/uiContracts';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const GOODREADS_CSV = join(__dirname, 'fixtures', 'goodreads-sample.csv');
 
-/**
- * Storage key used by useBookStore (zustand persist).
- * Mirrors src/store/useBookStore.ts.
- */
 const BOOK_STORAGE_KEY = 'spine-scanner-storage';
-/** Storage key used by useProfileStore. Mirrors src/store/useProfileStore.ts. */
 const PROFILE_STORAGE_KEY = 'spine-scanner-preferences';
 
 interface SeedBook {
@@ -33,10 +28,14 @@ interface SeedBook {
   lastProgressAt?: string | null;
 }
 
-/**
- * Seed the persisted zustand store before the page boots, so the React app
- * hydrates with these books on first paint. Must be called before page.goto().
- */
+interface SeedPreferencesOverrides {
+  currentStreak?: number;
+  longestStreak?: number;
+  lastStreakDate?: string | null;
+  readingGoalBooksPerYear?: number | null;
+  readingGoalPagesPerYear?: number | null;
+}
+
 async function seedBooks(page: Page, books: SeedBook[]) {
   await page.addInitScript(
     ({ key, payload }) => {
@@ -49,36 +48,34 @@ async function seedBooks(page: Page, books: SeedBook[]) {
   );
 }
 
-/** Mark onboarding as completed so the modal doesn't block UI checks. */
-async function seedOnboardingCompleted(page: Page) {
+async function seedPreferences(page: Page, overrides: SeedPreferencesOverrides = {}) {
+  const prefs = {
+    theme: 'dark',
+    librarySortBy: 'dateAdded',
+    librarySortAsc: false,
+    libraryViewMode: 'grid',
+    libraryStatusFilter: 'all',
+    batchModeDefault: false,
+    showStatsDefault: false,
+    showShelvesDefault: false,
+    onboardingCompleted: true,
+    smartShelves: [],
+    savedViews: [],
+    readingGoalBooksPerYear: overrides.readingGoalBooksPerYear ?? null,
+    readingGoalPagesPerYear: overrides.readingGoalPagesPerYear ?? null,
+    warnOnDuplicateIsbn: true,
+    currentStreak: overrides.currentStreak ?? 0,
+    longestStreak: overrides.longestStreak ?? 0,
+    lastStreakDate: overrides.lastStreakDate ?? null,
+  };
   await page.addInitScript(
-    ({ key }) => {
-      window.localStorage.setItem(
-        key,
-        JSON.stringify({
-          state: {
-            preferences: {
-              theme: 'dark',
-              librarySortBy: 'dateAdded',
-              librarySortAsc: false,
-              libraryViewMode: 'grid',
-              libraryStatusFilter: 'all',
-              batchModeDefault: false,
-              showStatsDefault: false,
-              showShelvesDefault: false,
-              onboardingCompleted: true,
-              smartShelves: [],
-              savedViews: [],
-              readingGoalBooksPerYear: null,
-              readingGoalPagesPerYear: null,
-              warnOnDuplicateIsbn: true,
-            },
-          },
-          version: 0,
-        }),
-      );
+    ({ key, payload }) => {
+      window.localStorage.setItem(key, JSON.stringify(payload));
     },
-    { key: PROFILE_STORAGE_KEY },
+    {
+      key: PROFILE_STORAGE_KEY,
+      payload: { state: { preferences: prefs }, version: 0 },
+    },
   );
 }
 
@@ -91,21 +88,17 @@ async function dismissOnboardingIfPresent(page: Page) {
 
 test.describe('Recent feature waves', () => {
   test.beforeEach(async ({ context }) => {
-    // Each test sets up its own state; clear storage so suites don't leak.
     await context.clearCookies();
   });
 
   /**
    * Issue #43: Pages-read input updates progress.
-   *
-   * The shipped BookDetail in this worktree exposes only quick-action buttons
-   * (Start reading, +25 pages, Finish, Mark DNF) — there is no labelled
-   * "Pages read" numeric input. Skipping until that input ships.
+   * Edit a 'reading' book, fill the labelled "Pages read" input, save,
+   * and verify the value persisted (re-opening the detail still shows it).
    */
-  test.skip('pages-read input updates progress (Issue #43)', async ({ page }) => {
-    // TODO: enable once a labelled "Pages read" input is added to BookDetail.
-    // The harness below is the intended shape:
-    await seedOnboardingCompleted(page);
+  test('pages-read input updates progress (Issue #43)', async ({ page }) => {
+    test.setTimeout(30_000);
+    await seedPreferences(page);
     await seedBooks(page, [
       {
         id: 'seed-43',
@@ -125,139 +118,162 @@ test.describe('Recent feature waves', () => {
 
     await page.goto('./library');
     await dismissOnboardingIfPresent(page);
+
+    // Open the book card (BookCard is role=button with the title in its accessible name).
     await page.getByRole('button', { name: /1984/i }).first().click();
+    await expect(page.getByRole('dialog', { name: /Details for 1984/i })).toBeVisible();
+
+    // Enter edit mode.
     await page.getByRole('button', { name: /edit details/i }).click();
-    const pagesInput = page.getByLabel(/pages read/i);
+
+    // Fill the labelled "Pages read" input.
+    const pagesInput = page.getByLabel(/^pages read$/i);
+    await expect(pagesInput).toBeVisible();
     await pagesInput.fill('150');
     await pagesInput.blur();
-    await page.getByRole('button', { name: /close detail view/i }).click();
-    await expect(page.getByText(/50%/)).toBeVisible();
+
+    // Save out of edit mode.
+    await page.getByRole('button', { name: /^save$/i }).click();
+
+    // Re-enter edit mode and verify persistence.
+    await page.getByRole('button', { name: /edit details/i }).click();
+    await expect(page.getByLabel(/^pages read$/i)).toHaveValue('150');
   });
 
   /**
-   * Issue #45: Sync status panel renders correctly.
-   *
-   * Negative path — without a signed-in Supabase session, ProfileSettings
-   * should not render any "Sync status" / "Last synced" panel. Full auth
-   * seeding requires real Supabase tokens (useAuthStore is not persisted),
-   * which we don't have in E2E. Verifying absence keeps the regression
-   * value without that complexity.
+   * Issue #45: Sync status panel is absent when not signed in.
+   * Negative path — useAuthStore is not persisted, so no signed-in session
+   * exists in E2E. The "Sync status" section should not render.
    */
   test('sync status panel is absent on profile when not signed in (Issue #45)', async ({ page }) => {
-    await seedOnboardingCompleted(page);
+    await seedPreferences(page);
     await page.goto('./profile');
     await dismissOnboardingIfPresent(page);
 
-    // Profile heading is present (proves we're on the page).
     await expect(page.locator('#profile-settings-title')).toBeVisible();
-
-    // No sync-related headings or copy should appear in the profile panel
-    // when there is no signed-in user.
     await expect(page.getByRole('heading', { name: /sync status/i })).toHaveCount(0);
     await expect(page.getByText(/last synced/i)).toHaveCount(0);
-    await expect(page.getByText(/changes? to sync/i)).toHaveCount(0);
-
-    // The local-profile badge is the expected substitute when Supabase is
-    // unconfigured, confirming the auth-gated branch is what's being shown.
-    const localBadge = page.getByText(/local profile - sign in to sync/i);
-    if (await localBadge.isVisible().catch(() => false)) {
-      await expect(localBadge).toBeVisible();
-    }
   });
 
   /**
    * Issue #44: Goodreads CSV import.
-   *
-   * Uploads a real-format Goodreads export (3 rows, ISBN13 in `="..."`
-   * format, varying Exclusive Shelf values). The DataManagement importer
-   * runs `lookupByIsbn` per row, which hits Google Books / Open Library —
-   * mock both at the context level so the test is hermetic.
+   * Uploads a real-format Goodreads export. The importer doesn't call any
+   * lookup APIs (it builds entries directly from the CSV with metadataSource='manual'),
+   * so no network mocking is needed.
    */
-  test('Goodreads CSV import adds books (Issue #44)', async ({ page, context }) => {
+  test('Goodreads CSV import adds books (Issue #44)', async ({ page }) => {
     test.setTimeout(30_000);
 
-    await seedOnboardingCompleted(page);
-
-    // Mock metadata APIs so the importer resolves without network.
-    await context.route(/googleapis\.com\/books\/v1\/volumes/, async (route) => {
-      const url = route.request().url();
-      const isbnMatch = url.match(/isbn:(\d+)/);
-      const isbn = isbnMatch?.[1] ?? '0000000000000';
-      const titleByIsbn: Record<string, { title: string; authors: string[] }> = {
-        '9780141036144': { title: '1984', authors: ['George Orwell'] },
-        '9780593135204': { title: 'Project Hail Mary', authors: ['Andy Weir'] },
-        '9780135957059': { title: 'The Pragmatic Programmer', authors: ['David Thomas', 'Andrew Hunt'] },
-      };
-      const meta = titleByIsbn[isbn] ?? { title: `Book ${isbn}`, authors: ['Unknown'] };
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          totalItems: 1,
-          items: [
-            {
-              volumeInfo: {
-                title: meta.title,
-                authors: meta.authors,
-                pageCount: 300,
-                industryIdentifiers: [{ type: 'ISBN_13', identifier: isbn }],
-                imageLinks: { thumbnail: 'https://example.com/cover.jpg' },
-              },
-            },
-          ],
-        }),
-      });
-    });
-    await context.route(/openlibrary\.org\/api\/books/, async (route) =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) }),
-    );
+    await seedPreferences(page);
 
     await page.goto('./data');
     await dismissOnboardingIfPresent(page);
     await expect(page.getByRole('heading', { name: /import & export/i })).toBeVisible();
 
-    // The import file input is hidden but accepts setInputFiles.
-    const fileInput = page.locator('input[type="file"][aria-label="Import books from file"]');
+    // The dedicated Goodreads CSV file input is hidden; setInputFiles works on hidden inputs.
+    const fileInput = page.locator('input[type="file"][aria-label="Import Goodreads CSV export"]');
     await expect(fileInput).toHaveCount(1);
     await fileInput.setInputFiles(GOODREADS_CSV);
 
-    // Either the toast or the inline summary confirms a successful import.
-    const toast = page.getByText(/imported \d+ book/i);
-    const summary = page.getByText(/import summary/i);
-    await expect(toast.or(summary).first()).toBeVisible({ timeout: 15_000 });
+    // Inline result message: "Imported N books (M duplicates skipped)" or similar.
+    await expect(page.getByText(/imported \d+ book/i)).toBeVisible({ timeout: 10_000 });
 
-    // Books should land in the library.
+    // Books should appear in the library after import.
     await page.getByTestId(uiContracts.navTabTestId('library')).click();
-    await expect(page.getByRole('heading', { name: /your library, built for browsing/i })).toBeVisible();
-    // At least one of the seeded titles should appear.
     const anyTitle = page
-      .getByText('1984')
-      .or(page.getByText('Project Hail Mary'))
-      .or(page.getByText('The Pragmatic Programmer'));
+      .getByText('1984', { exact: false })
+      .or(page.getByText('Project Hail Mary', { exact: false }))
+      .or(page.getByText('The Pragmatic Programmer', { exact: false }));
     await expect(anyTitle.first()).toBeVisible({ timeout: 10_000 });
   });
 
   /**
-   * Issue #42: Reading streak appears after marking a book read.
-   *
-   * No streak feature is implemented in this worktree (no "Streak" /
-   * "1-day streak" surface anywhere in HomeFeed or App.tsx). Skipping
-   * until the feature ships.
+   * Issue #42: Reading streak surface in HomeFeed.
+   * Seeds preferences.currentStreak=3 directly (vs triggering via store action,
+   * which depends on advanceStreak's date logic) and verifies the streak
+   * section renders with "{N}-day streak" text.
    */
-  test.skip('reading streak appears after marking a book read (Issue #42)', async ({ page }) => {
-    // TODO: enable once HomeFeed renders a streak indicator.
-    await seedOnboardingCompleted(page);
+  test('reading streak appears in HomeFeed when streak is active (Issue #42)', async ({ page }) => {
+    await seedPreferences(page, { currentStreak: 3, longestStreak: 5, lastStreakDate: '2026-05-03' });
     await page.goto('./home');
     await dismissOnboardingIfPresent(page);
-    await expect(page.getByText(/\d+-day streak/i)).toBeVisible();
+
+    const streakSection = page.getByRole('region', { name: /reading streak/i });
+    await expect(streakSection).toBeVisible();
+    await expect(streakSection.getByText(/3-day streak/i)).toBeVisible();
+    // Best is shown when longestStreak > currentStreak.
+    await expect(streakSection.getByText(/best:\s*5 days/i)).toBeVisible();
+  });
+
+  /**
+   * Issue #42 negative: streak section is absent when currentStreak=0.
+   */
+  test('reading streak is hidden when streak is zero (Issue #42 negative)', async ({ page }) => {
+    await seedPreferences(page, { currentStreak: 0 });
+    await page.goto('./home');
+    await dismissOnboardingIfPresent(page);
+
+    await expect(page.getByRole('region', { name: /reading streak/i })).toHaveCount(0);
   });
 
   /**
    * Issue #49: Year in Books card visibility.
-   *
-   * Not yet shipped in this worktree (no YearInBooks component / copy).
+   * Positive: when at least one book was finished this year, the card renders.
+   * Negative: with no read-this-year books, the card is hidden.
    */
-  test.skip('Year in Books card hides when no books read this year (Issue #49)', async () => {
-    // TODO: enable once Issue #49 ships.
+  test('Year in Books card renders when books were finished this year (Issue #49)', async ({ page }) => {
+    const currentYear = new Date().getFullYear();
+    await seedPreferences(page);
+    await seedBooks(page, [
+      {
+        id: 'seed-49a',
+        isbn: '9780141036144',
+        title: '1984',
+        author: 'George Orwell',
+        pageCount: 300,
+        amazonLink: '',
+        coverImg: '',
+        status: 'read',
+        notes: '',
+        dateAdded: `${currentYear}-01-15T00:00:00.000Z`,
+        finishedAt: `${currentYear}-02-20T00:00:00.000Z`,
+        shelfIds: [],
+      },
+      {
+        id: 'seed-49b',
+        isbn: '9780593135204',
+        title: 'Project Hail Mary',
+        author: 'Andy Weir',
+        pageCount: 476,
+        amazonLink: '',
+        coverImg: '',
+        status: 'read',
+        notes: '',
+        dateAdded: `${currentYear}-03-01T00:00:00.000Z`,
+        finishedAt: `${currentYear}-03-15T00:00:00.000Z`,
+        shelfIds: [],
+      },
+    ]);
+
+    await page.goto('./home');
+    await dismissOnboardingIfPresent(page);
+
+    const yearSection = page.getByRole('region', { name: /your reading year/i });
+    await expect(yearSection).toBeVisible();
+    await expect(yearSection.getByRole('heading', { name: new RegExp(`${currentYear} in books`, 'i') })).toBeVisible();
+    await expect(yearSection.getByText(/books finished/i)).toBeVisible();
+    await expect(yearSection.getByText(/pages read/i)).toBeVisible();
+    // With 2 books finished, busiest-month tile should render.
+    await expect(yearSection.getByText(/busiest month/i)).toBeVisible();
+  });
+
+  test('Year in Books card hides when no books read this year (Issue #49 negative)', async ({ page }) => {
+    await seedPreferences(page);
+    // Empty library = no books finished this year.
+    await seedBooks(page, []);
+    await page.goto('./home');
+    await dismissOnboardingIfPresent(page);
+
+    await expect(page.getByRole('region', { name: /your reading year/i })).toHaveCount(0);
   });
 });

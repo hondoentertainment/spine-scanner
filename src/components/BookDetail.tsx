@@ -144,9 +144,9 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
     const willUpdate = REFRESHABLE.filter((f) => {
       if (editedFields.includes(f)) return false;
       const newVal = f === 'title' ? newMeta.title
-        : f === 'author' ? (newMeta.authors[0] ?? '')
+        : f === 'author' ? (newMeta.author ?? '')
         : f === 'pageCount' ? newMeta.pageCount
-        : newMeta.thumbnail;
+        : newMeta.coverImg;
       const curVal = f === 'author' ? book.author : book[f];
       return newVal !== curVal;
     });
@@ -171,9 +171,9 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
       metadataConflicts: newMeta.metadataConflicts,
     };
     if (willUpdate.includes('title')) updates.title = newMeta.title;
-    if (willUpdate.includes('author')) updates.author = newMeta.authors[0] ?? book.author;
+    if (willUpdate.includes('author')) updates.author = newMeta.author ?? book.author;
     if (willUpdate.includes('pageCount')) updates.pageCount = newMeta.pageCount;
-    if (willUpdate.includes('coverImg')) updates.coverImg = newMeta.thumbnail;
+    if (willUpdate.includes('coverImg')) updates.coverImg = newMeta.coverImg;
 
     updateBook(book.id, updates);
     toast('Metadata refreshed', 'success');
