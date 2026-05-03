@@ -314,7 +314,6 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     return () => observer.disconnect();
   }, [viewMode]);
 
-  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: filteredAndSorted.length,
     getScrollElement: () => listParentRef.current,
@@ -1320,9 +1319,13 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
               const book = filteredAndSorted[virtualItem.index];
               if (!book) return null;
               const progress = getReadingProgressPercent(book);
+              const openThisBook = () => handleBookOpen(book);
               return (
                 <div
                   key={virtualItem.key}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open details for ${book.title}`}
                   className={s.listRow}
                   style={{
                     position: 'absolute',
@@ -1331,16 +1334,23 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
                     width: '100%',
                     transform: `translateY(${virtualItem.start}px)`,
                   }}
-                  onClick={() => handleBookOpen(book)}
+                  onClick={openThisBook}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openThisBook();
+                    }
+                  }}
                 >
                   {selectionMode && (
-                    <label className={s.listSelect} onClick={(event) => event.stopPropagation()}>
+                    <div className={s.listSelect} onPointerDown={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={selectedIds.includes(book.id)}
                         onChange={() => toggleBookSelection(book.id)}
+                        aria-label={`Select ${book.title}`}
                       />
-                    </label>
+                    </div>
                   )}
                   <img
                     src={getBookCoverSrc(book.coverImg)}
@@ -1360,7 +1370,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
                     </div>
                   </div>
                   <span className={`status-badge status-${book.status} ${s.listStatus}`}>{book.status}</span>
-                  <div className={s.listStatusChips} onClick={(event) => event.stopPropagation()}>
+                  <div className={s.listStatusChips} onPointerDown={(e) => e.stopPropagation()}>
                     <button
                       type="button"
                       className={`${s.listStatusChip} ${book.status === 'to-read' ? s.listStatusChipActive : ''}`}

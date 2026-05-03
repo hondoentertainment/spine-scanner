@@ -615,7 +615,8 @@ const Scanner: React.FC<ScannerProps> = ({
     const systemDotClass = cameraError ? s.systemDotError : !cameraReady ? s.systemDotWarning : '';
 
     return (
-        <div ref={containerRef} className={s.scannerLayout} tabIndex={0} aria-label="Book scanner: press Space or Enter to capture" aria-busy={processing || isScanning}>
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- role=application keyboard capture
+        <div ref={containerRef} className={s.scannerLayout} role="application" tabIndex={0} aria-label="Book scanner: press Space or Enter to capture" aria-busy={processing || isScanning}>
 
             {/* Left panel: controls */}
             <div className={s.controlsPanel}>

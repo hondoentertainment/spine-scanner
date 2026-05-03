@@ -110,7 +110,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
     <div
       ref={inline ? undefined : focusTrapRef}
       className={`glass ${inline ? s.page : s.modal}`}
-      onClick={(e) => !inline && e.stopPropagation()}
+      onPointerDown={(e) => !inline && e.stopPropagation()}
     >
       {!inline && onClose && (
         <button onClick={onClose} className={s.closeBtn} aria-label="Close settings">
@@ -485,8 +485,8 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       <>
       <div className={s.section}>
         <h3 className={s.sectionTitle}>Library defaults</h3>
-        <div className={s.field}>
-          <label className={s.label}>Sort by</label>
+        <fieldset className={`${s.field} ${s.fieldsetPlain}`}>
+          <legend className={s.label}>Sort by</legend>
           <div className={s.optionRow}>
             {sortOptions.map((opt) => (
               <button
@@ -500,9 +500,9 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
               </button>
             ))}
           </div>
-        </div>
-        <div className={s.field}>
-          <label className={s.label}>Sort order</label>
+        </fieldset>
+        <fieldset className={`${s.field} ${s.fieldsetPlain}`}>
+          <legend className={s.label}>Sort order</legend>
           <button
             type="button"
             onClick={() => updatePreferences({ librarySortAsc: !preferences.librarySortAsc })}
@@ -511,9 +511,9 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
             <ArrowUpDown size={14} />
             {preferences.librarySortAsc ? 'A -> Z' : 'Z -> A'}
           </button>
-        </div>
-        <div className={s.field}>
-          <label className={s.label}>Default view</label>
+        </fieldset>
+        <fieldset className={`${s.field} ${s.fieldsetPlain}`}>
+          <legend className={s.label}>Default view</legend>
           <div className={s.optionRow}>
             {viewOptions.map((opt) => (
               <button
@@ -528,9 +528,9 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
               </button>
             ))}
           </div>
-        </div>
-        <div className={s.field}>
-          <label className={s.label}>Default status filter</label>
+        </fieldset>
+        <fieldset className={`${s.field} ${s.fieldsetPlain}`}>
+          <legend className={s.label}>Default status filter</legend>
           <div className={s.optionRow}>
             {statusOptions.map((opt) => (
               <button
@@ -544,7 +544,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
               </button>
             ))}
           </div>
-        </div>
+        </fieldset>
       </div>
 
       <div className={s.section}>
@@ -623,7 +623,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
 
   return (
     <div className={s.overlay} role="dialog" aria-modal="true" aria-labelledby="profile-settings-title"
-      onClick={(e) => e.target === e.currentTarget && onClose?.()}>
+      onPointerDown={(e) => e.target === e.currentTarget && onClose?.()}>
       {content}
     </div>
   );

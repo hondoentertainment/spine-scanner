@@ -109,7 +109,7 @@ describe('BookDetail', () => {
 
       // The overlay is the outermost div of BookDetail
       const overlay = container.querySelector('[class*="overlay"]');
-      if (overlay) fireEvent.click(overlay);
+      if (overlay) fireEvent.pointerDown(overlay);
       expect(onClose).toHaveBeenCalled();
     });
 

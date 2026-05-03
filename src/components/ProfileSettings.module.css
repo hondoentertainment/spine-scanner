@@ -466,6 +466,13 @@
   letter-spacing: 0.05em;
 }
 
+.fieldsetPlain {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
 .textInput {
   padding: 0.5rem 0.75rem;
   border-radius: 0.5rem;

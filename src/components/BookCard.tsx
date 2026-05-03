@@ -85,6 +85,19 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
         pageCount: book.pageCount,
         coverImg: book.coverImg,
     });
+    const coverPreviewRef = useRef<HTMLImageElement | null>(null);
+    const [coverPreviewFailedUrl, setCoverPreviewFailedUrl] = useState<string | null>(null);
+    const showCoverPreview = Boolean(draft.coverImg) && draft.coverImg !== coverPreviewFailedUrl;
+
+    useEffect(() => {
+        if (!draft.coverImg || !showCoverPreview) return undefined;
+        const el = coverPreviewRef.current;
+        if (!el) return undefined;
+        const url = draft.coverImg;
+        const onErr = () => setCoverPreviewFailedUrl(url);
+        el.addEventListener('error', onErr);
+        return () => el.removeEventListener('error', onErr);
+    }, [draft.coverImg, showCoverPreview]);
 
     useEffect(() => {
         if (!editing) return undefined;
@@ -168,11 +181,6 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
         }
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSave(); }
-        if (e.key === 'Escape') handleCancel();
-    };
-
     if (editing) {
         return (
             <div className={`book-card glass ${s.card}`}>
@@ -180,13 +188,10 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                     <span className={s.editLabel}>Edit Book</span>
                     <div className={s.editBtnGroup}>
                         <button
-                            type="button"
+                            type="submit"
+                            form="book-card-edit-form"
                             aria-label="Save changes"
                             className={s.saveBtn}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleSave();
-                            }}
                         >
                             <Save size={14} /> Save
                         </button>
@@ -196,7 +201,11 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                     </div>
                 </div>
 
-                <form className={s.editForm} onSubmit={(e) => { e.preventDefault(); handleSave(); }} onKeyDown={handleKeyDown}>
+                <form
+                    id="book-card-edit-form"
+                    className={s.editForm}
+                    onSubmit={(e) => { e.preventDefault(); handleSave(); }}
+                >
                     <div>
                         <div className={s.fieldLabel}>Title</div>
                         <input className={s.input} type="text" value={draft.title}
@@ -224,14 +233,13 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                         <input className={s.input} type="url" value={draft.coverImg}
                             onChange={(e) => setDraft({ ...draft, coverImg: e.target.value })} placeholder="https://..." />
                     </div>
-                    {draft.coverImg && (
+                    {showCoverPreview && (
                         <div className={s.coverPreview}>
                             <img
-                                key={draft.coverImg}
+                                ref={coverPreviewRef}
                                 src={draft.coverImg}
                                 alt="Cover preview"
                                 className={s.coverPreviewImg}
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                             />
                         </div>
                     )}

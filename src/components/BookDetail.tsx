@@ -249,13 +249,13 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- role=dialog keyboard handling */}
       <div
         ref={focusTrapRef}
         className={styles.modal}
         role="dialog"
         aria-modal="true"
         aria-label={`Details for ${book.title}`}
-        onPointerDown={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
         <button onClick={onClose} className={styles.closeBtn} aria-label="Close detail view">
