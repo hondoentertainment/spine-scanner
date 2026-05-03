@@ -95,6 +95,8 @@ const Scanner: React.FC<ScannerProps> = ({
     const [isbnSuggestions, setIsbnSuggestions] = useState<string[]>([]);
     const [repairedMap, setRepairedMap] = useState<Record<string, string>>({});
     const [debugLogs, setDebugLogs] = useState<string[]>([]);
+    const debugLogsRef = useRef<string[]>([]);
+    useEffect(() => { debugLogsRef.current = debugLogs; }, [debugLogs]);
     const [showDebug, setShowDebug] = useState(false);
     const [liveTelemetry, setLiveTelemetry] = useState<LiveScanTelemetry>({ ...EMPTY_TELEMETRY });
     const [liveQualityHint, setLiveQualityHint] = useState<'ready' | 'blurry' | 'dark' | 'blurry-dark' | null>(null);
@@ -356,13 +358,13 @@ const Scanner: React.FC<ScannerProps> = ({
                     ? 'Scanner busy - upload a photo or enter ISBN'
                     : 'Scan failed - try a photo upload or enter ISBN',
                 type: 'error',
-                details: buildErrorDiagnostics(msg, debugLogs),
+                details: buildErrorDiagnostics(msg, debugLogsRef.current),
             });
         } finally {
             processingRef.current = false;
             setProcessing(false);
         }
-    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, debugLogs, batchModeProp, captureAveragedFrame, autoScan, scanMode]);
+    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, batchModeProp, captureAveragedFrame, autoScan, scanMode]);
 
     const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -462,13 +464,13 @@ const Scanner: React.FC<ScannerProps> = ({
                     ? 'Scanner busy - try another photo or enter ISBN'
                     : 'Scan failed - try another photo or enter ISBN',
                 type: 'error',
-                details: buildErrorDiagnostics(msg, debugLogs),
+                details: buildErrorDiagnostics(msg, debugLogsRef.current),
             });
         } finally {
             processingRef.current = false;
             setProcessing(false);
         }
-    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, debugLogs, scanMode, batchModeProp]);
+    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, scanMode, batchModeProp]);
 
     const handlePhotoOnlyFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];

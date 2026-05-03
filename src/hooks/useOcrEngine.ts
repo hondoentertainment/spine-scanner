@@ -136,6 +136,7 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
     const workerPromise = useRef<Promise<any> | null>(null);
     const workerRetries = useRef(0);
     const progressCallbackRef = useRef<((pct: number) => void) | null>(null);
+    const prefetchControllerRef = useRef<AbortController | null>(null);
     const [ocrState, setOcrState] = useState<OcrEngineState>('idle');
 
     const loadTessModule = useCallback(async (): Promise<ResolvedTesseract> => {
@@ -221,9 +222,14 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
     const preWarm = useCallback(async () => {
         setOcrState('loading');
         addLog('Pre-warming OCR engine...');
-        // Prefetch eng traineddata so it's cached before first scan (helps offline after first load)
+        // Prefetch eng traineddata so it's cached before first scan (helps offline after first load).
+        // Abort any previously-started prefetch before creating a new one — prevents orphaned
+        // fetch requests that would keep the Node.js process alive (open-handle) in test environments.
+        prefetchControllerRef.current?.abort();
         const langUrl = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz';
-        fetch(langUrl, { mode: 'cors' }).catch(() => {}); // Fire-and-forget; worker will fetch again if needed
+        const prefetchController = new AbortController();
+        prefetchControllerRef.current = prefetchController;
+        fetch(langUrl, { mode: 'cors', signal: prefetchController.signal }).catch(() => {}); // Fire-and-forget; worker will fetch again if needed
         try {
             const w = await getWorker();
             if (w) {
@@ -241,9 +247,12 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
         }
     }, [getWorker, addLog, onOcrReady]);
 
-    // Terminate worker on unmount
+    // Terminate worker and abort any pending prefetch on unmount
     useEffect(() => {
-        return () => { workerRef.current?.terminate?.().catch(() => {}); };
+        return () => {
+            prefetchControllerRef.current?.abort();
+            workerRef.current?.terminate?.().catch(() => {});
+        };
     }, []);
 
     /** Run OCR on a preprocessed image and extract ISBN candidates. */
