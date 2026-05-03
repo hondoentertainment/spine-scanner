@@ -43,7 +43,8 @@ jobs:
   unit-tests:
     needs: lint
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    # Slowest shards (heavy integration-style suites) can exceed 75m on ubuntu-latest.
+    timeout-minutes: 95
     strategy:
       fail-fast: true
       matrix:
