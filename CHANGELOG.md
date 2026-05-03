@@ -2,7 +2,21 @@
 
 ## Unreleased
 
-- _Nothing yet._
+- **Phase 25 (Scan Accuracy Hardening) closed:** `scripts/benchmark-scan.ts` runs the pipeline against the regression fixture set and outputs CSV (`npm run benchmark:scan`); closes Issue #36.
+- **Phase 26 (Metadata Quality Layer):** `MetadataSource` and `MetadataConflict` types on `BookEntry`; parallel Google Books + Open Library queries with field-level conflict detection (author / pageCount / title); source badge and conflict warning in `BookDetail`; safe **Refresh metadata** action that preserves `userEditedFields`; `metadata_conflict` analytics event. Closes Issues #37, #38, #39.
+- **Bulk metadata refresh:** `DataManagement` "Refresh all books without metadata source" — throttled (500 ms/book), cancellable, live progress (Issue #47).
+- **Edition-level duplicate detection:** `findEditionDuplicateGroups` finds books with matching normalized title+author but different ISBNs (handles diacritics, edition suffixes, hardcover/paperback). Amber **Possible duplicate editions** panel in `DataManagement` with merge actions (Issue #53).
+- **Goodreads CSV import:** `importFromGoodreadsCSV` parses the official Goodreads export (handles `="..."` ISBN wrappers, Exclusive Shelf → status, Date Read → `finishedAt`); import button in `DataManagement` (Issue #44).
+- **Reading workflow (Phase 27):**
+  - Pages-read input in `BookDetail` edit mode for `status='reading'` books; prominent `N of M pages (X%)` line in view mode (Issue #43).
+  - Reading streak tracking: `currentStreak` / `longestStreak` / `lastStreakDate` in `ProfilePreferences`; advances on `updateBookStatus` (read/reading) or `updateReadingProgress`; flame card in `HomeFeed` when active (Issue #42).
+  - **Streak timezone fix:** `new Date("YYYY-MM-DD")` parsed as UTC midnight, so users west of UTC computed "yesterday" as 2 days ago and lost their streak. Centralised in `toLocalDateKey()` and yesterday is now derived by subtracting from a local Date. 7 unit tests with `vi.setSystemTime` (Issue #51).
+  - Year in Books stats card: books finished, pages read, avg pages/book, busiest month — derived from `finishedAt` (Issue #49).
+  - Series completion hints: top incomplete series surfaced in `HomeFeed` with progress bar and "View series" link (Issue #46).
+- **Sync visibility (Phase 30 start):** Sync status section in `ProfileSettings` showing last sync time, pending count, and failure warning with reload-to-retry; only renders when signed in (Issue #45).
+- **Test coverage (Issue #41):** Branch-coverage additions across `useBookLookup`, `useScanPipeline`, `useAuthStore`, `importLogic`; thresholds raised to stmts 65 / branches 55 / funcs 62 / lines 67.
+- **E2E coverage:** `e2e/recent-features.spec.ts` covering Issues #42, #43, #44, #45, #49 with `e2e/fixtures/goodreads-sample.csv`; added to `test:e2e:release` so CI runs it (Issue #52).
+- **Tooling:** ESLint and Vitest now ignore `.claude/**` to prevent agent-worktree contamination during local dev runs.
 
 ## [1.2.2] - 2026-04-10
 
