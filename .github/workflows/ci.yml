@@ -17,7 +17,7 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     # lint + sharded unit tests + build + Playwright + E2E
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
 
@@ -40,21 +40,22 @@ jobs:
           VITE_APP_RELEASE: ${{ github.sha }}
         run: npm run check:production
 
-      # Two shards in parallel (~half wall time vs one vitest run; avoids step timeouts on large suite)
+      # Sharded Vitest in parallel (one process per shard; wall time ~= slowest shard)
       - name: Test
-        timeout-minutes: 30
+        timeout-minutes: 40
         run: |
-          set -e
-          npx vitest run --shard=1/2 &
-          pid1=$!
-          npx vitest run --shard=2/2 &
-          pid2=$!
-          wait "$pid1"
-          s1=$?
-          wait "$pid2"
-          s2=$?
-          if [ "$s1" -ne 0 ]; then exit "$s1"; fi
-          if [ "$s2" -ne 0 ]; then exit "$s2"; fi
+          set +e
+          npx vitest run --shard=1/3 &
+          p1=$!
+          npx vitest run --shard=2/3 &
+          p2=$!
+          npx vitest run --shard=3/3 &
+          p3=$!
+          e=0
+          wait $p1 || e=1
+          wait $p2 || e=1
+          wait $p3 || e=1
+          exit $e
 
       - name: Build
         env:
