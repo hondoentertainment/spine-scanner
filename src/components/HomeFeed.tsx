@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Library, ScanLine, Sparkles, Clock, Target, Cloud, Inbox, Lightbulb } from 'lucide-react';
+import { BookOpen, Library, ScanLine, Sparkles, Clock, Target, Cloud, Inbox, Lightbulb, BarChart3 } from 'lucide-react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useProfileStore } from '../store/useProfileStore.ts';
 import { useAuthStore } from '../store/useAuthStore.ts';
@@ -85,6 +85,41 @@ export default function HomeFeed() {
       if (!best || s.owned > best.owned) best = s;
     }
     return best;
+  }, [books]);
+
+  const yearStats = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const finishedThisYear = books.filter(
+      (b) =>
+        b.status === 'read' &&
+        b.finishedAt &&
+        new Date(b.finishedAt).getFullYear() === currentYear,
+    );
+    const booksRead = finishedThisYear.length;
+    const totalPages = finishedThisYear.reduce((sum, b) => sum + (b.pageCount || 0), 0);
+    const avgPages = booksRead > 0 ? Math.round(totalPages / booksRead) : 0;
+
+    let busiestMonthLabel = '';
+    if (booksRead > 0) {
+      const counts = new Array<number>(12).fill(0);
+      finishedThisYear.forEach((b) => {
+        const m = new Date(b.finishedAt as string).getMonth();
+        counts[m] += 1;
+      });
+      let bestMonth = 0;
+      let bestCount = 0;
+      counts.forEach((c, i) => {
+        if (c > bestCount) {
+          bestCount = c;
+          bestMonth = i;
+        }
+      });
+      const monthName = new Date(currentYear, bestMonth, 1).toLocaleString(undefined, { month: 'long' });
+      busiestMonthLabel = `${monthName} (${bestCount} book${bestCount === 1 ? '' : 's'})`;
+    }
+
+    return { currentYear, booksRead, totalPages, avgPages, busiestMonthLabel };
   }, [books]);
 
   const suggestions = useMemo(() => {
@@ -240,6 +275,35 @@ export default function HomeFeed() {
           >
             View series
           </button>
+        </section>
+      )}
+
+      {yearStats.booksRead > 0 && (
+        <section className={`glass ${s.yearStats}`} aria-label="Your reading year">
+          <div className={s.sectionHead}>
+            <BarChart3 size={16} aria-hidden />
+            <h2 className={s.sectionTitle}>{yearStats.currentYear} in books</h2>
+          </div>
+          <div className={s.yearStatsGrid}>
+            <div className={s.yearStatTile}>
+              <span className={s.yearStatValue}>{yearStats.booksRead}</span>
+              <span className={s.yearStatLabel}>books finished</span>
+            </div>
+            <div className={s.yearStatTile}>
+              <span className={s.yearStatValue}>{yearStats.totalPages.toLocaleString()}</span>
+              <span className={s.yearStatLabel}>pages read</span>
+            </div>
+            <div className={s.yearStatTile}>
+              <span className={s.yearStatValue}>{yearStats.avgPages}</span>
+              <span className={s.yearStatLabel}>avg pages/book</span>
+            </div>
+            {yearStats.booksRead >= 2 && (
+              <div className={s.yearStatTile}>
+                <span className={s.yearStatValue}>{yearStats.busiestMonthLabel}</span>
+                <span className={s.yearStatLabel}>busiest month</span>
+              </div>
+            )}
+          </div>
         </section>
       )}
 
