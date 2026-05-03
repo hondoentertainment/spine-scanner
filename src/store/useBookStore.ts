@@ -4,19 +4,19 @@ import type { BookEntry, ProfilePreferences, Shelf } from '../types.ts';
 import { normalizeBookEntry, normalizeBooks, updateBookForStatus, updateBookProgress } from '../utils/bookState.ts';
 import { useProfileStore } from './useProfileStore.ts';
 
-function todayISO(): string {
-  const d = new Date();
+export function toLocalDateKey(d: Date): string {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function advanceStreak(prefs: ProfilePreferences): Partial<ProfilePreferences> {
-  const today = todayISO();
-  const d = new Date(today);
-  d.setDate(d.getDate() - 1);
-  const yesterday = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+export function advanceStreak(prefs: ProfilePreferences): Partial<ProfilePreferences> {
+  const todayDate = new Date();
+  const yesterdayDate = new Date(todayDate);
+  yesterdayDate.setDate(todayDate.getDate() - 1);
+  const today = toLocalDateKey(todayDate);
+  const yesterday = toLocalDateKey(yesterdayDate);
 
   if (prefs.lastStreakDate === today) {
     return {};

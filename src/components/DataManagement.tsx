@@ -9,7 +9,8 @@ import { isbnExistsInLibrary, isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { exportToGoodreadsCSV } from '../utils/goodreadsExport.ts';
 import { exportToJSON, importFromJSON, exportToLibraryThingTSV, exportToStoryGraphCSV, exportToHTML } from '../utils/exportFormats.ts';
 import { findDuplicateIsbnGroups } from '../utils/libraryDuplicates.ts';
-import { Download, Upload, Trash2, Globe, CheckCircle, Loader2, X, GitMerge, RefreshCw } from 'lucide-react';
+import { findEditionDuplicateGroups } from '../utils/editionDuplicates.ts';
+import { Download, Upload, Trash2, Globe, CheckCircle, Loader2, X, GitMerge, RefreshCw, Layers } from 'lucide-react';
 import type { BookEntry } from '../types.ts';
 import s from './DataManagement.module.css';
 
@@ -41,7 +42,18 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
     const [deleteConfirmStep, setDeleteConfirmStep] = useState<'idle' | 'confirm'>('idle');
     const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
     const duplicateGroups = useMemo(() => findDuplicateIsbnGroups(books), [books]);
+    const editionGroups = useMemo(() => findEditionDuplicateGroups(books), [books]);
     const [mergeKeepers, setMergeKeepers] = useState<Record<string, string>>({});
+
+    const statusLabel = (status: BookEntry['status']) => {
+        switch (status) {
+            case 'to-read': return 'To read';
+            case 'reading': return 'Reading';
+            case 'read': return 'Read';
+            case 'dnf': return 'DNF';
+            default: return status;
+        }
+    };
 
     const keeperForGroup = useCallback(
         (key: string, groupBooks: BookEntry[]) => {
@@ -337,6 +349,55 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                                         }}
                                     >
                                         Merge into selected
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
+            )}
+
+            {editionGroups.length > 0 && (
+                <section className={s.sectionBorder} aria-label="Possible duplicate editions">
+                    <h3 className={s.sectionTitle}>
+                        <Layers size={20} style={{ color: '#f59e0b' }} /> Possible duplicate editions
+                    </h3>
+                    <p className={s.sectionDesc}>
+                        Books with matching title and author but different ISBNs (e.g. hardcover vs paperback). Review each pair before merging.
+                    </p>
+                    <div className={s.duplicateStack}>
+                        {editionGroups.map((group) => {
+                            const keep = group.books[0];
+                            const removeIds = group.books.slice(1).map((b) => b.id);
+                            return (
+                                <div key={group.key} className={`glass ${s.editionCard}`}>
+                                    <div className={s.editionHead}>
+                                        <span className={s.editionGroupTitle}>{keep.title}</span>
+                                        <span className={s.editionMeta}>{group.books.length} editions</span>
+                                    </div>
+                                    <ul className={s.editionBookList}>
+                                        {group.books.map((b) => (
+                                            <li key={b.id} className={s.editionBookRow}>
+                                                <span className={s.editionBookTitle}>{b.title}</span>
+                                                <span className={s.editionBookAuthor}>{b.author}</span>
+                                                <span className={s.editionBookFacts}>
+                                                    <span>ISBN {b.isbn || '—'}</span>
+                                                    <span>{b.pageCount ? `${b.pageCount} pages` : 'pages unknown'}</span>
+                                                    <span>{statusLabel(b.status)}</span>
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    <button
+                                        type="button"
+                                        className={`glass ${s.editionMergeBtn}`}
+                                        onClick={() => {
+                                            if (removeIds.length === 0) return;
+                                            mergeBooks(keep.id, removeIds);
+                                            toast('Merged duplicate editions', 'success');
+                                        }}
+                                    >
+                                        Merge into "{keep.title}"
                                     </button>
                                 </div>
                             );
