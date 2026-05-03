@@ -138,7 +138,29 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 ## Deployment
 
-The app auto-deploys to GitHub Pages on push to `main` via GitHub Actions. The workflow installs dependencies, builds, and uploads to Pages.
+On push to `main`, the `Lint, Test, Build & Deploy` workflow (`.github/workflows/ci.yml`) runs lint, unit tests, the production-readiness check, the production build, Playwright E2E, and **then deploys to BOTH GitHub Pages and Vercel** in parallel jobs gated on the verify job passing.
+
+### Required GitHub configuration
+
+**Secrets** (Settings → Secrets and variables → Actions → Secrets):
+
+- `VERCEL_TOKEN` — generate at [vercel.com/account/tokens](https://vercel.com/account/tokens)
+- `VERCEL_ORG_ID` — find in `.vercel/project.json` after running `vercel link` locally, or in the Vercel dashboard
+- `VERCEL_PROJECT_ID` — same source as `VERCEL_ORG_ID`
+- `VITE_SENTRY_DSN` (optional) — production Sentry DSN
+
+**Variables** (Settings → Secrets and variables → Actions → Variables):
+
+- `VITE_SITE_URL` — public Pages URL (defaults to `https://<owner>.github.io`)
+- `VITE_BASE_PATH` — Pages base path (defaults to `/spine-scanner/`)
+- `VITE_BASE_PATH_VERCEL` — Vercel base path (defaults to `/`)
+- `VITE_SUPPORT_EMAIL` — monitored support address (defaults to `noreply@example.com`)
+
+**Vercel project setup**: After adding the secrets, **disconnect Vercel's GitHub auto-deploy** in the Vercel dashboard (Project → Settings → Git) so deploys flow only through this workflow — otherwise every push triggers two parallel Vercel builds.
+
+### Manual fallback
+
+`.github/workflows/deploy.yml` still exists as a `workflow_dispatch`-only Pages deploy for one-off rebuilds (e.g. redeploy without a code push, or deploy a non-main branch).
 
 ### Public Launch Configuration
 

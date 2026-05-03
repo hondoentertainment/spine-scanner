@@ -1,4 +1,4 @@
-name: Lint, Test & Build
+name: Lint, Test, Build & Deploy
 
 on:
   push:
@@ -12,6 +12,8 @@ concurrency:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 jobs:
   verify:
@@ -32,11 +34,12 @@ jobs:
 
       - name: Check production
         env:
-          VITE_SITE_URL: https://example.com
-          VITE_BASE_PATH: /spine-scanner/
-          VITE_SUPPORT_EMAIL: noreply@example.com
+          VITE_SITE_URL: ${{ github.ref == 'refs/heads/main' && (vars.VITE_SITE_URL != '' && vars.VITE_SITE_URL || format('https://{0}.github.io', github.repository_owner)) || 'https://example.com' }}
+          VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH != '' && vars.VITE_BASE_PATH || '/spine-scanner/' }}
+          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL != '' && vars.VITE_SUPPORT_EMAIL || 'noreply@example.com' }}
           VITE_ENABLE_SCANNER_DEBUG: 'false'
-          VITE_APP_ENV: test
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          VITE_APP_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'test' }}
           VITE_APP_RELEASE: ${{ github.sha }}
         run: npm run check:production
 
@@ -46,13 +49,30 @@ jobs:
 
       - name: Build
         env:
-          VITE_SITE_URL: https://example.com
-          VITE_BASE_PATH: /spine-scanner/
-          VITE_SUPPORT_EMAIL: noreply@example.com
+          VITE_SITE_URL: ${{ github.ref == 'refs/heads/main' && (vars.VITE_SITE_URL != '' && vars.VITE_SITE_URL || format('https://{0}.github.io', github.repository_owner)) || 'https://example.com' }}
+          VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH != '' && vars.VITE_BASE_PATH || '/spine-scanner/' }}
+          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL != '' && vars.VITE_SUPPORT_EMAIL || 'noreply@example.com' }}
           VITE_ENABLE_SCANNER_DEBUG: 'false'
-          VITE_APP_ENV: test
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          VITE_APP_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'test' }}
           VITE_APP_RELEASE: ${{ github.sha }}
         run: npm run build
+
+      # Persist the build for both deploy jobs (Pages + Vercel-prebuilt).
+      # Pages-specific upload also runs so actions/deploy-pages can find it.
+      - name: Upload build for deploy jobs
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 1
+
+      - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -61,10 +81,70 @@ jobs:
         timeout-minutes: 12
         env:
           CI: 'true'
-          VITE_SITE_URL: https://example.com
-          VITE_BASE_PATH: /spine-scanner/
-          VITE_SUPPORT_EMAIL: noreply@example.com
+          VITE_SITE_URL: ${{ github.ref == 'refs/heads/main' && (vars.VITE_SITE_URL != '' && vars.VITE_SITE_URL || format('https://{0}.github.io', github.repository_owner)) || 'https://example.com' }}
+          VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH != '' && vars.VITE_BASE_PATH || '/spine-scanner/' }}
+          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL != '' && vars.VITE_SUPPORT_EMAIL || 'noreply@example.com' }}
           VITE_ENABLE_SCANNER_DEBUG: 'false'
-          VITE_APP_ENV: test
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          VITE_APP_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'test' }}
           VITE_APP_RELEASE: ${{ github.sha }}
         run: npm run test:e2e:release
+
+  # Deploy to GitHub Pages. Runs only on push to main, after verify passes.
+  # Uses the Pages artifact uploaded by `verify`.
+  deploy-pages:
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # Deploy to Vercel via the Vercel CLI. Runs only on push to main, after verify passes.
+  # Requires repository secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID.
+  # IMPORTANT: To avoid duplicate deploys, disable the Vercel-GitHub auto-deploy
+  # in the Vercel project dashboard (Settings → Git → Disconnect, or set
+  # "deployHooks only"). Only this workflow should produce production deploys.
+  deploy-vercel:
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel project info
+        run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+
+      - name: Build for Vercel
+        env:
+          VITE_SITE_URL: ${{ vars.VITE_SITE_URL != '' && vars.VITE_SITE_URL || 'https://spinescanner.app' }}
+          VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH_VERCEL != '' && vars.VITE_BASE_PATH_VERCEL || '/' }}
+          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL != '' && vars.VITE_SUPPORT_EMAIL || 'noreply@example.com' }}
+          VITE_ENABLE_SCANNER_DEBUG: 'false'
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          VITE_APP_ENV: production
+          VITE_APP_RELEASE: ${{ github.sha }}
+        run: vercel build --prod --token=$VERCEL_TOKEN
+
+      - name: Deploy to Vercel
+        run: vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
