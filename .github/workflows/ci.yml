@@ -14,10 +14,9 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  lint:
     runs-on: ubuntu-latest
-    # lint + unit tests + build + Playwright + E2E (Vitest can exceed 50m on ubuntu-latest)
-    timeout-minutes: 130
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -40,11 +39,44 @@ jobs:
           VITE_APP_RELEASE: ${{ github.sha }}
         run: npm run check:production
 
-      - name: Test
-        timeout-minutes: 75
+  # One Vitest process per VM avoids ubuntu-latest OOM from hour-long multi-worker runs.
+  unit-tests:
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: true
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Vitest shard ${{ matrix.shard }}/3
         env:
+          CI: true
           NODE_OPTIONS: --max-old-space-size=6144
-        run: npm test
+        run: npx vitest run --shard=${{ matrix.shard }}/3
+
+  verify:
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
 
       - name: Build
         env:
