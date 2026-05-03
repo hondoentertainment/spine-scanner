@@ -62,7 +62,6 @@ const {
   buildOcrPasses,
   hasLowOcrResolution,
   getQualityHints,
-  CROP_MEDIUM,
   CROP_NARROW,
 } = await import('../src/hooks/useScanPipeline.ts') as typeof import('../src/hooks/useScanPipeline.ts');
 
