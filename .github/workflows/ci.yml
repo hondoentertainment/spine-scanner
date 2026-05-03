@@ -16,8 +16,8 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    # lint + unit tests + build + Playwright + E2E (Vitest ~35–45m on ubuntu-latest; avoid multi-process sharding on 2-core runners)
-    timeout-minutes: 95
+    # lint + unit tests + build + Playwright + E2E (Vitest can exceed 50m on ubuntu-latest)
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -41,7 +41,7 @@ jobs:
         run: npm run check:production
 
       - name: Test
-        timeout-minutes: 50
+        timeout-minutes: 65
         run: npm test
 
       - name: Build
