@@ -169,17 +169,17 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    // On GitHub Actions, worker pools have occasionally kept the process alive after all tests finish.
-    // A single worker avoids that class of flake for the required "Lint, Test & Build" check.
+    // CI: vmForks + single worker avoids thread-pool and jsdom processes that sometimes never exit on Linux.
+    // Local (Windows): forks singleFork matches historical stability for this repo.
     ...(process.env.CI === 'true'
-      ? { fileParallelism: false, maxWorkers: 1, minWorkers: 1 }
-      : {}),
-    // Threads on CI: fork workers sometimes never exit on Linux runners after all tests pass.
-    // Forks locally: avoids occasional hangs on some Windows setups with the default thread pool.
-    pool: process.env.CI === 'true' ? 'threads' : 'forks',
-    ...(process.env.CI === 'true'
-      ? {}
+      ? {
+          pool: 'vmForks' as const,
+          fileParallelism: false,
+          maxWorkers: 1,
+          minWorkers: 1,
+        }
       : {
+          pool: 'forks' as const,
           poolOptions: {
             forks: {
               singleFork: true,
