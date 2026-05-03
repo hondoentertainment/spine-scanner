@@ -5,7 +5,13 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'jsdom',
-    ...(process.env.CI ? { testTimeout: 180000, maxWorkers: 2 } : {}),
+    ...(process.env.CI
+      ? {
+          testTimeout: 180000,
+          maxWorkers: 1,
+          minWorkers: 1,
+        }
+      : {}),
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     exclude: ['e2e/**', 'node_modules/**'],

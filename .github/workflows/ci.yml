@@ -17,7 +17,7 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     # lint + unit tests + build + Playwright + E2E (Vitest can exceed 50m on ubuntu-latest)
-    timeout-minutes: 120
+    timeout-minutes: 130
     steps:
       - uses: actions/checkout@v4
 
@@ -41,7 +41,9 @@ jobs:
         run: npm run check:production
 
       - name: Test
-        timeout-minutes: 65
+        timeout-minutes: 75
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
         run: npm test
 
       - name: Build
