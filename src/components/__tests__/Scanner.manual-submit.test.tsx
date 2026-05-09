@@ -35,7 +35,8 @@ const runOcr = vi.fn();
 const runOcrWithLang = vi.fn();
 const captureAveragedFrame = vi.fn();
 
-vi.mock('react-webcam', () => {
+vi.mock('react-webcam', async () => {
+  const React = await import('react');
   const Webcam = React.forwardRef((_props, ref) => {
     React.useImperativeHandle(ref, () => ({
       video: {

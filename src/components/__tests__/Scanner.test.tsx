@@ -76,7 +76,8 @@ afterEach(() => {
  * ================================================================ */
 
 // ── react-webcam ──────────────────────────────────────────────
-vi.mock('react-webcam', () => {
+vi.mock('react-webcam', async () => {
+  const React = await import('react');
   let webcamState = {
     readyState: 4,
     screenshot: 'data:image/jpeg;base64,abc',
