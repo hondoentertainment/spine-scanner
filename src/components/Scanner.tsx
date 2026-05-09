@@ -487,14 +487,14 @@ const Scanner: React.FC<ScannerProps> = ({
     }, [onPhotoCapture, isScanning, addLog, toast]);
 
     useEffect(() => {
-        if (!autoScan) return;
+        if (!autoScan || cameraError) return;
         addLog('Auto-scan (OCR) started');
         setStatus('Auto-scanning... hold book steady');
         const interval = setInterval(() => {
             if (!isBusy() && autoScan && liveQualityHintRef.current !== 'blurry' && liveQualityHintRef.current !== 'blurry-dark') capture();
         }, 2000);
         return () => { clearInterval(interval); addLog('Auto-scan (OCR) stopped'); };
-    }, [autoScan, capture, addLog, isBusy]);
+    }, [autoScan, cameraError, capture, addLog, isBusy]);
 
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -663,7 +663,7 @@ const Scanner: React.FC<ScannerProps> = ({
                     <p className={s.statusHeading} id="status-text">
                         {processing ? (inOcrPhase ? `Analyzing spine... ${ocrElapsedSec}s` : 'Scanning...') : cameraError ? 'No camera' : 'Ready to scan'}
                     </p>
-                    <p className={s.statusText}>{status}</p>
+                    <p className={s.statusText}>{cameraError ? 'No camera - upload a photo or type the ISBN' : status}</p>
                     {batchModeProp && lastBatchAddIsbn && onViewLibrary && !processing && (
                         <button type="button" onClick={() => onViewLibrary(lastBatchAddIsbn)} className={s.viewLibraryLink}>
                             <Library size={14} /> View in Library

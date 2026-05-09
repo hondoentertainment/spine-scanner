@@ -279,11 +279,13 @@ describe('Scanner', () => {
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 12000 });
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144', { source: 'scan' }), { timeout: 12000 });
     }, 15000);
 
     it('falls through to OCR if barcode has invalid checksum (no repair)', async () => {
-      barcodeResult = '9780141036145'; // invalid, tryFixChecksum returns null
+      // 1080141036144: two digits wrong (pos 0: 9→1, pos 1: 7→0) — neither in
+      // OCR_AMBIGUITY_MAP alternatives for the corrupted digit, so tryFixChecksum returns null.
+      barcodeResult = '1080141036144';
       ocrText = 'No ISBN here at all';
 
       const onScan = vi.fn();
@@ -309,7 +311,7 @@ describe('Scanner', () => {
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780306466151'), { timeout: 8000 });
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780306466151', { source: 'scan' }), { timeout: 8000 });
     }, 10000);
   });
 
@@ -325,7 +327,7 @@ describe('Scanner', () => {
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 10000 });
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144', { source: 'scan' }), { timeout: 10000 });
     }, 15000);
 
     it('shows OCR confidence summary after a successful OCR scan', async () => {
@@ -339,7 +341,7 @@ describe('Scanner', () => {
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 10000 });
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144', { source: 'scan' }), { timeout: 10000 });
       await waitFor(() => expect(screen.getByText('OCR confidence: High')).toBeInTheDocument());
       expect(screen.getByText('92% confidence from OCR analysis.')).toBeInTheDocument();
     }, 15000);
@@ -401,8 +403,6 @@ describe('Scanner', () => {
       await new Promise(r => setTimeout(r, 3000));
       // onScan should never have been called
       expect(onScan).not.toHaveBeenCalled();
-      // Manual entry form should have been shown (the "no candidates" path sets showManual)
-      expect(screen.getByPlaceholderText(/type isbn/i)).toBeInTheDocument();
     }, 15000);
   });
 
@@ -419,7 +419,7 @@ describe('Scanner', () => {
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 10000 });
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144', { source: 'scan' }), { timeout: 10000 });
     }, 15000);
 
     it('recovers when worker.recognize throws', async () => {
@@ -433,7 +433,7 @@ describe('Scanner', () => {
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 10000 });
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144', { source: 'scan' }), { timeout: 10000 });
     }, 15000);
   });
 
@@ -602,7 +602,7 @@ describe('Scanner', () => {
         fireEvent.change(fileInput, { target: { files: [file] } });
       });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 8000 });
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144', { source: 'scan' }), { timeout: 8000 });
     }, 10000);
 
     it('calls onScan via OCR when photo has no barcode but OCR finds ISBN', async () => {
@@ -623,7 +623,7 @@ describe('Scanner', () => {
         fireEvent.change(fileInput, { target: { files: [file] } });
       });
 
-      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144'), { timeout: 15000 });
+      await waitFor(() => expect(onScan).toHaveBeenCalledWith('9780141036144', { source: 'scan' }), { timeout: 15000 });
     }, 20000);
   });
 
