@@ -43,12 +43,12 @@ jobs:
   unit-tests:
     needs: lint
     runs-on: ubuntu-latest
-    # Slowest shards (heavy integration-style suites) can exceed 75m on ubuntu-latest.
-    timeout-minutes: 95
+    # Shards that contain very large test files (e.g. OCR/scanner hooks) can exceed 95m on ubuntu-latest.
+    timeout-minutes: 150
     strategy:
       fail-fast: true
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
     steps:
       - uses: actions/checkout@v4
 
@@ -59,11 +59,11 @@ jobs:
 
       - run: npm ci
 
-      - name: Vitest shard ${{ matrix.shard }}/8
+      - name: Vitest shard ${{ matrix.shard }}/16
         env:
           CI: true
           NODE_OPTIONS: --max-old-space-size=6144
-        run: npx vitest run --shard=${{ matrix.shard }}/8
+        run: npx vitest run --shard=${{ matrix.shard }}/16
 
   verify:
     needs: unit-tests
