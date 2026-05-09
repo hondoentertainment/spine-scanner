@@ -23,30 +23,6 @@ const makeShelf = (overrides: Partial<Shelf> = {}): Shelf => ({
   ...overrides,
 });
 
-// ─── Supabase mock helpers ───────────────────────────────────────
-
-/** Builds a chainable Supabase query mock that resolves with given data/error. */
-function makeQueryMock(result: { data?: unknown; error?: unknown }) {
-  const chain: Record<string, unknown> = {};
-  const terminal = vi.fn().mockResolvedValue(result);
-  // Chainable methods that return the chain
-  ['select', 'eq', 'order', 'upsert', 'delete', 'in'].forEach((method) => {
-    chain[method] = vi.fn().mockReturnValue(chain);
-  });
-  // Terminal methods resolve the promise
-  chain['select'] = vi.fn().mockReturnValue(chain);
-  chain['eq'] = vi.fn().mockReturnValue(chain);
-  chain['order'] = vi.fn().mockReturnValue(chain);
-  chain['in'] = vi.fn().mockReturnValue(chain);
-  chain['delete'] = vi.fn().mockReturnValue(chain);
-  chain['upsert'] = vi.fn().mockResolvedValue(result);
-  // Make the chain thenable so `await chain.method()...` resolves
-  Object.defineProperty(chain, 'then', {
-    get() { return terminal.then?.bind(terminal) ?? undefined; },
-  });
-  return chain;
-}
-
 // ─── mergeBooksLists ────────────────────────────────────────────
 
 describe('mergeBooksLists', () => {
