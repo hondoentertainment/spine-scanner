@@ -95,6 +95,15 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function expireOcrBudgetAfterFirstPass() {
+  const start = 1_000_000;
+  let calls = 0;
+  vi.spyOn(Date, 'now').mockImplementation(() => {
+    calls += 1;
+    return calls <= 2 ? start : start + 36_000;
+  });
+}
+
 /* ================================================================
  *  Crop region constants
  * ================================================================ */
@@ -456,6 +465,7 @@ describe('useScanPipeline — runPipeline', () => {
   });
 
   it('returns suggestions when no valid ISBN found but candidates exist', async () => {
+    expireOcrBudgetAfterFirstPass();
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
     const runOcr = vi.fn().mockResolvedValue({
       isbn: null,
@@ -546,6 +556,7 @@ describe('useScanPipeline — runPipeline', () => {
     expect(runOcr).not.toHaveBeenCalled();
 
     rerender({ scanMode: 'ocr' });
+    expireOcrBudgetAfterFirstPass();
 
     await act(async () => {
       await result.current.runPipeline(img, canvas, 'test');
@@ -556,6 +567,7 @@ describe('useScanPipeline — runPipeline', () => {
   }, 25000);
 
   it('includes lowResolution in diagnostics when image is too small for OCR', async () => {
+    expireOcrBudgetAfterFirstPass();
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
     const runOcr = vi.fn().mockResolvedValue({ isbn: null, allCandidates: [] });
 
@@ -584,6 +596,7 @@ describe('useScanPipeline — runPipeline', () => {
   }, 15000);
 
   it('invokes onProgress with barcode and ocr phases', async () => {
+    expireOcrBudgetAfterFirstPass();
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
     const runOcr = vi.fn().mockResolvedValue({ isbn: null, allCandidates: [] });
 
@@ -616,6 +629,7 @@ describe('useScanPipeline — runPipeline', () => {
   }, 15000);
 
   it('onProgress includes currentPass and totalPasses during OCR', async () => {
+    expireOcrBudgetAfterFirstPass();
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
     const runOcr = vi.fn().mockResolvedValue({
       isbn: null,
@@ -822,6 +836,7 @@ describe('useScanPipeline — runPipeline', () => {
   });
 
   it('returns best candidate when all passes have low confidence', async () => {
+    expireOcrBudgetAfterFirstPass();
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
     let callCount = 0;
     const runOcr = vi.fn().mockImplementation(async () => {
@@ -915,6 +930,7 @@ describe('useScanPipeline — runPipeline', () => {
   });
 
   it('suppresses concurrent pipeline call with diagnostics', async () => {
+    expireOcrBudgetAfterFirstPass();
     const tryBarcodeDecode = vi.fn().mockImplementation(
       () => new Promise(resolve => setTimeout(() => resolve(null), 50))
     );
@@ -951,6 +967,7 @@ describe('useScanPipeline — runPipeline', () => {
   }, 15000);
 
   it('includes triple-repair suggestions when double-repair fails', async () => {
+    expireOcrBudgetAfterFirstPass();
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
     const runOcr = vi.fn().mockResolvedValue({
       isbn: null,
@@ -977,6 +994,7 @@ describe('useScanPipeline — runPipeline', () => {
   }, 25000);
 
   it('skips barcode phase when scanMode is ocr', async () => {
+    expireOcrBudgetAfterFirstPass();
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
     const runOcr = vi.fn().mockResolvedValue({ isbn: null, allCandidates: [] });
     const addLog = vi.fn();
@@ -1065,6 +1083,7 @@ describe('useScanPipeline — runPipeline', () => {
   });
 
   it('barcode phase catches errors and continues to OCR', async () => {
+    expireOcrBudgetAfterFirstPass();
     const tryBarcodeDecode = vi.fn().mockRejectedValue(new Error('Barcode decode failed'));
     const runOcr = vi.fn().mockResolvedValue({ isbn: null, allCandidates: [] });
     const addLog = vi.fn();
