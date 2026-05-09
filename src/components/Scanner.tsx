@@ -487,14 +487,14 @@ const Scanner: React.FC<ScannerProps> = ({
     }, [onPhotoCapture, isScanning, addLog, toast]);
 
     useEffect(() => {
-        if (!autoScan) return;
+        if (!autoScan || !cameraReady || cameraError) return;
         addLog('Auto-scan (OCR) started');
         setStatus('Auto-scanning... hold book steady');
         const interval = setInterval(() => {
             if (!isBusy() && autoScan && liveQualityHintRef.current !== 'blurry' && liveQualityHintRef.current !== 'blurry-dark') capture();
         }, 2000);
         return () => { clearInterval(interval); addLog('Auto-scan (OCR) stopped'); };
-    }, [autoScan, capture, addLog, isBusy]);
+    }, [autoScan, cameraReady, cameraError, capture, addLog, isBusy]);
 
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
