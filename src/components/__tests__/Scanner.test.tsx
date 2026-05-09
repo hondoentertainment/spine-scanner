@@ -276,10 +276,6 @@ describe('Scanner', () => {
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
 
-      const ocrMode = screen.getByRole('radio', { name: /ocr/i });
-      fireEvent.click(ocrMode);
-      await waitFor(() => expect(ocrMode).toHaveAttribute('aria-checked', 'true'));
-
       const capture = screen.getByRole('button', { name: /scan book/i });
       await waitFor(() => expect(capture).not.toBeDisabled());
       await act(async () => { fireEvent.click(capture); });
@@ -293,6 +289,10 @@ describe('Scanner', () => {
 
       const onScan = vi.fn();
       renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
+
+      const ocrMode = screen.getByRole('radio', { name: /ocr/i });
+      fireEvent.click(ocrMode);
+      await waitFor(() => expect(ocrMode).toHaveAttribute('aria-checked', 'true'));
 
       const capture = screen.getByRole('button', { name: /scan book/i });
       await waitFor(() => expect(capture).not.toBeDisabled());
