@@ -89,6 +89,7 @@ describe('useOcrEngine', () => {
     mockOcrConfidence = undefined;
     createWorkerReject = null;
     workerRecognizeReject = null;
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
 
     createWorkerFn.mockImplementation(async () => {
       if (createWorkerReject) throw createWorkerReject;
@@ -110,6 +111,7 @@ describe('useOcrEngine', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   describe('runOcr with worker', () => {
