@@ -332,10 +332,14 @@ describe('Regression fixture — OCR confidence band output', () => {
 
   it('returns confidenceBand="medium" for confidence in 60–84 range', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
-    const runOcr = vi.fn().mockResolvedValue({
-      isbn: '9780141036144',
-      allCandidates: ['9780141036144'],
-      confidence: 70,
+    const controller = new AbortController();
+    const runOcr = vi.fn().mockImplementation(async () => {
+      controller.abort();
+      return {
+        isbn: '9780141036144',
+        allCandidates: ['9780141036144'],
+        confidence: 70,
+      };
     });
 
     const { result } = renderHook(() =>
@@ -344,7 +348,12 @@ describe('Regression fixture — OCR confidence band output', () => {
 
     let pipelineResult: { confidenceBand?: string } | null = null;
     await act(async () => {
-      pipelineResult = await result.current.runPipeline(makeImg(640, 480), document.createElement('canvas'), 'conf-med');
+      pipelineResult = await result.current.runPipeline(
+        makeImg(640, 480),
+        document.createElement('canvas'),
+        'conf-med',
+        { signal: controller.signal },
+      );
     });
 
     expect(pipelineResult?.confidenceBand).toBe('medium');
