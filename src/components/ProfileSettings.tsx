@@ -188,7 +188,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
         </div>
       </div>
 
-      <div className={s.letterboxdPanel}>
+      <div className={s.libraryPanel}>
         <div className={s.panelHeader}>
           <div>
             <h3 className={s.panelTitle}>Reading activity</h3>
@@ -237,11 +237,11 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
         </div>
       </div>
 
-      <div className={s.letterboxdPanel}>
+      <div className={s.libraryPanel}>
         <div className={s.panelHeader}>
           <div>
             <h3 className={s.panelTitle}>Recent additions</h3>
-            <p className={s.panelSubtitle}>Newest books in your library, Letterboxd-card style.</p>
+            <p className={s.panelSubtitle}>Latest titles in your Book Library, with cover-forward cards.</p>
           </div>
         </div>
         {summary.recentBooks.length > 0 ? (
@@ -275,7 +275,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       </div>
 
       {scanStats.totalScans > 0 && (
-        <div className={s.letterboxdPanel}>
+        <div className={s.libraryPanel}>
           <div className={s.panelHeader}>
             <div>
               <h3 className={s.panelTitle}>Scan statistics</h3>

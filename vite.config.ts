@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { defaultExclude } from 'vitest/config';
 
 function normalizeBasePath(value?: string): string {
   if (!value) return '/';
@@ -168,6 +169,8 @@ export default defineConfig({
     },
   },
   test: {
+    /** Long-running CSV benchmark; run only via `npm run benchmark:scan` (explicit path). */
+    exclude: [...defaultExclude, '**/benchmarkScanRunner.test.ts'],
     environment: 'jsdom',
     // CI: vmForks + single worker avoids thread-pool and jsdom processes that sometimes never exit on Linux.
     // Local (Windows): forks singleFork matches historical stability for this repo.

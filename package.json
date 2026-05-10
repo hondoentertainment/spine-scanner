@@ -20,7 +20,7 @@
     "test:watch": "vitest",
     "test:integration": "cross-env RUN_OCR_INTEGRATION=1 vitest run src/hooks/__tests__/scanRegressionFixtures.test.ts",
     "test:all": "vitest run && cross-env RUN_OCR_INTEGRATION=1 vitest run",
-    "benchmark:scan": "tsx scripts/benchmark-scan.ts",
+    "benchmark:scan": "cross-env RUN_SCAN_BENCHMARK=1 SCAN_BENCHMARK_RUNS=10 vitest run src/hooks/__tests__/benchmarkScanRunner.test.ts",
     "generate-ocr-fixture": "node scripts/generate-ocr-fixture.mjs",
     "test:e2e": "node scripts/generate-ocr-fixture.mjs && npm run build && playwright test --project=chromium --project=mobile-chrome-pixel-7 --project=mobile-safari-iphone-14 --project=mobile-chrome-galaxy-s9",
     "test:e2e:release": "node scripts/generate-ocr-fixture.mjs && npm run build && playwright test e2e/app.spec.ts e2e/a11y.spec.ts --project=chromium --workers=1",
