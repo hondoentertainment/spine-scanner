@@ -33,6 +33,8 @@ interface SyncQueueStore {
   reset: () => void;
   /** Save a snapshot of current books (call before pushing) */
   saveSnapshot: (books: BookEntry[]) => void;
+  /** Clear the snapshot (call after restore so the button disappears) */
+  clearSnapshot: () => void;
   /** Mark that a conflict was detected */
   markConflict: (had: boolean) => void;
 }
@@ -69,6 +71,9 @@ export const useSyncQueue = create<SyncQueueStore>()(
           lastSyncedAt: null,
           lastSyncFailedAt: null,
           flushing: false,
+          lastGoodSnapshot: null,
+          lastGoodSnapshotAt: null,
+          hadConflictLastSync: false,
         }),
 
       saveSnapshot: (books) =>
@@ -76,6 +81,8 @@ export const useSyncQueue = create<SyncQueueStore>()(
           lastGoodSnapshot: JSON.stringify(books),
           lastGoodSnapshotAt: new Date().toISOString(),
         }),
+
+      clearSnapshot: () => set({ lastGoodSnapshot: null, lastGoodSnapshotAt: null }),
 
       markConflict: (had) => set({ hadConflictLastSync: had }),
     }),

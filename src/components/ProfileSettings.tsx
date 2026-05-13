@@ -77,7 +77,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
   const {
     pendingChanges, lastSyncedAt, lastSyncFailedAt, flushing,
     lastGoodSnapshot, lastGoodSnapshotAt, hadConflictLastSync,
-    saveSnapshot, markConflict,
+    clearSnapshot, markConflict,
   } = useSyncQueue();
   const displayName = profile?.username ?? profile?.displayName ?? user?.user_metadata?.full_name ?? user?.email ?? 'Local reader';
   const avatarUrl = profile?.avatarUrl ?? user?.user_metadata?.avatar_url ?? null;
@@ -404,7 +404,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
                   try {
                     const parsed = JSON.parse(lastGoodSnapshot) as import('../types.ts').BookEntry[];
                     useBookStore.getState().setBooks(parsed);
-                    saveSnapshot([]);
+                    clearSnapshot();
                     toast('Library restored from snapshot', 'success');
                   } catch {
                     toast('Failed to restore snapshot', 'error');

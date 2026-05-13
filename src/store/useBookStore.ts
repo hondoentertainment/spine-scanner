@@ -111,10 +111,13 @@ export const useBookStore = create<BookStore>()(
           books: state.books.map((b) => (b.id === id ? { ...b, notes } : b)),
         })),
       updateReadingProgress: (id, pagesFinished) => {
-        set((state) => ({
-          books: state.books.map((b) => (b.id === id ? updateBookProgress(b, pagesFinished) : b)),
-        }));
-        if (pagesFinished > 0) {
+        let bookUpdated = false;
+        set((state) => {
+          const hasBook = state.books.some((b) => b.id === id);
+          bookUpdated = hasBook;
+          return { books: state.books.map((b) => (b.id === id ? updateBookProgress(b, pagesFinished) : b)) };
+        });
+        if (pagesFinished > 0 && bookUpdated) {
           const prefs = useProfileStore.getState().preferences;
           useProfileStore.getState().updatePreferences(advanceStreak(prefs));
         }

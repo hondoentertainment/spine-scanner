@@ -155,8 +155,8 @@ export const importFromGoodreadsCSV = (
             coverImg: '',
             status,
             notes: col(row, 'My Review'),
-            dateAdded: dateAddedRaw ? new Date(dateAddedRaw).toISOString() : new Date().toISOString(),
-            finishedAt: dateReadRaw ? new Date(dateReadRaw).toISOString() : null,
+            dateAdded: dateAddedRaw && !isNaN(new Date(dateAddedRaw).getTime()) ? new Date(dateAddedRaw).toISOString() : new Date().toISOString(),
+            finishedAt: dateReadRaw && !isNaN(new Date(dateReadRaw).getTime()) ? new Date(dateReadRaw).toISOString() : null,
             shelfIds: [],
             metadataSource: 'manual',
         };

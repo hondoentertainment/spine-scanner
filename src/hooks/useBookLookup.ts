@@ -216,7 +216,8 @@ export const useBookLookup = () => {
                 author: result.authors.join(', '),
                 pageCount: result.pageCount,
                 coverImg: result.thumbnail,
-                metadataSource: 'google_books' as MetadataSource,
+                metadataSource: result.metadataSource,
+                metadataConflicts: result.metadataConflicts,
             };
         } catch (err) {
             setError('Failed to refresh metadata');

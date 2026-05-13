@@ -95,15 +95,15 @@ Feature flags, changelog, and diagnostics shipped. Remaining:
 
 | # | Phase | Goal | Key remaining deliverables |
 |---|-------|------|------------------|
-| 27 | Reading Workflow Expansion (partial) | Active reading tracker | Reading sessions log, session timer, richer per-book activity history |
+| 27 | Reading Workflow Expansion | Active reading tracker | ✅ Complete (streaks, Year in Books, session log + timer shipped) |
 | 29 | Social and Household Sharing | Shared libraries across families/clubs | Household mode, lend/borrow tracking, shared shelves, viewer/editor permissions, activity feed |
-| 30 | Cloud Sync V2 (partial) | Safe, clear, resilient sync | Conflict UI, snapshot restore, schema migrations, background retry strategy, multi-device test coverage |
+| 30 | Cloud Sync V2 (partial) | Safe, clear, resilient sync | Schema migrations, multi-device test coverage |
 | 31 | Insights and Recommendations (partial) | Useful library patterns | Personalised recs from owned books, unread-backlog insights, exportable yearly reading reports |
 | 32 | Accessibility and Inclusive UX | Production accessibility bar | Real VoiceOver/NVDA audits, high-contrast theme, motion controls, keyboard-only scanner, accessibility CI checks |
-| 33 | Platform Integrations (partial) | Connect to reader ecosystems | StoryGraph import, calendar export, Notion / webhook automation, richer share targets |
-| 34 | Release Readiness and Growth | Broad public launch + maintenance | Onboarding tour, feature flags, in-app changelog, diagnostics bundle, privacy controls, admin telemetry, deploy/rollback playbooks |
+| 33 | Platform Integrations (partial) | Connect to reader ecosystems | Notion / webhook automation, richer share targets |
+| 34 | Release Readiness and Growth (partial) | Broad public launch + maintenance | Onboarding tour, analytics opt-in, privacy controls, admin telemetry, deploy/rollback playbooks |
 
-Phases 25, 26, and 28 are now substantially complete. Phase 27 is half-done (outcome tracking shipped; session tracking ahead). Phase 30 is started (visibility shipped; resilience ahead). Phase 31 is partly started (series hints + duplicates shipped; recommendations ahead). Phase 33 is partly started (Goodreads import shipped).
+Phases 25, 26, 27, and 28 are now substantially complete. Phase 30 is mostly done (backoff, snapshot, conflict detection shipped; schema migrations ahead). Phase 31 is partly started (series hints + duplicates shipped; recommendations ahead). Phase 33 is partly started (Goodreads + StoryGraph import, ICS export shipped). Phase 34 is partly started (feature flags, changelog, diagnostics shipped).
 
 ---
 
