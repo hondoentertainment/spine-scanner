@@ -73,6 +73,14 @@ export interface SavedView {
   maxPageCount?: number | null;
 }
 
+export interface ReadingSession {
+  id: string;
+  bookId: string;
+  durationMin: number;
+  pagesRead: number;
+  date: string;
+}
+
 export const SHELF_COLORS = [
   '#6366f1', // indigo
   '#f43f5e', // rose

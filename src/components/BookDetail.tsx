@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
+import { useReadingSessionStore } from '../store/useReadingSessionStore.ts';
 import { useToast } from './Toast.tsx';
 import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import { useBookLookup } from '../hooks/useBookLookup.ts';
@@ -52,6 +53,7 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
     assignShelf,
     unassignShelf,
   } = useBookStore();
+  const { sessions: allSessions, addSession, removeSession, sessionsForBook, stats } = useReadingSessionStore();
   const { toast, confirm } = useToast();
   const { refreshMetadata, loading: refreshLoading } = useBookLookup();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
@@ -73,6 +75,42 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   const availableShelves = shelves.filter((s) => !bookShelfIds.includes(s.id));
   const progressPercent = getReadingProgressPercent(book);
   const progressValue = book.pagesFinished || 0;
+
+  const bookSessions = sessionsForBook(book.id);
+  const bookStats = stats(book.id);
+  const showSessionSection =
+    (book.status === 'reading' || book.status === 'read') && bookSessions.length > 0;
+
+  const todayKey = (() => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  })();
+
+  const [showLogForm, setShowLogForm] = useState(false);
+  const [logDate, setLogDate] = useState(todayKey);
+  const [logDuration, setLogDuration] = useState(30);
+  const [logPages, setLogPages] = useState(0);
+
+  const handleAddSession = () => {
+    addSession({
+      id: crypto.randomUUID(),
+      bookId: book.id,
+      durationMin: Math.max(1, logDuration),
+      pagesRead: Math.max(0, logPages),
+      date: logDate,
+    });
+    setShowLogForm(false);
+    setLogDate(todayKey);
+    setLogDuration(30);
+    setLogPages(0);
+    toast('Session logged', 'success');
+  };
+
+  // suppress unused warning from allSessions subscription (ensures reactivity)
+  void allSessions;
 
   const handleEdit = () => {
     setDraft({
@@ -471,6 +509,82 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
             </div>
           )}
         </div>
+
+        {/* Reading sessions */}
+        {showSessionSection && (
+          <div className={styles.sessionsSection}>
+            <div className={styles.sectionHeader}>
+              <strong className={styles.sectionTitle}>Reading sessions</strong>
+            </div>
+            <div className={styles.statsRow}>
+              <span>{bookStats.totalSessions} sessions</span>
+              <span>{bookStats.avgPagesPerHour} pg/hr avg</span>
+              <span>Longest: {bookStats.longestSessionMin}m</span>
+              <span>This week: {bookStats.sessionsThisWeek}</span>
+            </div>
+            <div className={styles.sessionList}>
+              {[...bookSessions].reverse().map((session) => (
+                <div key={session.id} className={styles.sessionItem}>
+                  <span className={styles.sessionDate}>{session.date}</span>
+                  <span className={styles.sessionDuration}>{session.durationMin}m</span>
+                  <span className={styles.sessionPages}>{session.pagesRead > 0 ? `${session.pagesRead} pg` : '—'}</span>
+                  <button
+                    type="button"
+                    className={styles.sessionRemoveBtn}
+                    aria-label="Remove session"
+                    onClick={() => removeSession(session.id)}
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {showLogForm ? (
+              <div className={styles.logForm}>
+                <input
+                  type="date"
+                  value={logDate}
+                  onChange={(e) => setLogDate(e.target.value)}
+                  className={styles.input}
+                />
+                <div className={styles.row}>
+                  <div style={{ flex: 1 }}>
+                    <label className={styles.label}>Duration (min)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={logDuration}
+                      onChange={(e) => setLogDuration(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                      className={styles.input}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label className={styles.label}>Pages read</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={logPages}
+                      onChange={(e) => setLogPages(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className={styles.input}
+                    />
+                  </div>
+                </div>
+                <div className={styles.editActions}>
+                  <button type="button" onClick={handleAddSession} className={styles.saveBtn}>
+                    <Save size={14} /> Save
+                  </button>
+                  <button type="button" onClick={() => setShowLogForm(false)} className={styles.cancelBtn}>
+                    <X size={14} /> Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" className={styles.logSessionBtn} onClick={() => setShowLogForm(true)}>
+                + Log session
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Notes */}
         <textarea
