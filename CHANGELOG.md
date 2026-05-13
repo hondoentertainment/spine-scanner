@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### This wave (Phase 27 completion / Phase 30 resilience / Phase 33–34 polish)
+
+- **Reading session log (Phase 27):** `useReadingSessionStore` — persisted Zustand store with `startSession`, `stopSession`, `cancelSession`, per-book `sessionsForBook()`, and aggregate `stats()` (avg pages/hr, longest session, sessions this week). Start/Stop timer button on `BookCard` for `status='reading'` books (shows elapsed time, inline pages-read form on stop). Session history + stats section in `BookDetail`. `ReadingSession` type added to `src/types.ts`. 16 unit tests.
+- **Sync resilience (Phase 30):** `src/lib/syncRetry.ts` — `withRetry<T>(fn, opts)` with exponential backoff (4 attempts, 2 s base, 30 s cap). All Supabase upsert/delete calls in `pushBooks`/`pushShelves` now wrapped with `withRetry`. Pre-push snapshot saved to `useSyncQueue` (`lastGoodSnapshot` / `lastGoodSnapshotAt`) so users can roll back. Conflict detection in `mergeSync` (title/author/notes differ between local and remote for same `id`). Snapshot restore + conflict warning UI in `ProfileSettings`. 7 unit tests.
+- **StoryGraph CSV import (Phase 33):** `importFromStoryGraphCSV` in `importLogic.ts` — maps all four StoryGraph read statuses, parses `Dates Read` pipe pairs into `startedAt`/`finishedAt`, extracts `Series` into `seriesName`, deduplicates by ISBN and normalized title+author. Import button in `DataManagement`. 14 unit tests.
+- **ICS calendar export (Phase 33):** `exportToICS` in `exportFormats.ts` — RFC 5545 VCALENDAR with one `VEVENT` per finished book (DATE-only, UID, SUMMARY, DESCRIPTION). Line folding at 75 octets, text escaping, CRLF line endings. "Export reading calendar (.ics)" button in `DataManagement`. 15 unit tests.
+- **Feature flag scaffolding (Phase 34):** `src/utils/featureFlags.ts` — `FEATURE_FLAGS` constant listing all in-progress phases; `src/hooks/useFeatureFlag.ts` — `useFeatureFlag(name)` with `localStorage` override support (`ff_<name>=true/false`). 4 unit tests.
+- **In-app changelog (Phase 34):** `src/changelog.json` — version-tagged entry list; `ChangelogModal` component (accessible dialog, focus trap, scrollable version list); "What's new" button in `ProfileSettings`.
+- **Diagnostics download (Phase 34):** `downloadDiagnosticsBundle` in `supportDiagnostics.ts` — one-click download of `spinescanner-diagnostics-YYYYMMDD.json` containing book count, preferences, last 100 analytics events, and filtered `localStorage` (keys with password/token/key excluded). "Download diagnostics" button in `ProfileSettings`. 6 unit tests.
+
+### Previous wave
+
 - **Phase 25 (Scan Accuracy Hardening) closed:** `scripts/benchmark-scan.ts` runs the pipeline against the regression fixture set and outputs CSV (`npm run benchmark:scan`); closes Issue #36.
 - **Phase 26 (Metadata Quality Layer):** `MetadataSource` and `MetadataConflict` types on `BookEntry`; parallel Google Books + Open Library queries with field-level conflict detection (author / pageCount / title); source badge and conflict warning in `BookDetail`; safe **Refresh metadata** action that preserves `userEditedFields`; `metadata_conflict` analytics event. Closes Issues #37, #38, #39.
 - **Bulk metadata refresh:** `DataManagement` "Refresh all books without metadata source" — throttled (500 ms/book), cancellable, live progress (Issue #47).

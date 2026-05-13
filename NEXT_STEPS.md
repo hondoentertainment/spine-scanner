@@ -15,13 +15,21 @@ Status of recommended improvements. Items marked ✅ are implemented and shipped
 | 27 | Pages-read input in BookDetail edit mode (Issue #43) | ✅ |
 | 27 | Reading streak tracking (Issue #42) + timezone-correct date logic (Issue #51) | ✅ |
 | 27 | Year in Books stats card (Issue #49) | ✅ |
+| 27 | **Reading session log** — `useReadingSessionStore`, Start/Stop timer on BookCard, session history + stats in BookDetail | ✅ |
 | 28 | Bulk multi-select in LibraryList (Issue #50) | ✅ (already shipped) |
 | 30 | Sync status panel in ProfileSettings (Issue #45) | ✅ |
+| 30 | **Sync resilience** — `withRetry` exponential backoff, pre-push snapshot + restore, conflict detection | ✅ |
 | 31 | Series completion hints in HomeFeed (Issue #46) | ✅ |
 | 33 | Goodreads CSV import (Issue #44) | ✅ |
+| 33 | **StoryGraph CSV import** — all statuses, dates, series | ✅ |
+| 33 | **ICS calendar export** — RFC 5545, one VEVENT per finished book | ✅ |
+| 34 | **Feature flag scaffolding** — `FEATURE_FLAGS` + `useFeatureFlag(name)` with localStorage override | ✅ |
+| 34 | **In-app changelog** — `ChangelogModal` + "What's new" in Profile | ✅ |
+| 34 | **Diagnostics download** — one-click `spinescanner-diagnostics-YYYYMMDD.json` bundle | ✅ |
 | — | E2E coverage for the new wave (Issue #52) | ✅ |
 | — | Branch coverage uplift, raised vitest thresholds (Issue #41) | ✅ |
 | — | Tooling: ESLint and Vitest exclude `.claude/**` so agent worktrees don't contaminate local runs | ✅ |
+| — | CI: auto-deploy to GitHub Pages + Vercel on push to main | ✅ |
 
 ---
 
@@ -39,25 +47,22 @@ The product is feature-complete enough to ship. The remaining work is config and
 
 Owner: human (needs deploy access).
 
-### 2. Phase 27 completion — reading sessions
+### 2. Phase 29 — Social and Household Sharing
 
-The streak + Year-in-Books work covers the *outcome* side. The remaining gap is the *activity* side:
+Begin with simple trusted sharing before broader discovery:
 
-- A lightweight reading session log: `{ bookId, durationMin, pagesRead, date }`
-- "Start session" button on BookCard for `status='reading'` books
-- Session history per book in BookDetail
-- Aggregate stats: avg pages/hour, longest session, sessions this week
+- Household mode: invite users by email to share a library (read-only or editor)
+- Lend/borrow tracking: mark a book as lent to a named contact with an optional due date
+- Shared shelves: one shelf visible across a household
+- Viewer/editor permission model with per-book visibility
 
-This unlocks richer Year-in-Books cards and more accurate goal pacing.
+### 3. Phase 30 continuation — sync schema migrations
 
-### 3. Phase 30 continuation — sync resilience
+Backoff, snapshot, and conflict detection are shipped. Still missing:
 
-We shipped the visibility piece. Still missing:
-
-- Conflict UI when two devices edit the same book (currently the last write wins silently)
-- Last-good snapshot restore — let users roll back the local store if a sync run corrupted things
-- Schema migration tooling so adding fields to `BookEntry` doesn't break sync for older clients
-- Background retry strategy with exponential backoff (currently relies on user-driven retry)
+- Schema migration tooling: adding new fields to `BookEntry` must not break older clients still syncing
+- Explicit migration log in release notes + a migration runner on sign-in
+- Multi-device concurrent-edit test coverage in CI
 
 ### 4. Phase 32 — accessibility production audit
 
@@ -69,23 +74,20 @@ The codebase has solid `aria-label` coverage and a focus trap. The gap is *real 
 - Verify keyboard-only access to the scanner (no mouse-only paths)
 - `prefers-reduced-motion` audit on animations
 
-### 5. Phase 33 expansion — platform integrations
+### 5. Phase 33 expansion — remaining integrations
 
-Goodreads import shipped (#44). Adjacent high-value work:
+StoryGraph and ICS shipped. Remaining:
 
-- StoryGraph CSV import (similar shape to Goodreads)
-- Calendar export for reading goals (`.ics` file generated client-side)
-- Notion database export (CSV-compatible)
+- Notion database export (CSV-compatible column mapping)
 - Webhook events for sync-server integrations (post-launch)
 
-### 6. Phase 34 — release readiness polish
+### 6. Phase 34 continuation — privacy controls
 
-Once shipped:
+Feature flags, changelog, and diagnostics shipped. Remaining:
 
-- In-app changelog / "what's new" view
-- Feature-flag scaffolding (e.g. `useFeatureFlag('reading-sessions')`) so unfinished phases can ship dark
-- Support diagnostics bundle: a one-click export of `localStorage` + recent analytics for debugging
-- Privacy controls: explicit opt-in for analytics, easy data-deletion path
+- Explicit opt-in for analytics with a clear toggle in Profile
+- Easy data-deletion path: one-button clear of all analytics + localStorage
+- Onboarding tour for first-time users (gated behind `onboardingCompleted` flag already in preferences)
 
 ---
 
