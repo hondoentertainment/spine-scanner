@@ -57,10 +57,7 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
     const [elapsedLabel, setElapsedLabel] = useState('');
 
     useEffect(() => {
-      if (activeBookId !== book.id) {
-        setElapsedLabel('');
-        return;
-      }
+      if (activeBookId !== book.id) return;
       const activeStartMs = useReadingSessionStore.getState().activeStartMs;
       if (activeStartMs === null) return;
       const update = () => {
