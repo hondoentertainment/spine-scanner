@@ -77,6 +77,23 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      - name: Verify Playwright install
+        run: npx playwright --version && ls ~/.cache/ms-playwright/ 2>/dev/null || true
+
+      - name: Generate OCR fixture
+        run: node scripts/generate-ocr-fixture.mjs
+
+      - name: Build for E2E
+        env:
+          VITE_SITE_URL: ${{ github.ref == 'refs/heads/main' && (vars.VITE_SITE_URL != '' && vars.VITE_SITE_URL || format('https://{0}.github.io', github.repository_owner)) || 'https://example.com' }}
+          VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH != '' && vars.VITE_BASE_PATH || '/spine-scanner/' }}
+          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL != '' && vars.VITE_SUPPORT_EMAIL || 'noreply@example.com' }}
+          VITE_ENABLE_SCANNER_DEBUG: 'false'
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          VITE_APP_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'test' }}
+          VITE_APP_RELEASE: ${{ github.sha }}
+        run: npm run build
+
       - name: E2E release tests
         timeout-minutes: 12
         env:
@@ -88,7 +105,7 @@ jobs:
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           VITE_APP_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'test' }}
           VITE_APP_RELEASE: ${{ github.sha }}
-        run: npm run test:e2e:release
+        run: npx playwright test e2e/app.spec.ts e2e/recent-features.spec.ts --project=chromium --workers=1
 
       - name: Upload Playwright report
         if: failure()
