@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { BookEntry, ProfilePreferences, Shelf } from '../types.ts';
 import { normalizeBookEntry, normalizeBooks, updateBookForStatus, updateBookProgress } from '../utils/bookState.ts';
+import { migrateBooks } from '../lib/schemaMigrations.ts';
 import { useProfileStore } from './useProfileStore.ts';
 
 export function toLocalDateKey(d: Date): string {
@@ -221,9 +222,11 @@ export const useBookStore = create<BookStore>()(
       name: 'spine-scanner-storage',
       merge: (persistedState, currentState) => {
         const p = persistedState as { books?: BookEntry[]; shelves?: Shelf[] } | undefined;
+        const persistedBooks = p?.books ?? currentState.books;
+        const migratedBooks = migrateBooks(persistedBooks);
         return {
           ...currentState,
-          books: normalizeBooks(p?.books ?? currentState.books),
+          books: normalizeBooks(migratedBooks),
           shelves: p?.shelves ?? currentState.shelves,
         };
       },

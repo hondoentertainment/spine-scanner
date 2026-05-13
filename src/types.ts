@@ -40,6 +40,8 @@ export interface BookEntry {
   metadataConflicts?: MetadataConflict[];
   /** Fields the user has manually edited — these are preserved on metadata refresh. */
   userEditedFields?: string[];
+  /** Schema version of this book entry; bumped when migrations are added. */
+  schemaVersion?: number;
 }
 
 export interface Shelf {

@@ -1,6 +1,7 @@
 import { supabase } from './supabase.ts';
 import type { BookEntry, Shelf } from '../types.ts';
 import { addBreadcrumb, captureException } from './errorMonitoring.ts';
+import { migrateBooks } from './schemaMigrations.ts';
 import { withRetry } from './syncRetry.ts';
 import { useSyncQueue } from '../store/useSyncQueue.ts';
 
@@ -114,7 +115,8 @@ export async function pullBooks(userId: string): Promise<BookEntry[] | null> {
     return null;
   }
 
-  return (data as BookRow[]).map(toBookEntry);
+  const books = (data as BookRow[]).map(toBookEntry);
+  return migrateBooks(books);
 }
 
 /** Pull the user's shelves from Supabase. */
@@ -342,7 +344,7 @@ export async function mergeSync(
     );
   });
 
-  const mergedBooks = mergeBooksLists(localBooks, remoteBooks);
+  const mergedBooks = migrateBooks(mergeBooksLists(localBooks, remoteBooks));
   const mergedShelves = mergeShelvesLists(localShelves, remoteShelves || []);
 
   // Save snapshot of local books before pushing
