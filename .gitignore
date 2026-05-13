@@ -45,6 +45,9 @@ public/tesseract/*.wasm.js
 # Environment
 .env
 
+# Phase 25 scan benchmark output
+scan-benchmark.csv
+
 # Scratch base64 dumps
 tmp_b64.txt
 *.tmp.b64.txt

@@ -37,6 +37,35 @@ describe('useBookLookup', () => {
     expect(metadata!.authors).toEqual(['F. Scott Fitzgerald']);
     expect(metadata!.pageCount).toBe(180);
     expect(metadata!.isbn).toBe('1111111111');
+    expect(metadata!.source).toBe('google_books');
+  });
+
+  it('reports open_library source when Google Books returns nothing', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('googleapis.com')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ totalItems: 0 }) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          'ISBN:5555555555': {
+            title: 'Open Library Result',
+            authors: [{ name: 'Some Author' }],
+            number_of_pages: 200,
+          },
+        }),
+      });
+    }));
+
+    const { result } = renderHook(() => useBookLookup());
+
+    let metadata: Awaited<ReturnType<typeof result.current.lookupByIsbn>>;
+    await act(async () => {
+      metadata = await result.current.lookupByIsbn('5555555555');
+    });
+
+    expect(metadata!).not.toBeNull();
+    expect(metadata!.source).toBe('open_library');
   });
 
   it('returns null when no book found on any source', async () => {

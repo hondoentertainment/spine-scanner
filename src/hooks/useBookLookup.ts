@@ -2,12 +2,16 @@ import { useState, useRef } from 'react';
 import { isbn13To10, isbn10To13 } from '../utils/isbnValidation.ts';
 import { addBreadcrumb, captureException } from '../lib/errorMonitoring.ts';
 
+import type { MetadataSource } from '../types.ts';
+
 export interface BookMetadata {
     title: string;
     authors: string[];
     pageCount: number;
     thumbnail: string;
     isbn: string;
+    /** Provider that returned this metadata. Phase 26 attribution. */
+    source: MetadataSource;
 }
 
 const cache = new Map<string, BookMetadata>();
@@ -49,6 +53,7 @@ const lookupGoogleBooks = async (isbn: string): Promise<BookMetadata | null> => 
         pageCount: volumeInfo.pageCount || 0,
         thumbnail: volumeInfo.imageLinks?.thumbnail || '',
         isbn,
+        source: 'google_books',
     };
 };
 
@@ -66,6 +71,7 @@ const lookupOpenLibrary = async (isbn: string): Promise<BookMetadata | null> => 
         pageCount: entry.number_of_pages || 0,
         thumbnail: entry.cover?.medium || entry.cover?.small || '',
         isbn,
+        source: 'open_library',
     };
 };
 

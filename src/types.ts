@@ -24,7 +24,29 @@ export interface BookEntry {
   seriesIndex?: number;
   /** Short quotes or reading notes kept as separate lines. */
   highlights?: string[];
+  /** Which provider supplied this book's metadata (Phase 26). */
+  metadataSource?: MetadataSource;
+  /**
+   * Per-field flag indicating the user has manually edited that field.
+   * A subsequent "Refresh metadata" must not overwrite flagged fields.
+   */
+  userEditedFields?: UserEditedFields;
 }
+
+export type MetadataSource = 'google_books' | 'open_library' | 'manual';
+
+export interface UserEditedFields {
+  title?: boolean;
+  author?: boolean;
+  pageCount?: boolean;
+  coverImg?: boolean;
+}
+
+export const METADATA_SOURCE_LABEL: Record<MetadataSource, string> = {
+  google_books: 'Google Books',
+  open_library: 'Open Library',
+  manual: 'Manual entry',
+};
 
 export interface Shelf {
   id: string;

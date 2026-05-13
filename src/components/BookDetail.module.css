@@ -183,6 +183,52 @@
   background: rgba(56, 189, 248, 0.2);
 }
 
+.sourceRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.sourceBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.refreshBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent-purple);
+  background: rgba(168, 85, 247, 0.1);
+  padding: 0.25rem 0.55rem;
+  border-radius: 0.5rem;
+  border: none;
+  cursor: pointer;
+}
+
+.refreshBtn:hover:not(:disabled) {
+  background: rgba(168, 85, 247, 0.2);
+}
+
+.refreshBtn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 /* ---- Edit mode ---- */
 .editFields {
   display: flex;

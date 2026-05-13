@@ -19,6 +19,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:integration": "cross-env RUN_OCR_INTEGRATION=1 vitest run",
+    "bench:scan": "vitest run --config vitest.bench.config.ts",
     "test:all": "vitest run && cross-env RUN_OCR_INTEGRATION=1 vitest run",
     "generate-ocr-fixture": "node scripts/generate-ocr-fixture.mjs",
     "test:e2e": "node scripts/generate-ocr-fixture.mjs && npm run build && playwright test --project=chromium --project=mobile-chrome-pixel-7 --project=mobile-safari-iphone-14 --project=mobile-chrome-galaxy-s9",
