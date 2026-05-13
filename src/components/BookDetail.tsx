@@ -316,26 +316,26 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                     <Share2 size={12} /> Share
                   </button>
                 </div>
-                {book.metadataSource && (
+                {!isBookPhotoOnly(book) && (
                   <div className={styles.sourceRow}>
-                    <span
-                      className={styles.sourceBadge}
-                      title={`Metadata from ${METADATA_SOURCE_LABEL[book.metadataSource]}`}
-                      aria-label={`Metadata source: ${METADATA_SOURCE_LABEL[book.metadataSource]}`}
-                    >
-                      {METADATA_SOURCE_LABEL[book.metadataSource]}
-                    </span>
-                    {!isBookPhotoOnly(book) && (
-                      <button
-                        type="button"
-                        onClick={handleRefreshMetadata}
-                        disabled={lookupLoading}
-                        className={styles.refreshBtn}
-                        aria-label="Refresh metadata from provider"
+                    {book.metadataSource && (
+                      <span
+                        className={styles.sourceBadge}
+                        title={`Metadata from ${METADATA_SOURCE_LABEL[book.metadataSource]}`}
+                        aria-label={`Metadata source: ${METADATA_SOURCE_LABEL[book.metadataSource]}`}
                       >
-                        <RefreshCw size={12} /> {lookupLoading ? 'Refreshing…' : 'Refresh metadata'}
-                      </button>
+                        {METADATA_SOURCE_LABEL[book.metadataSource]}
+                      </span>
                     )}
+                    <button
+                      type="button"
+                      onClick={handleRefreshMetadata}
+                      disabled={lookupLoading}
+                      className={styles.refreshBtn}
+                      aria-label="Refresh metadata from provider"
+                    >
+                      <RefreshCw size={12} /> {lookupLoading ? 'Refreshing…' : 'Refresh metadata'}
+                    </button>
                   </div>
                 )}
               </div>
