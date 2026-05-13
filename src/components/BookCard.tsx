@@ -343,7 +343,7 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                 </div>
             </div>
 
-            {book.status === 'reading' && (
+            {(book.status === 'reading' || activeBookId === book.id) && (
               <div className={s.sessionRow} onClick={(e) => e.stopPropagation()}>
                 {activeBookId === book.id ? (
                   showStopForm ? (

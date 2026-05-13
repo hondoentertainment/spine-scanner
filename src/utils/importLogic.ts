@@ -1,5 +1,36 @@
 import type { BookEntry } from '../types.ts';
 
+/**
+ * Splits a CSV text into row strings while respecting RFC 4180 quoted fields
+ * (which may contain embedded newlines). Replaces the naive `split(/\r?\n/)`.
+ */
+function splitCSVRows(text: string): string[] {
+    const rows: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (ch === '"') {
+            if (inQuotes && text[i + 1] === '"') {
+                // Escaped double-quote inside quoted field
+                current += '""';
+                i++;
+            } else {
+                inQuotes = !inQuotes;
+                current += ch;
+            }
+        } else if ((ch === '\r' || ch === '\n') && !inQuotes) {
+            if (ch === '\r' && text[i + 1] === '\n') i++; // consume CRLF as one
+            if (current.trim() !== '') rows.push(current);
+            current = '';
+        } else {
+            current += ch;
+        }
+    }
+    if (current.trim() !== '') rows.push(current);
+    return rows;
+}
+
 export interface ImportResult {
     added: number;
     duplicates: number;
@@ -108,7 +139,7 @@ export const importFromGoodreadsCSV = (
     csvText: string,
     existingBooks: BookEntry[],
 ): { imported: BookEntry[]; skipped: number } => {
-    const lines = csvText.split(/\r?\n/).filter((l) => l.trim() !== '');
+    const lines = splitCSVRows(csvText);
     if (lines.length < 2) return { imported: [], skipped: 0 };
 
     const headers = parseCSVLine(lines[0]).map((h) => h.trim());
@@ -177,7 +208,7 @@ export function importFromStoryGraphCSV(
     existingBooks: BookEntry[],
     addBook: (book: BookEntry) => void,
 ): ImportResult {
-    const lines = csv.split(/\r?\n/).filter((l) => l.trim() !== '');
+    const lines = splitCSVRows(csv);
     if (lines.length < 2) return { added: 0, duplicates: 0, errors: [] };
 
     const rawHeaders = parseCSVLine(lines[0]);
