@@ -164,6 +164,14 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
           <article className={styles.card}>
             <h3>Your controls</h3>
             <p>You can export your library, clear local analytics, sign out of sync, or remove local browser storage at any time from the app’s data tools.</p>
+            <p>
+              Anonymous usage analytics are off by default; you can turn them on from
+              Profile → Privacy. The toggle only affects this device.
+            </p>
+            <p>
+              You can delete all your data — local and cloud — at any time from
+              Profile → Privacy. Deletion is permanent and cannot be undone.
+            </p>
           </article>
           <article className={styles.card}>
             <h3>Reading goals, series, and highlights</h3>

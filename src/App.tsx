@@ -187,7 +187,7 @@ function App() {
   const lastSyncedAt = useSyncQueue((s) => s.lastSyncedAt);
   const syncFailedRecently = lastSyncFailedAt != null && Date.now() - lastSyncFailedAt < 90_000;
   const { online, justReconnected, clearReconnected } = useOnlineStatus();
-  const { themePreference, toggleTheme } = useTheme();
+  const { theme: themePreference, toggleTheme } = useTheme();
   const { toast, confirm } = useToast();
   const { track } = useAnalyticsStore();
   const [srAnnouncement, setSrAnnouncement] = useState('');
@@ -751,7 +751,7 @@ function App() {
                 {flushing ? 'Syncing…' : !online ? 'Offline' : `${pendingChanges} to sync`}
               </button>
             )}
-            <ThemeToggle themePreference={themePreference} onToggle={toggleTheme} />
+            <ThemeToggle theme={themePreference} onToggle={toggleTheme} />
             <AuthPanel
               onSyncNow={handleSyncNow}
               syncing={flushing}

@@ -121,6 +121,8 @@ export interface ProfilePreferences {
   longestStreak: number;
   /** ISO date string (YYYY-MM-DD) of the last day reading activity was recorded. */
   lastStreakDate: string | null;
+  /** When true, anonymous usage analytics are recorded locally. Opt-in. */
+  analyticsOptIn: boolean;
 }
 
 export const DEFAULT_PREFERENCES: ProfilePreferences = {
@@ -141,4 +143,5 @@ export const DEFAULT_PREFERENCES: ProfilePreferences = {
   currentStreak: 0,
   longestStreak: 0,
   lastStreakDate: null,
+  analyticsOptIn: false,
 };

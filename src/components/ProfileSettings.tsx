@@ -12,7 +12,7 @@ import { isMvpMode } from '../lib/appMode.ts';
 import {
   X, User, Sun, Moon, Monitor, LayoutGrid, List, ArrowUpDown, Columns2,
   CheckCircle, Layers, BarChart3, Tag, BookOpen, Clock3, Bookmark, Flame, ScanLine,
-  Database, Share2, Target, Download, Eraser, ScrollText, Bug,
+  Database, Share2, Target, Download, Eraser, ScrollText, Bug, ShieldCheck, Trash2,
 } from 'lucide-react';
 import type { ProfilePreferences } from '../types.ts';
 import { getShareBaseUrl } from '../utils/shareBook.ts';
@@ -532,6 +532,64 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
         >
           <Bug size={16} aria-hidden />
           Download diagnostics
+        </button>
+      </div>
+
+      <div className={s.section}>
+        <h3 className={s.sectionTitle}>
+          <ShieldCheck size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} aria-hidden />
+          Privacy
+        </h3>
+        <button
+          type="button"
+          onClick={() => updatePreferences({ analyticsOptIn: !preferences.analyticsOptIn })}
+          className={`${s.toggleRow} ${preferences.analyticsOptIn ? s.toggleRowActive : ''}`}
+          aria-pressed={preferences.analyticsOptIn}
+        >
+          <BarChart3 size={18} />
+          <div className={s.toggleLabel}>
+            <span>Anonymous usage analytics</span>
+            <span className={s.toggleHint}>
+              Help improve SpineScanner by sharing anonymized usage data. No book content is collected. You can turn this off any time.
+            </span>
+          </div>
+          {preferences.analyticsOptIn && <CheckCircle size={18} className={s.check} />}
+        </button>
+        <p className={s.sectionHint}>
+          Permanently delete your entire library, shelves, preferences, and analytics. If you are signed in, your cloud data is removed too.
+        </p>
+        <button
+          type="button"
+          className={s.dangerOutlineBtn}
+          onClick={async () => {
+            const ok = await confirm({
+              title: 'Delete all your data?',
+              message:
+                "This permanently deletes your entire library, shelves, preferences, and analytics from this device. If you're signed in, your cloud data will also be deleted. This cannot be undone.",
+              confirmLabel: 'Delete all my data',
+              danger: true,
+            });
+            if (!ok) return;
+
+            const signedIn = user !== null;
+            if (signedIn && user) {
+              const { deleteAllCloudData } = await import('../lib/syncBooks.ts');
+              await deleteAllCloudData(user.id);
+            }
+
+            const { clearLocalAppData } = await import('../utils/clearLocalAppData.ts');
+            clearLocalAppData();
+
+            if (signedIn) {
+              await useAuthStore.getState().signOut();
+            }
+
+            toast('All data deleted', 'success');
+            setTimeout(() => window.location.reload(), 1500);
+          }}
+        >
+          <Trash2 size={16} aria-hidden />
+          Delete all my data
         </button>
       </div>
 

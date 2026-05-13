@@ -313,6 +313,57 @@ export function mergeShelvesLists(localShelves: Shelf[], remoteShelves: Shelf[])
 }
 
 /**
+ * Permanently deletes all of a user's data from Supabase.
+ * Removes every row from `books` and `shelves` owned by the user, plus the
+ * profile row keyed on `id = userId`. Returns true on success, false otherwise.
+ */
+export async function deleteAllCloudData(userId: string): Promise<boolean> {
+  if (!supabase) return false;
+  addBreadcrumb('sync', 'Deleting all cloud data', { userId });
+
+  try {
+    const { error: booksError } = await supabase
+      .from('books')
+      .delete()
+      .eq('user_id', userId);
+    if (booksError) throw booksError;
+  } catch (err) {
+    const error = err as Error;
+    console.error('[sync] Error deleting cloud books:', error.message);
+    captureException(error, { area: 'deleteAllCloudData.books', userId });
+    return false;
+  }
+
+  try {
+    const { error: shelvesError } = await supabase
+      .from('shelves')
+      .delete()
+      .eq('user_id', userId);
+    if (shelvesError) throw shelvesError;
+  } catch (err) {
+    const error = err as Error;
+    console.error('[sync] Error deleting cloud shelves:', error.message);
+    captureException(error, { area: 'deleteAllCloudData.shelves', userId });
+    return false;
+  }
+
+  try {
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('id', userId);
+    if (profileError) throw profileError;
+  } catch (err) {
+    const error = err as Error;
+    console.error('[sync] Error deleting profile:', error.message);
+    captureException(error, { area: 'deleteAllCloudData.profile', userId });
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Smart merge: pulls remote, merges with local (local wins on conflict),
  * then pushes merged result back.
  */

@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+// Runtime `.getState()` lookup keeps this dependency dynamic-friendly and
+// reads the freshest preference value each time `track()` is invoked.
+import { useProfileStore } from './useProfileStore.ts';
 
 /** Individual tracked event with timestamp. */
 export interface AnalyticsEvent {
@@ -80,7 +83,10 @@ export const useAnalyticsStore = create<AnalyticsStore>()(
     (set, get) => ({
       events: [],
 
-      track: (type, meta) =>
+      track: (type, meta) => {
+        // Privacy gate (Phase 34): analytics are strictly opt-in. When the
+        // user has not enabled them, do not record anything — not even locally.
+        if (!useProfileStore.getState().preferences.analyticsOptIn) return;
         set((state) => {
           const event: AnalyticsEvent = {
             type,
@@ -89,7 +95,8 @@ export const useAnalyticsStore = create<AnalyticsStore>()(
           };
           const events = [event, ...state.events].slice(0, MAX_EVENTS);
           return { events };
-        }),
+        });
+      },
 
       getSummary: () => summarizeAnalyticsEvents(get().events),
 
