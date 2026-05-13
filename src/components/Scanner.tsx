@@ -95,6 +95,11 @@ const Scanner: React.FC<ScannerProps> = ({
     const [isbnSuggestions, setIsbnSuggestions] = useState<string[]>([]);
     const [repairedMap, setRepairedMap] = useState<Record<string, string>>({});
     const [debugLogs, setDebugLogs] = useState<string[]>([]);
+    // Mirror of `debugLogs` for reads that must not invalidate dependent callbacks.
+    // Without this, `capture` (below) lists `debugLogs` in its deps; every `addLog`
+    // call recreates `capture`, which retriggers the auto-scan effect that calls
+    // `addLog` again — an infinite render loop under React 19's scheduling.
+    const debugLogsRef = useRef<string[]>([]);
     const [showDebug, setShowDebug] = useState(false);
     const [liveTelemetry, setLiveTelemetry] = useState<LiveScanTelemetry>({ ...EMPTY_TELEMETRY });
     const [liveQualityHint, setLiveQualityHint] = useState<'ready' | 'blurry' | 'dark' | 'blurry-dark' | null>(null);
@@ -164,7 +169,11 @@ const Scanner: React.FC<ScannerProps> = ({
 
     const addLog = useCallback((msg: string) => {
         console.log(`[Scanner] ${msg}`);
-        setDebugLogs(prev => [msg, ...prev].slice(0, 50));
+        setDebugLogs(prev => {
+            const next = [msg, ...prev].slice(0, 50);
+            debugLogsRef.current = next;
+            return next;
+        });
     }, []);
 
     const { preWarm, runOcr, runOcrWithLang, ocrState } = useOcrEngine({
@@ -356,13 +365,13 @@ const Scanner: React.FC<ScannerProps> = ({
                     ? 'Scanner busy - upload a photo or enter ISBN'
                     : 'Scan failed - try a photo upload or enter ISBN',
                 type: 'error',
-                details: buildErrorDiagnostics(msg, debugLogs),
+                details: buildErrorDiagnostics(msg, debugLogsRef.current),
             });
         } finally {
             processingRef.current = false;
             setProcessing(false);
         }
-    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, debugLogs, batchModeProp, captureAveragedFrame, autoScan, scanMode]);
+    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, batchModeProp, captureAveragedFrame, autoScan, scanMode]);
 
     const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -462,13 +471,13 @@ const Scanner: React.FC<ScannerProps> = ({
                     ? 'Scanner busy - try another photo or enter ISBN'
                     : 'Scan failed - try another photo or enter ISBN',
                 type: 'error',
-                details: buildErrorDiagnostics(msg, debugLogs),
+                details: buildErrorDiagnostics(msg, debugLogsRef.current),
             });
         } finally {
             processingRef.current = false;
             setProcessing(false);
         }
-    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, debugLogs, scanMode, batchModeProp]);
+    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, scanMode, batchModeProp]);
 
     const handlePhotoOnlyFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
