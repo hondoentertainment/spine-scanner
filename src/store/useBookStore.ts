@@ -141,10 +141,18 @@ export const useBookStore = create<BookStore>()(
         set((state) => ({
           books: state.books.map((b) => (ids.includes(b.id) ? normalizeBookEntry({ ...b, ...updates }) : b)),
         })),
-      bulkUpdateStatus: (ids, status) =>
-        set((state) => ({
-          books: state.books.map((b) => (ids.includes(b.id) ? updateBookForStatus(b, status) : b)),
-        })),
+      bulkUpdateStatus: (ids, status) => {
+        let anyUpdated = false;
+        set((state) => {
+          const idSet = new Set(ids);
+          anyUpdated = state.books.some((b) => idSet.has(b.id));
+          return { books: state.books.map((b) => (idSet.has(b.id) ? updateBookForStatus(b, status) : b)) };
+        });
+        if (anyUpdated && (status === 'read' || status === 'reading')) {
+          const prefs = useProfileStore.getState().preferences;
+          useProfileStore.getState().updatePreferences(advanceStreak(prefs));
+        }
+      },
       bulkAssignShelf: (ids, shelfId) =>
         set((state) => ({
           books: state.books.map((b) =>
