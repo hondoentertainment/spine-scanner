@@ -7,7 +7,7 @@ import type { ImportResult } from '../utils/importLogic.ts';
 import { normalizeToIsbn13 } from '../utils/isbnValidation.ts';
 import { isbnExistsInLibrary, isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { exportToGoodreadsCSV } from '../utils/goodreadsExport.ts';
-import { exportToJSON, importFromJSON, exportToLibraryThingTSV, exportToStoryGraphCSV, exportToHTML, exportToICS } from '../utils/exportFormats.ts';
+import { exportToJSON, importFromJSON, exportToLibraryThingTSV, exportToStoryGraphCSV, exportToHTML, exportToICS, exportToNotionCSV } from '../utils/exportFormats.ts';
 import { findDuplicateIsbnGroups } from '../utils/libraryDuplicates.ts';
 import { findEditionDuplicateGroups } from '../utils/editionDuplicates.ts';
 import { Download, Upload, Trash2, Globe, CheckCircle, Loader2, X, GitMerge, RefreshCw, Layers } from 'lucide-react';
@@ -183,6 +183,12 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
         toast('Reading calendar exported', 'success');
     };
 
+    const handleNotionExport = () => {
+        const csvContent = exportToNotionCSV(books);
+        downloadFile(csvContent, 'spinescanner-notion.csv', 'text/csv');
+        toast('Notion CSV exported', 'success');
+    };
+
     const handleBulkRefresh = async () => {
         const targets = books.filter((b) => b.metadataSource === undefined);
         if (targets.length === 0) {
@@ -329,6 +335,9 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                 </button>
                 <button onClick={handleICSExport} className={`glass ${s.exportBtn}`} style={{ marginTop: '0.5rem' }}>
                     Export reading calendar (.ics)
+                </button>
+                <button onClick={handleNotionExport} className={`glass ${s.exportBtn}`} style={{ marginTop: '0.5rem' }}>
+                    Export to Notion (CSV)
                 </button>
             </section>
 
