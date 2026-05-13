@@ -1,7 +1,12 @@
 /* ---- Card layout ---- */
 .card {
-  animation: fadeIn 0.2s ease-out;
   cursor: pointer;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .card {
+    animation: fadeIn 0.2s ease-out;
+  }
 }
 
 .cardInner {

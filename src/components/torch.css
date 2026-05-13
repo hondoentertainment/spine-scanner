@@ -7,7 +7,13 @@
 .torch-on {
   background: #f59e0b !important;
   border: 1px solid #f29b0b !important;
-  animation: torch-glow 1s ease-in-out infinite alternate;
+  box-shadow: 0 0 12px #f59e0b;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .torch-on {
+    animation: torch-glow 1s ease-in-out infinite alternate;
+  }
 }
 
 .torch-on:hover {

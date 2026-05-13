@@ -98,7 +98,7 @@ export const SHELF_COLORS = [
 
 /** User profile preferences stored per-profile (local or cloud). */
 export interface ProfilePreferences {
-  theme: 'light' | 'dark' | 'system';
+  theme: 'light' | 'dark' | 'system' | 'high-contrast';
   librarySortBy: 'title' | 'author' | 'dateAdded' | 'pageCount';
   librarySortAsc: boolean;
   libraryViewMode: 'grid' | 'list' | 'masonry';

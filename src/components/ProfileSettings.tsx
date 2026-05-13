@@ -10,7 +10,7 @@ import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
 import { isMvpMode } from '../lib/appMode.ts';
 import {
-  X, User, Sun, Moon, Monitor, LayoutGrid, List, ArrowUpDown, Columns2,
+  X, User, Sun, Moon, Monitor, Contrast, LayoutGrid, List, ArrowUpDown, Columns2,
   CheckCircle, Layers, BarChart3, Tag, BookOpen, Clock3, Bookmark, Flame, ScanLine,
   Database, Share2, Target, Download, Eraser, ScrollText, Bug, ShieldCheck, Trash2,
 } from 'lucide-react';
@@ -31,6 +31,7 @@ const themeOptions: { value: ProfilePreferences['theme']; label: string; icon: R
   { value: 'dark', label: 'Dark', icon: <Moon size={16} /> },
   { value: 'light', label: 'Light', icon: <Sun size={16} /> },
   { value: 'system', label: 'System', icon: <Monitor size={16} /> },
+  { value: 'high-contrast', label: 'High contrast', icon: <Contrast size={16} /> },
 ];
 
 const sortOptions: { value: ProfilePreferences['librarySortBy']; label: string }[] = [
