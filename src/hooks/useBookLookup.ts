@@ -211,11 +211,12 @@ export const useBookLookup = () => {
                 setError('No book found with this ISBN');
                 return null;
             }
+            const edited = new Set(book.userEditedFields ?? []);
             return {
-                title: result.title,
-                author: result.authors.join(', '),
-                pageCount: result.pageCount,
-                coverImg: result.thumbnail,
+                ...(edited.has('title') ? {} : { title: result.title }),
+                ...(edited.has('author') ? {} : { author: result.authors.join(', ') }),
+                ...(edited.has('pageCount') ? {} : { pageCount: result.pageCount }),
+                ...(edited.has('coverImg') ? {} : { coverImg: result.thumbnail }),
                 metadataSource: result.metadataSource,
                 metadataConflicts: result.metadataConflicts,
             };

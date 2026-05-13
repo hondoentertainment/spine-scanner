@@ -99,10 +99,12 @@ export const useBookStore = create<BookStore>()(
           books: state.books.map((b) => (b.id === id ? normalizeBookEntry({ ...b, ...updates }) : b)),
         })),
       updateBookStatus: (id, status) => {
-        set((state) => ({
-          books: state.books.map((b) => (b.id === id ? updateBookForStatus(b, status) : b)),
-        }));
-        if (status === 'read' || status === 'reading') {
+        let bookUpdated = false;
+        set((state) => {
+          bookUpdated = state.books.some((b) => b.id === id);
+          return { books: state.books.map((b) => (b.id === id ? updateBookForStatus(b, status) : b)) };
+        });
+        if (bookUpdated && (status === 'read' || status === 'reading')) {
           const prefs = useProfileStore.getState().preferences;
           useProfileStore.getState().updatePreferences(advanceStreak(prefs));
         }
