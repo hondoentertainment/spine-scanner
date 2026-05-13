@@ -1,6 +1,8 @@
 import { supabase } from './supabase.ts';
 import type { BookEntry, Shelf } from '../types.ts';
 import { addBreadcrumb, captureException } from './errorMonitoring.ts';
+import { withRetry } from './syncRetry.ts';
+import { useSyncQueue } from '../store/useSyncQueue.ts';
 
 /** Row shape in the Supabase `books` table */
 interface BookRow {
@@ -148,11 +150,15 @@ export async function pushBooks(userId: string, books: BookEntry[]): Promise<boo
 
   // Upsert all books (insert or update on conflict by primary key `id`)
   if (rows.length > 0) {
-    const { error } = await supabase
-      .from('books')
-      .upsert(rows, { onConflict: 'id' });
-
-    if (error) {
+    try {
+      await withRetry(async () => {
+        const { error } = await supabase!
+          .from('books')
+          .upsert(rows, { onConflict: 'id' });
+        if (error) throw error;
+      });
+    } catch (err) {
+      const error = err as Error;
       console.error('[sync] Error pushing books:', error.message);
       captureException(error, { area: 'pushBooks.upsert', userId, bookCount: books.length });
       return false;
@@ -177,14 +183,18 @@ export async function pushBooks(userId: string, books: BookEntry[]): Promise<boo
   const toDelete = remoteIds.filter((id) => !localIds.includes(id));
 
   if (toDelete.length > 0) {
-    const { error: deleteError } = await supabase
-      .from('books')
-      .delete()
-      .in('id', toDelete);
-
-    if (deleteError) {
-      console.error('[sync] Error deleting stale books:', deleteError.message);
-      captureException(deleteError, { area: 'pushBooks.deleteStale', userId, staleCount: toDelete.length });
+    try {
+      await withRetry(async () => {
+        const { error: deleteError } = await supabase!
+          .from('books')
+          .delete()
+          .in('id', toDelete);
+        if (deleteError) throw deleteError;
+      });
+    } catch (err) {
+      const error = err as Error;
+      console.error('[sync] Error deleting stale books:', error.message);
+      captureException(error, { area: 'pushBooks.deleteStale', userId, staleCount: toDelete.length });
       return false;
     }
   }
@@ -200,11 +210,15 @@ export async function pushShelves(userId: string, shelves: Shelf[]): Promise<boo
   const rows = shelves.map((s) => toShelfRow(s, userId));
 
   if (rows.length > 0) {
-    const { error } = await supabase
-      .from('shelves')
-      .upsert(rows, { onConflict: 'id' });
-
-    if (error) {
+    try {
+      await withRetry(async () => {
+        const { error } = await supabase!
+          .from('shelves')
+          .upsert(rows, { onConflict: 'id' });
+        if (error) throw error;
+      });
+    } catch (err) {
+      const error = err as Error;
       console.error('[sync] Error pushing shelves:', error.message);
       captureException(error, { area: 'pushShelves.upsert', userId, shelfCount: shelves.length });
       return false;
@@ -229,14 +243,18 @@ export async function pushShelves(userId: string, shelves: Shelf[]): Promise<boo
   const toDeleteIds = remoteIds.filter((id) => !localIds.includes(id));
 
   if (toDeleteIds.length > 0) {
-    const { error: deleteError } = await supabase
-      .from('shelves')
-      .delete()
-      .in('id', toDeleteIds);
-
-    if (deleteError) {
-      console.error('[sync] Error deleting stale shelves:', deleteError.message);
-      captureException(deleteError, { area: 'pushShelves.deleteStale', userId, staleCount: toDeleteIds.length });
+    try {
+      await withRetry(async () => {
+        const { error: deleteError } = await supabase!
+          .from('shelves')
+          .delete()
+          .in('id', toDeleteIds);
+        if (deleteError) throw deleteError;
+      });
+    } catch (err) {
+      const error = err as Error;
+      console.error('[sync] Error deleting stale shelves:', error.message);
+      captureException(error, { area: 'pushShelves.deleteStale', userId, staleCount: toDeleteIds.length });
       return false;
     }
   }
@@ -312,13 +330,32 @@ export async function mergeSync(
 
   const remoteShelves = await pullShelves(userId);
 
+  // Detect conflict: any book that exists both locally and remotely with differing content
+  const remoteMap = new Map(remoteBooks.map((b) => [b.id, b]));
+  const hadConflict = localBooks.some((local) => {
+    const remote = remoteMap.get(local.id);
+    if (!remote) return false;
+    return (
+      remote.title !== local.title ||
+      remote.author !== local.author ||
+      remote.notes !== local.notes
+    );
+  });
+
   const mergedBooks = mergeBooksLists(localBooks, remoteBooks);
   const mergedShelves = mergeShelvesLists(localShelves, remoteShelves || []);
+
+  // Save snapshot of local books before pushing
+  useSyncQueue.getState().saveSnapshot(localBooks);
 
   const pushOk = await pushBooks(userId, mergedBooks);
   if (!pushOk) return null;
 
   await pushShelves(userId, mergedShelves);
+
+  // Record conflict status
+  useSyncQueue.getState().markConflict(hadConflict);
+
   addBreadcrumb('sync', 'Merge sync completed', {
     mergedBooks: mergedBooks.length,
     mergedShelves: mergedShelves.length,

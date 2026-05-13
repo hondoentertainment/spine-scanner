@@ -71,7 +71,11 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
   const analyticsEvents = useAnalyticsStore((s) => s.events);
   const scanStats = useMemo(() => summarizeAnalyticsEvents(analyticsEvents), [analyticsEvents]);
-  const { pendingChanges, lastSyncedAt, lastSyncFailedAt, flushing } = useSyncQueue();
+  const {
+    pendingChanges, lastSyncedAt, lastSyncFailedAt, flushing,
+    lastGoodSnapshot, lastGoodSnapshotAt, hadConflictLastSync,
+    saveSnapshot, markConflict,
+  } = useSyncQueue();
   const displayName = profile?.username ?? profile?.displayName ?? user?.user_metadata?.full_name ?? user?.email ?? 'Local reader';
   const avatarUrl = profile?.avatarUrl ?? user?.user_metadata?.avatar_url ?? null;
   const joinedLabel = user?.created_at
@@ -363,6 +367,43 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
                 onClick={() => window.location.reload()}
               >
                 Retry
+              </button>
+            </div>
+          )}
+          {hadConflictLastSync && (
+            <div className={s.syncWarningRow}>
+              <span>Last sync detected conflicting edits on another device. Last write won.</span>
+              <button
+                type="button"
+                className={s.retryBtn}
+                onClick={() => markConflict(false)}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+          {lastGoodSnapshot !== null && (
+            <div className={s.syncRow}>
+              <button
+                type="button"
+                className={s.optBtn}
+                onClick={() => {
+                  try {
+                    const parsed = JSON.parse(lastGoodSnapshot) as import('../types.ts').BookEntry[];
+                    useBookStore.getState().setBooks(parsed);
+                    saveSnapshot([]);
+                    toast('Library restored from snapshot', 'success');
+                  } catch {
+                    toast('Failed to restore snapshot', 'error');
+                  }
+                }}
+              >
+                Restore from snapshot
+                {lastGoodSnapshotAt !== null && (
+                  <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.25rem' }}>
+                    (taken {new Date(lastGoodSnapshotAt).toLocaleString()})
+                  </span>
+                )}
               </button>
             </div>
           )}

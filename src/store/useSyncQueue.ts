@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { BookEntry } from '../types.ts';
 
 const SYNC_FAILED_RECENT_MS = 90_000;
 
@@ -12,6 +13,12 @@ interface SyncQueueStore {
   lastSyncFailedAt: number | null;
   /** Whether a sync flush is currently in progress */
   flushing: boolean;
+  /** JSON snapshot of books[] saved before the last sync push */
+  lastGoodSnapshot: string | null;
+  /** Timestamp when the snapshot was taken */
+  lastGoodSnapshotAt: string | null;
+  /** Whether a conflict was detected in the last sync (remote had newer data for ≥1 book) */
+  hadConflictLastSync: boolean;
   /** Whether sync recently failed (within SYNC_FAILED_RECENT_MS) */
   syncFailedRecently: () => boolean;
   /** Mark that a local mutation happened (increment pending count) */
@@ -24,6 +31,10 @@ interface SyncQueueStore {
   setFlushing: (flushing: boolean) => void;
   /** Reset the queue (e.g. on sign-out) */
   reset: () => void;
+  /** Save a snapshot of current books (call before pushing) */
+  saveSnapshot: (books: BookEntry[]) => void;
+  /** Mark that a conflict was detected */
+  markConflict: (had: boolean) => void;
 }
 
 export const useSyncQueue = create<SyncQueueStore>()(
@@ -33,6 +44,9 @@ export const useSyncQueue = create<SyncQueueStore>()(
       lastSyncedAt: null,
       lastSyncFailedAt: null,
       flushing: false,
+      lastGoodSnapshot: null,
+      lastGoodSnapshotAt: null,
+      hadConflictLastSync: false,
 
       syncFailedRecently: () => {
         const t = get().lastSyncFailedAt;
@@ -50,14 +64,30 @@ export const useSyncQueue = create<SyncQueueStore>()(
       setFlushing: (flushing) => set({ flushing }),
 
       reset: () =>
-        set({ pendingChanges: 0, lastSyncedAt: null, lastSyncFailedAt: null, flushing: false }),
+        set({
+          pendingChanges: 0,
+          lastSyncedAt: null,
+          lastSyncFailedAt: null,
+          flushing: false,
+        }),
+
+      saveSnapshot: (books) =>
+        set({
+          lastGoodSnapshot: JSON.stringify(books),
+          lastGoodSnapshotAt: new Date().toISOString(),
+        }),
+
+      markConflict: (had) => set({ hadConflictLastSync: had }),
     }),
     {
       name: 'spine-scanner-sync-queue',
-      // Only persist pendingChanges and lastSyncedAt, not transient flushing state
+      // Persist sync state and snapshot fields; omit transient flushing
       partialize: (state) => ({
         pendingChanges: state.pendingChanges,
         lastSyncedAt: state.lastSyncedAt,
+        lastGoodSnapshot: state.lastGoodSnapshot,
+        lastGoodSnapshotAt: state.lastGoodSnapshotAt,
+        hadConflictLastSync: state.hadConflictLastSync,
       }),
     }
   )
