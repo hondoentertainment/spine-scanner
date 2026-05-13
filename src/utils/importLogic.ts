@@ -169,6 +169,119 @@ export const importFromGoodreadsCSV = (
 };
 
 /**
+ * Imports books from a StoryGraph library export CSV.
+ * Returns an ImportResult with counts of added, duplicates, and errors.
+ */
+export function importFromStoryGraphCSV(
+    csv: string,
+    existingBooks: BookEntry[],
+    addBook: (book: BookEntry) => void,
+): ImportResult {
+    const lines = csv.split(/\r?\n/).filter((l) => l.trim() !== '');
+    if (lines.length < 2) return { added: 0, duplicates: 0, errors: [] };
+
+    const rawHeaders = parseCSVLine(lines[0]);
+    const headers = rawHeaders.map((h) => h.trim().toLowerCase());
+
+    const col = (row: string[], name: string): string => {
+        const idx = headers.indexOf(name.toLowerCase());
+        return idx !== -1 ? (row[idx] ?? '').trim() : '';
+    };
+
+    // Pre-build lookup sets for duplicate detection
+    const existingIsbns = new Set(existingBooks.filter((b) => b.isbn).map((b) => b.isbn));
+    const existingTitleAuthor = new Set(
+        existingBooks.map((b) => `${b.title.toLowerCase().trim()}|${b.author.toLowerCase().trim()}`),
+    );
+
+    // Track within-batch additions
+    const batchIsbns = new Set<string>(existingIsbns);
+    const batchTitleAuthor = new Set<string>(existingTitleAuthor);
+
+    let added = 0;
+    let duplicates = 0;
+    const errors: string[] = [];
+
+    for (const line of lines.slice(1)) {
+        try {
+            const row = parseCSVLine(line);
+
+            const title = col(row, 'Title');
+            if (!title) continue; // skip rows with no title
+
+            const author = col(row, 'Authors');
+            const isbn = col(row, 'ISBN/UID');
+            const readStatusRaw = col(row, 'Read Status');
+            const datesRead = col(row, 'Dates Read');
+            const pageCountRaw = col(row, 'Page Count');
+            const seriesRaw = col(row, 'Series');
+            const starRatingRaw = col(row, 'Star Rating');
+
+            // Duplicate detection
+            const normalizedKey = `${title.toLowerCase().trim()}|${author.toLowerCase().trim()}`;
+            if (isbn && batchIsbns.has(isbn)) { duplicates++; continue; }
+            if (batchTitleAuthor.has(normalizedKey)) { duplicates++; continue; }
+
+            // Map read status
+            let status: BookEntry['status'];
+            if (readStatusRaw === 'read') status = 'read';
+            else if (readStatusRaw === 'currently-reading') status = 'reading';
+            else if (readStatusRaw === 'did-not-finish') status = 'dnf';
+            else status = 'to-read';
+
+            // Parse dates — pipe-separated: first = startedAt, second = finishedAt
+            let startedAt: string | null = null;
+            let finishedAt: string | null = null;
+            if (datesRead) {
+                const parts = datesRead.split('|');
+                if (parts[0]) {
+                    const d = new Date(parts[0].trim());
+                    if (!isNaN(d.getTime())) startedAt = d.toISOString();
+                }
+                if (parts[1]) {
+                    const d = new Date(parts[1].trim());
+                    if (!isNaN(d.getTime())) finishedAt = d.toISOString();
+                }
+            }
+
+            // Parse seriesName — strip position suffix like "#1" if needed (keep as-is per spec)
+            const seriesName = seriesRaw || undefined;
+
+            const pageCount = parseInt(pageCountRaw, 10) || 0;
+            const starRating = parseFloat(starRatingRaw) || 0;
+
+            const entry: BookEntry = {
+                id: crypto.randomUUID(),
+                isbn: isbn || '',
+                title,
+                author: author || 'Unknown Author',
+                pageCount,
+                amazonLink: '',
+                coverImg: '',
+                status,
+                notes: starRating ? `Rating: ${starRating}` : '',
+                dateAdded: new Date().toISOString(),
+                startedAt,
+                finishedAt,
+                shelfIds: [],
+                metadataSource: 'manual',
+                ...(seriesName !== undefined && { seriesName }),
+            };
+
+            addBook(entry);
+
+            if (isbn) batchIsbns.add(isbn);
+            batchTitleAuthor.add(normalizedKey);
+            added++;
+        } catch (err) {
+            errors.push(err instanceof Error ? err.message : String(err));
+        }
+    }
+
+    return { added, duplicates, errors };
+}
+
+/**
  * Validates file names for extra extensions.
  */
 export const validateFileName = (fileName: string): { valid: boolean; warning?: string } => {

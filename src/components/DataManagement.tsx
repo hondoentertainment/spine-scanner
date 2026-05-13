@@ -2,12 +2,12 @@ import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useBookLookup } from '../hooks/useBookLookup.ts';
 import { useToast } from './Toast.tsx';
-import { parseCSV, extractISBNs, importFromGoodreadsCSV } from '../utils/importLogic.ts';
+import { parseCSV, extractISBNs, importFromGoodreadsCSV, importFromStoryGraphCSV } from '../utils/importLogic.ts';
 import type { ImportResult } from '../utils/importLogic.ts';
 import { normalizeToIsbn13 } from '../utils/isbnValidation.ts';
 import { isbnExistsInLibrary, isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { exportToGoodreadsCSV } from '../utils/goodreadsExport.ts';
-import { exportToJSON, importFromJSON, exportToLibraryThingTSV, exportToStoryGraphCSV, exportToHTML } from '../utils/exportFormats.ts';
+import { exportToJSON, importFromJSON, exportToLibraryThingTSV, exportToStoryGraphCSV, exportToHTML, exportToICS } from '../utils/exportFormats.ts';
 import { findDuplicateIsbnGroups } from '../utils/libraryDuplicates.ts';
 import { findEditionDuplicateGroups } from '../utils/editionDuplicates.ts';
 import { Download, Upload, Trash2, Globe, CheckCircle, Loader2, X, GitMerge, RefreshCw, Layers } from 'lucide-react';
@@ -28,6 +28,8 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
     const [importing, setImporting] = useState(false);
     const [result, setResult] = useState<ImportResult | null>(null);
     const [goodreadsMsg, setGoodreadsMsg] = useState<string | null>(null);
+    const [storygraphMsg, setStorygraphMsg] = useState<string | null>(null);
+    const storygraphInputRef = useRef<HTMLInputElement>(null);
 
     // Bulk metadata refresh state
     const [refreshRunning, setRefreshRunning] = useState(false);
@@ -157,6 +159,28 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
         reader.readAsText(file);
         // reset input so same file can be re-imported
         e.target.value = '';
+    };
+
+    const handleStoryGraphImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result as string;
+            const importResult = importFromStoryGraphCSV(text, books, addBook);
+            const msg = `Added ${importResult.added} book${importResult.added !== 1 ? 's' : ''} from StoryGraph (${importResult.duplicates} duplicate${importResult.duplicates !== 1 ? 's' : ''} skipped)`;
+            setStorygraphMsg(msg);
+            toast(msg, 'success');
+        };
+        reader.readAsText(file);
+        // reset input so same file can be re-imported
+        e.target.value = '';
+    };
+
+    const handleICSExport = () => {
+        const icsContent = exportToICS(books);
+        downloadFile(icsContent, 'spinescanner-reading-calendar.ics', 'text/calendar');
+        toast('Reading calendar exported', 'success');
     };
 
     const handleBulkRefresh = async () => {
@@ -303,6 +327,9 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                 <button onClick={handleExport} className={`glass ${s.exportBtn}`}>
                     Export ({exportFormat.toUpperCase()})
                 </button>
+                <button onClick={handleICSExport} className={`glass ${s.exportBtn}`} style={{ marginTop: '0.5rem' }}>
+                    Export reading calendar (.ics)
+                </button>
             </section>
 
             {duplicateGroups.length > 0 && (
@@ -440,6 +467,34 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                 </div>
                 {goodreadsMsg && (
                     <p className={s.goodreadsMsg}>{goodreadsMsg}</p>
+                )}
+            </section>
+
+            {/* StoryGraph CSV import */}
+            <section className={s.sectionBorder}>
+                <h3 className={s.sectionTitle}>
+                    <Upload size={20} style={{ color: '#818cf8' }} /> Import StoryGraph CSV
+                </h3>
+                <p className={s.sectionDesc}>
+                    Import your StoryGraph library export. Go to StoryGraph → Account → Import/Export → Export your library data.
+                </p>
+                <input
+                    ref={storygraphInputRef}
+                    type="file"
+                    accept=".csv"
+                    onChange={handleStoryGraphImport}
+                    aria-label="Import StoryGraph CSV export"
+                    className={s.fileInput}
+                    style={{ display: 'none' }}
+                />
+                <button
+                    onClick={() => storygraphInputRef.current?.click()}
+                    className={`glass ${s.exportBtn}`}
+                >
+                    Import from StoryGraph
+                </button>
+                {storygraphMsg && (
+                    <p className={s.goodreadsMsg}>{storygraphMsg}</p>
                 )}
             </section>
 
