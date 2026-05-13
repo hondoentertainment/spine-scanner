@@ -1,0 +1,38 @@
+[
+  {
+    "version": "Unreleased",
+    "date": "2026-05-13",
+    "items": [
+      "Reading session log with start/stop timer (Phase 27)",
+      "Sync resilience: exponential backoff, snapshot restore, conflict detection (Phase 30)",
+      "StoryGraph CSV import (Phase 33)",
+      "ICS calendar export for finished books (Phase 33)",
+      "Feature flag scaffolding for in-progress phases (Phase 34)",
+      "Support diagnostics download bundle (Phase 34)"
+    ]
+  },
+  {
+    "version": "1.2.2",
+    "date": "2026-04-10",
+    "items": [
+      "Goodreads CSV import",
+      "Reading streak tracking with timezone fix",
+      "Year in Books stats card",
+      "Series completion hints in HomeFeed",
+      "Sync status panel in Profile",
+      "Edition-level duplicate detection",
+      "Bulk metadata refresh"
+    ]
+  },
+  {
+    "version": "1.2.0",
+    "date": "2026-04-10",
+    "items": [
+      "Metadata source tracking (Google Books / Open Library)",
+      "Metadata conflict detection between APIs",
+      "Safe Refresh metadata action preserving user edits",
+      "Pages-read input for reading books",
+      "Bulk multi-select in library"
+    ]
+  }
+]

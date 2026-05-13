@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore.ts';
 import { useBookStore } from '../store/useBookStore.ts';
@@ -12,12 +12,14 @@ import { isMvpMode } from '../lib/appMode.ts';
 import {
   X, User, Sun, Moon, Monitor, LayoutGrid, List, ArrowUpDown, Columns2,
   CheckCircle, Layers, BarChart3, Tag, BookOpen, Clock3, Bookmark, Flame, ScanLine,
-  Database, Share2, Target, Download, Eraser,
+  Database, Share2, Target, Download, Eraser, ScrollText, Bug,
 } from 'lucide-react';
 import type { ProfilePreferences } from '../types.ts';
 import { getShareBaseUrl } from '../utils/shareBook.ts';
 import { exportAccountSnapshot } from '../utils/exportFormats.ts';
+import { downloadDiagnosticsBundle } from '../utils/supportDiagnostics.ts';
 import { useToast } from './Toast.tsx';
+import ChangelogModal from './ChangelogModal.tsx';
 import s from './ProfileSettings.module.css';
 
 interface ProfileSettingsProps {
@@ -62,6 +64,7 @@ const statusSummary = [
 const SUPPORT_EMAIL_ENV = (import.meta.env.VITE_SUPPORT_EMAIL as string | undefined)?.trim();
 
 const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = false }) => {
+  const [changelogOpen, setChangelogOpen] = useState(false);
   const navigate = useNavigate();
   const { toast, confirm } = useToast();
   const { user, profile } = useAuthStore();
@@ -124,7 +127,17 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
         </button>
       )}
 
-      <h2 id="profile-settings-title" className={s.title}>Profile & Settings</h2>
+      <div className={s.titleRow}>
+        <h2 id="profile-settings-title" className={s.title}>Profile & Settings</h2>
+        <button
+          type="button"
+          className={s.optBtn}
+          onClick={() => setChangelogOpen(true)}
+        >
+          <ScrollText size={15} aria-hidden />
+          What's new
+        </button>
+      </div>
       <p className={s.subtitle}>
         {isMvpMode()
           ? 'Essentials only: theme, data, and export. Use the full build for the home feed and advanced preferences.'
@@ -504,6 +517,24 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
         </div>
       </div>
 
+      <div className={s.section}>
+        <h3 className={s.sectionTitle}>Support</h3>
+        <p className={s.sectionHint}>
+          Download a diagnostics bundle to help report issues. The file includes your book count, preferences, recent analytics events, and app storage — passwords, tokens, and keys are excluded.
+        </p>
+        <button
+          type="button"
+          className={s.optBtn}
+          onClick={() => {
+            downloadDiagnosticsBundle(books, preferences, analyticsEvents);
+            toast('Diagnostics downloaded', 'success');
+          }}
+        >
+          <Bug size={16} aria-hidden />
+          Download diagnostics
+        </button>
+      </div>
+
       {!isMvpMode() && (
       <div className={s.section}>
         <h3 className={s.sectionTitle}>
@@ -701,14 +732,22 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
   );
 
   if (inline) {
-    return <section aria-labelledby="profile-settings-title">{content}</section>;
+    return (
+      <>
+        <section aria-labelledby="profile-settings-title">{content}</section>
+        <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
+      </>
+    );
   }
 
   return (
-    <div className={s.overlay} role="dialog" aria-modal="true" aria-labelledby="profile-settings-title"
-      onClick={(e) => e.target === e.currentTarget && onClose?.()}>
-      {content}
-    </div>
+    <>
+      <div className={s.overlay} role="dialog" aria-modal="true" aria-labelledby="profile-settings-title"
+        onClick={(e) => e.target === e.currentTarget && onClose?.()}>
+        {content}
+      </div>
+      <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
+    </>
   );
 };
 
