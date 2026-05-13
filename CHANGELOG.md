@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Phase 30/32/33/34 wave (May 2026)
+
+- **Schema migration runner (Phase 30):** `src/lib/schemaMigrations.ts` — `CURRENT_SCHEMA_VERSION` + `migrateBook`/`migrateBooks` runner (idempotent, safe on unknown versions). Wired into `useBookStore.persist.merge` and `syncBooks.pullBooks`/`mergeSync` so adding new `BookEntry` fields won't break older clients. 9 unit tests.
+- **High-contrast theme (Phase 32):** `'high-contrast'` added to `ProfilePreferences.theme` union. WCAG AAA palette in `:root[data-theme="high-contrast"]` (black bg, white text, `#ffeb3b` primary, `#00ffff` accent, full white borders). `useTheme` cycles `light → dark → system → high-contrast`. `ThemeToggle` redesigned as rotating-icon button with proper aria-labels. Theme picker in ProfileSettings extended.
+- **Reduced-motion audit (Phase 32):** Global `@media (prefers-reduced-motion: reduce)` clamp in `src/index.css` covering the whole tree; previously-unguarded animations in `BookCard.module.css`, `PasswordReset.module.css`, and `torch.css` wrapped in `@media (prefers-reduced-motion: no-preference)`.
+- **Notion CSV export (Phase 33):** `exportToNotionCSV` in `exportFormats.ts` — header `Title,Author,ISBN,Status,Pages,Pages Read,Started,Finished,Series,Series #,Notes,Date Added`. ISO dates → `YYYY-MM-DD`. Status capitalization (`To Read`/`Reading`/`Read`/`DNF`). CRLF line endings, RFC 4180 escaping, multi-line notes flattened to ` / `. "Export to Notion (CSV)" button in `DataManagement`. 13 unit tests.
+- **Privacy controls (Phase 34):** `analyticsOptIn` (default `false`) on `ProfilePreferences`; `useAnalyticsStore.track()` short-circuits unless opted in. `deleteAllCloudData(userId)` in `syncBooks.ts` wipes books, shelves, and the profile row. Profile → Privacy section adds the toggle and a destructive "Delete all my data" button (cloud + local + sign-out + reload). Privacy page copy updated. 8 unit tests.
+- **Onboarding tour (Phase 34):** `OnboardingModal` rewritten as a 4-step tour (Welcome / Scan / Organize / Sync) with Back/Next/Skip/Done, step dots, focus trap, Escape-to-skip, `role="dialog"`/`aria-modal="true"`/`aria-label="Welcome tour"`. App wiring marks `onboardingCompleted: true` on close. 10 unit tests.
+- **Fix:** `useBookStore.updateBookStatus` only advances streak if the target book exists (prevented stale book IDs from spuriously incrementing).
+- **Fix:** `useBookStore.bulkUpdateStatus` now advances streak once per call when marking `read`/`reading`, mirroring single-book behavior.
+- **Fix:** `useBookLookup.refreshMetadata` filters out `book.userEditedFields` so manual edits aren't overwritten on bulk refresh.
+
 ### This wave (Phase 27 completion / Phase 30 resilience / Phase 33–34 polish)
 
 - **Reading session log (Phase 27):** `useReadingSessionStore` — persisted Zustand store with `startSession`, `stopSession`, `cancelSession`, per-book `sessionsForBook()`, and aggregate `stats()` (avg pages/hr, longest session, sessions this week). Start/Stop timer button on `BookCard` for `status='reading'` books (shows elapsed time, inline pages-read form on stop). Session history + stats section in `BookDetail`. `ReadingSession` type added to `src/types.ts`. 16 unit tests.

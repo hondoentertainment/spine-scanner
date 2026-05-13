@@ -26,6 +26,12 @@ Status of recommended improvements. Items marked ✅ are implemented and shipped
 | 34 | **Feature flag scaffolding** — `FEATURE_FLAGS` + `useFeatureFlag(name)` with localStorage override | ✅ |
 | 34 | **In-app changelog** — `ChangelogModal` + "What's new" in Profile | ✅ |
 | 34 | **Diagnostics download** — one-click `spinescanner-diagnostics-YYYYMMDD.json` bundle | ✅ |
+| 30 | **Schema migration runner** — `migrateBook`/`migrateBooks` wired into store and pullBooks/mergeSync | ✅ |
+| 32 | **High-contrast theme** — `'high-contrast'` variant with WCAG AAA palette, 4-step toggle cycle | ✅ |
+| 32 | **Reduced-motion audit** — global `prefers-reduced-motion` clamp + guarded BookCard/PasswordReset/torch animations | ✅ |
+| 33 | **Notion CSV export** — RFC 4180 escaping, ISO→YYYY-MM-DD, status capitalization | ✅ |
+| 34 | **Privacy controls** — `analyticsOptIn` opt-in default + "Delete all my data" (cloud + local + sign-out) | ✅ |
+| 34 | **Onboarding tour** — 4-step accessible modal, marks `onboardingCompleted: true` on close | ✅ |
 | — | E2E coverage for the new wave (Issue #52) | ✅ |
 | — | Branch coverage uplift, raised vitest thresholds (Issue #41) | ✅ |
 | — | Tooling: ESLint and Vitest exclude `.claude/**` so agent worktrees don't contaminate local runs | ✅ |
@@ -56,38 +62,30 @@ Begin with simple trusted sharing before broader discovery:
 - Shared shelves: one shelf visible across a household
 - Viewer/editor permission model with per-book visibility
 
-### 3. Phase 30 continuation — sync schema migrations
+### 3. Phase 30 continuation — multi-device test coverage
 
-Backoff, snapshot, and conflict detection are shipped. Still missing:
+Backoff, snapshot, conflict detection, AND schema migration runner are all shipped. Still missing:
 
-- Schema migration tooling: adding new fields to `BookEntry` must not break older clients still syncing
-- Explicit migration log in release notes + a migration runner on sign-in
-- Multi-device concurrent-edit test coverage in CI
+- A first real migration entry in `MIGRATIONS` exercising the runner end-to-end
+- Multi-device concurrent-edit test coverage in CI (simulated two-client merge fixture)
+- Document migration policy in release notes template
 
-### 4. Phase 32 — accessibility production audit
+### 4. Phase 32 continuation — assistive-tech validation
 
-The codebase has solid `aria-label` coverage and a focus trap. The gap is *real assistive-tech validation*:
+High-contrast theme and reduced-motion audit shipped. The remaining gap is *real assistive-tech validation*:
 
 - Run a full VoiceOver pass on iOS Safari (scan flow, library, BookDetail)
 - Run an NVDA pass on Windows Chrome
-- Add a high-contrast theme variant
 - Verify keyboard-only access to the scanner (no mouse-only paths)
-- `prefers-reduced-motion` audit on animations
+- Add automated axe-core checks in Playwright E2E
 
-### 5. Phase 33 expansion — remaining integrations
+### 5. Phase 33 expansion — webhook automation
 
-StoryGraph and ICS shipped. Remaining:
+Goodreads + StoryGraph imports and ICS + Notion exports all shipped. Remaining (post-launch):
 
-- Notion database export (CSV-compatible column mapping)
-- Webhook events for sync-server integrations (post-launch)
-
-### 6. Phase 34 continuation — privacy controls
-
-Feature flags, changelog, and diagnostics shipped. Remaining:
-
-- Explicit opt-in for analytics with a clear toggle in Profile
-- Easy data-deletion path: one-button clear of all analytics + localStorage
-- Onboarding tour for first-time users (gated behind `onboardingCompleted` flag already in preferences)
+- Webhook events for sync-server integrations
+- Calendar subscription URL (instead of one-shot ICS download)
+- Richer share targets (Mastodon, Bluesky)
 
 ---
 
@@ -97,13 +95,13 @@ Feature flags, changelog, and diagnostics shipped. Remaining:
 |---|-------|------|------------------|
 | 27 | Reading Workflow Expansion | Active reading tracker | ✅ Complete (streaks, Year in Books, session log + timer shipped) |
 | 29 | Social and Household Sharing | Shared libraries across families/clubs | Household mode, lend/borrow tracking, shared shelves, viewer/editor permissions, activity feed |
-| 30 | Cloud Sync V2 (partial) | Safe, clear, resilient sync | Schema migrations, multi-device test coverage |
+| 30 | Cloud Sync V2 | Safe, clear, resilient sync | ✅ Complete (backoff, snapshot, conflict detection, schema migration runner shipped); multi-device CI fixture ahead |
 | 31 | Insights and Recommendations (partial) | Useful library patterns | Personalised recs from owned books, unread-backlog insights, exportable yearly reading reports |
-| 32 | Accessibility and Inclusive UX | Production accessibility bar | Real VoiceOver/NVDA audits, high-contrast theme, motion controls, keyboard-only scanner, accessibility CI checks |
-| 33 | Platform Integrations (partial) | Connect to reader ecosystems | Notion / webhook automation, richer share targets |
-| 34 | Release Readiness and Growth (partial) | Broad public launch + maintenance | Onboarding tour, analytics opt-in, privacy controls, admin telemetry, deploy/rollback playbooks |
+| 32 | Accessibility and Inclusive UX (partial) | Production accessibility bar | ✅ High-contrast theme + reduced-motion audit shipped. Real VoiceOver/NVDA audits + keyboard-only scanner + axe-core CI ahead |
+| 33 | Platform Integrations | Connect to reader ecosystems | ✅ Goodreads + StoryGraph imports, ICS + Notion exports shipped. Webhooks + richer share targets post-launch |
+| 34 | Release Readiness and Growth | Broad public launch + maintenance | ✅ Feature flags, changelog, diagnostics, privacy controls (opt-in + delete), onboarding tour shipped. Admin telemetry + deploy/rollback playbooks ahead |
 
-Phases 25, 26, 27, and 28 are now substantially complete. Phase 30 is mostly done (backoff, snapshot, conflict detection shipped; schema migrations ahead). Phase 31 is partly started (series hints + duplicates shipped; recommendations ahead). Phase 33 is partly started (Goodreads + StoryGraph import, ICS export shipped). Phase 34 is partly started (feature flags, changelog, diagnostics shipped).
+Phases 25, 26, 27, 28, 30, 33, and 34 are now substantially complete. Phase 31 is partly started (series hints + duplicates shipped; recommendations ahead). Phase 32 is partly started (high-contrast theme + reduced-motion shipped; assistive-tech validation ahead). The only fully-pending phase is **#29 (household sharing)**.
 
 ---
 
