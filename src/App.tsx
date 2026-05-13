@@ -187,12 +187,11 @@ function App() {
   const lastSyncedAt = useSyncQueue((s) => s.lastSyncedAt);
   const syncFailedRecently = lastSyncFailedAt != null && Date.now() - lastSyncFailedAt < 90_000;
   const { online, justReconnected, clearReconnected } = useOnlineStatus();
-  const { theme, toggleTheme } = useTheme();
+  const { themePreference, toggleTheme } = useTheme();
   const { toast, confirm } = useToast();
   const { track } = useAnalyticsStore();
   const [srAnnouncement, setSrAnnouncement] = useState('');
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [onboardingStep, setOnboardingStep] = useState(0);
   const batchMode = preferences.batchModeDefault;
   const insights = useMemo(() => getLibraryInsights(books), [books]);
   const diagnostics = useMemo(() => buildSupportDiagnostics({
@@ -403,7 +402,6 @@ function App() {
 
   const completeOnboarding = useCallback(() => {
     setShowOnboarding(false);
-    setOnboardingStep(0);
     updatePreferences({ onboardingCompleted: true });
   }, [updatePreferences]);
 
@@ -753,7 +751,7 @@ function App() {
                 {flushing ? 'Syncing…' : !online ? 'Offline' : `${pendingChanges} to sync`}
               </button>
             )}
-            <ThemeToggle theme={theme} onToggle={toggleTheme} />
+            <ThemeToggle themePreference={themePreference} onToggle={toggleTheme} />
             <AuthPanel
               onSyncNow={handleSyncNow}
               syncing={flushing}
@@ -1025,24 +1023,19 @@ function App() {
         </Routes>
       </main>
 
-      {showOnboarding && (
-        <OnboardingModal
-          currentStep={onboardingStep}
-          steps={DEFAULT_ONBOARDING_STEPS.map((step) => ({
-            ...step,
-            onCta: step.id === 'scan'
-              ? () => goToMain('/scan', 'Scanner view')
-              : step.id === 'review'
-                ? () => goToMain('/library', 'Library view')
-                : step.id === 'views'
-                  ? () => goToMain('/library', 'Library view')
-                  : () => goToMain('/data', 'Import and export view'),
-          }))}
-          onNext={() => setOnboardingStep((step) => Math.min(step + 1, DEFAULT_ONBOARDING_STEPS.length - 1))}
-          onSkip={completeOnboarding}
-          onComplete={completeOnboarding}
-        />
-      )}
+      <OnboardingModal
+        open={showOnboarding}
+        steps={DEFAULT_ONBOARDING_STEPS.map((step) => ({
+          ...step,
+          onCta: step.id === 'scan'
+            ? () => goToMain('/scan', 'Scanner view')
+            : step.id === 'organize'
+              ? () => goToMain('/library', 'Library view')
+              : step.onCta,
+        }))}
+        onClose={completeOnboarding}
+      />
+
 
       <PwaInstallPrompt />
 

@@ -10,6 +10,7 @@
 }
 
 .modal {
+  position: relative;
   width: min(680px, 100%);
   padding: 1.25rem;
   display: grid;
@@ -42,18 +43,44 @@
   color: var(--text-muted);
 }
 
-.progressBar {
-  height: 10px;
-  border-radius: 9999px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.08);
+.dots {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
 }
 
-.progressFill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  transition: width 0.2s ease;
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.18);
+  transition: width 0.2s ease, background 0.2s ease;
+}
+
+.dotActive {
+  width: 22px;
+  background: var(--accent-blue);
+}
+
+.skipCorner {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  min-height: 36px;
+}
+
+.skipCorner:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-main);
 }
 
 .hero {
@@ -80,7 +107,8 @@
 }
 
 .primaryBtn,
-.secondaryBtn {
+.secondaryBtn,
+.ghostBtn {
   min-height: 44px;
   padding: 0.75rem 1rem;
   border-radius: 9999px;
@@ -101,13 +129,28 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
+.ghostBtn {
+  color: var(--text-muted);
+  background: transparent;
+}
+
+.ghostBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 @media (max-width: 640px) {
   .hero {
     flex-direction: column;
   }
 
   .primaryBtn,
-  .secondaryBtn {
+  .secondaryBtn,
+  .ghostBtn {
+    width: 100%;
+  }
+
+  .primaryGroup {
     width: 100%;
   }
 }
