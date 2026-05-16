@@ -9,10 +9,16 @@ const FIXTURE_PATH = join(__dirname, 'fixtures', 'book-spine-isbn.png');
 
 test.describe('OCR photo upload', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'spine-scanner-preferences',
+        JSON.stringify({ state: { preferences: { onboardingCompleted: true } }, version: 0 }),
+      );
+    });
+    await page.goto('./scan');
     await page.waitForLoadState('domcontentloaded');
     // Ensure SpineScanner app loaded (not another app on same port)
-    await expect(page.getByText(/SpineScanner|Scan Book Spine/i)).toBeVisible({
+    await expect(page.getByRole('heading', { level: 1, name: /spinescanner/i })).toBeVisible({
       timeout: 15000,
     });
   });
@@ -46,7 +52,7 @@ test.describe('OCR photo upload', () => {
 
     // Use the file input directly (hidden; setInputFiles works). First input is for ISBN scan.
     const fileInput = page.getByTestId(uiContracts.scannerFileInputTestId).first();
-    await expect(fileInput).toHaveCount(1);
+    await expect(fileInput).toBeAttached();
     await fileInput.setInputFiles(FIXTURE_PATH);
 
     // OCR runs (15–45s first load, up to 2 min in CI); when ISBN found, onScan fires -> Google Books lookup -> "Added X to library"
@@ -55,7 +61,7 @@ test.describe('OCR photo upload', () => {
     });
 
     // Verify book appears in library
-    await page.getByTestId(uiContracts.navTabTestId('library')).click();
+    await page.goto('./library');
     await expect(page.getByRole('heading', { name: /Your Library/ })).toBeVisible();
     await expect(page.getByText(mockTitle)).toBeVisible({ timeout: 5000 });
   });

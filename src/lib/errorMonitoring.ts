@@ -15,6 +15,7 @@ const IS_ENABLED = !!SENTRY_DSN;
 
 /** Lazily loaded Sentry module (only imported when DSN is present). */
 let sentryModule: typeof import('@sentry/react') | null = null;
+let initPromise: Promise<void> | null = null;
 
 /**
  * Initialize error monitoring. Call once at app startup (e.g. in main.tsx).
@@ -22,38 +23,47 @@ let sentryModule: typeof import('@sentry/react') | null = null;
  */
 export async function initErrorMonitoring(): Promise<void> {
   if (!IS_ENABLED) return;
+  if (initPromise) return initPromise;
 
-  try {
-    sentryModule = await import('@sentry/react');
-    sentryModule.init({
-      dsn: SENTRY_DSN,
-      environment: APP_ENVIRONMENT,
-      release: APP_RELEASE,
-      // Sample 10% of transactions for performance monitoring
-      tracesSampleRate: 0.1,
-      // Only send errors, not warnings
-      beforeSend(event) {
-        // Strip PII from breadcrumbs
-        if (event.breadcrumbs) {
-          event.breadcrumbs = event.breadcrumbs.map(bc => ({
-            ...bc,
-            // Don't send ISBN values as breadcrumb data
-            data: bc.data ? { ...bc.data, isbn: undefined } : bc.data,
-          }));
-        }
-        return event;
-      },
-    });
-    sentryModule.setTag('app_env', APP_ENVIRONMENT);
-    sentryModule.setTag('base_path', BASE_PATH);
-    if (APP_RELEASE) {
-      sentryModule.setTag('app_release', APP_RELEASE);
+  initPromise = (async () => {
+    try {
+      sentryModule = await import('@sentry/react');
+      sentryModule.init({
+        dsn: SENTRY_DSN,
+        environment: APP_ENVIRONMENT,
+        release: APP_RELEASE,
+        // Sample 10% of transactions for performance monitoring
+        tracesSampleRate: 0.1,
+        // Only send errors, not warnings
+        beforeSend(event) {
+          // Strip PII from breadcrumbs
+          if (event.breadcrumbs) {
+            event.breadcrumbs = event.breadcrumbs.map(bc => ({
+              ...bc,
+              // Don't send ISBN values as breadcrumb data
+              data: bc.data ? { ...bc.data, isbn: undefined } : bc.data,
+            }));
+          }
+          return event;
+        },
+      });
+      sentryModule.setTag('app_env', APP_ENVIRONMENT);
+      sentryModule.setTag('base_path', BASE_PATH);
+      if (APP_RELEASE) {
+        sentryModule.setTag('app_release', APP_RELEASE);
+      }
+      console.log('[ErrorMonitoring] Sentry initialized');
+    } catch (err) {
+      // Sentry failed to load — continue without monitoring
+      console.warn('[ErrorMonitoring] Failed to initialize Sentry:', err);
     }
-    console.log('[ErrorMonitoring] Sentry initialized');
-  } catch (err) {
-    // Sentry failed to load — continue without monitoring
-    console.warn('[ErrorMonitoring] Failed to initialize Sentry:', err);
-  }
+  })();
+
+  return initPromise;
+}
+
+export function getErrorMonitoringInitPromise(): Promise<void> | null {
+  return initPromise;
 }
 
 /**

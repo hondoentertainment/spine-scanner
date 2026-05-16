@@ -35,6 +35,7 @@ export async function upsertProfile(
   if (data.username !== undefined) row.username = data.username || null;
   if (data.displayName !== undefined) row.display_name = data.displayName || null;
   if (data.avatarUrl !== undefined) row.avatar_url = data.avatarUrl || null;
+  if (data.preferences !== undefined) row.preferences = data.preferences;
 
   const { error } = await supabase
     .from('profiles')

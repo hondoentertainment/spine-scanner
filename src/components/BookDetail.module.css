@@ -206,6 +206,19 @@
   letter-spacing: 0.04em;
 }
 
+.reviewReason {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+}
+
 .refreshBtn {
   display: inline-flex;
   align-items: center;

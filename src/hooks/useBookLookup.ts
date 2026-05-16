@@ -12,6 +12,22 @@ export interface BookMetadata {
     isbn: string;
     /** Provider that returned this metadata. Phase 26 attribution. */
     source: MetadataSource;
+    /** Other providers or ISBN editions that returned materially different metadata. */
+    conflicts?: MetadataConflict[];
+    /** Alternate ISBN edition queried while resolving this result. */
+    matchedIsbn?: string;
+    /** True when the selected result came from an ISBN-10/13 alternate query. */
+    editionFallback?: boolean;
+}
+
+export interface MetadataConflict {
+    source: MetadataSource;
+    title: string;
+    authors: string[];
+    pageCount: number;
+    thumbnail: string;
+    isbn: string;
+    reasons: string[];
 }
 
 const cache = new Map<string, BookMetadata>();
@@ -37,6 +53,48 @@ const fetchWithRetry = async (url: string, retries = 2): Promise<Response> => {
         }
     }
     throw new Error('Max retries exceeded');
+};
+
+const normalizeComparable = (value: string) =>
+    value.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').replace(/\s+/g, ' ').trim();
+
+const getConflictReasons = (primary: BookMetadata, other: BookMetadata): string[] => {
+    const reasons: string[] = [];
+    if (normalizeComparable(primary.title) !== normalizeComparable(other.title)) reasons.push('title');
+    if (normalizeComparable(primary.authors.join(', ')) !== normalizeComparable(other.authors.join(', '))) reasons.push('author');
+    if (primary.pageCount > 0 && other.pageCount > 0 && Math.abs(primary.pageCount - other.pageCount) > 10) reasons.push('page count');
+    if (!primary.thumbnail && other.thumbnail) reasons.push('cover');
+    return reasons;
+};
+
+const attachMetadataContext = (
+    primary: BookMetadata,
+    candidates: Array<BookMetadata | null>,
+    requestedIsbn: string,
+): BookMetadata => {
+    const conflicts = candidates
+        .filter((candidate): candidate is BookMetadata => candidate != null && candidate.source !== primary.source)
+        .map((candidate) => ({ candidate, reasons: getConflictReasons(primary, candidate) }))
+        .filter(({ reasons }) => reasons.length > 0)
+        .map(({ candidate, reasons }) => ({
+            source: candidate.source,
+            title: candidate.title,
+            authors: candidate.authors,
+            pageCount: candidate.pageCount,
+            thumbnail: candidate.thumbnail,
+            isbn: candidate.isbn,
+            reasons,
+        }));
+
+    const bestCover = primary.thumbnail || candidates.find((candidate) => candidate?.thumbnail)?.thumbnail || '';
+    return {
+        ...primary,
+        isbn: requestedIsbn,
+        matchedIsbn: primary.isbn,
+        thumbnail: bestCover,
+        editionFallback: primary.isbn !== requestedIsbn,
+        ...(conflicts.length > 0 ? { conflicts } : {}),
+    };
 };
 
 const lookupGoogleBooks = async (isbn: string): Promise<BookMetadata | null> => {
@@ -99,22 +157,19 @@ export const useBookLookup = () => {
         setError(null);
         try {
             addBreadcrumb('metadata', 'Lookup started', { isbnLength: isbn.length });
-            // Try Google Books first
-            let result = await lookupGoogleBooks(isbn);
-
-            // Fall back to Open Library if Google returns nothing
-            if (!result) {
-                result = await lookupOpenLibrary(isbn);
-            }
+            const googleResult = await lookupGoogleBooks(isbn);
+            const openLibraryResult = await lookupOpenLibrary(isbn);
+            let result = googleResult ?? openLibraryResult;
+            const candidates: Array<BookMetadata | null> = [googleResult, openLibraryResult];
 
             // Try alternate ISBN format (13↔10) — some APIs have better coverage for one format
             if (!result) {
                 const alt = isbn.length === 13 ? isbn13To10(isbn) : isbn10To13(isbn);
                 if (alt) {
-                    result = await lookupGoogleBooks(alt) ?? await lookupOpenLibrary(alt);
-                    if (result) {
-                        result = { ...result, isbn };
-                    }
+                    const altGoogleResult = await lookupGoogleBooks(alt);
+                    const altOpenLibraryResult = await lookupOpenLibrary(alt);
+                    candidates.push(altGoogleResult, altOpenLibraryResult);
+                    result = altGoogleResult ?? altOpenLibraryResult;
                 }
             }
 
@@ -124,6 +179,7 @@ export const useBookLookup = () => {
                 return null;
             }
 
+            result = attachMetadataContext(result, candidates, isbn);
             cache.set(isbn, result);
             addBreadcrumb('metadata', 'Lookup succeeded', {
                 isbnLength: isbn.length,

@@ -34,9 +34,11 @@ import BookCard from './BookCard.tsx';
 import BookDetail from './BookDetail.tsx';
 import ShelfManager from './ShelfManager.tsx';
 import { useToast } from './Toast.tsx';
+import { useBookLookup } from '../hooks/useBookLookup.ts';
 import { isMvpMode } from '../lib/appMode.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
 import { getBookCoverSrc, getLibraryInsights } from '../utils/bookPresentation.ts';
+import { isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import s from './LibraryList.module.css';
 
 type SortField = 'title' | 'author' | 'dateAdded' | 'pageCount';
@@ -99,6 +101,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     bulkUpdateBooks,
   } = useBookStore();
   const { preferences, updatePreferences } = useProfileStore();
+  const { lookupByIsbn } = useBookLookup();
   const { toast, confirm } = useToast();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -529,6 +532,51 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     bulkUpdateBooks(selectedIds, { needsReview: false, reviewReason: '' });
     toast('Resolved review flags for selected books', 'success');
   }, [bulkUpdateBooks, selectedIds, toast]);
+
+  const handleBulkRefreshMetadata = useCallback(async () => {
+    if (selectedIds.length === 0) return;
+    const selectedBooks = books.filter((book) => selectedIds.includes(book.id) && !isBookPhotoOnly(book));
+    if (selectedBooks.length === 0) {
+      toast('No ISBN-backed books selected for metadata refresh.', 'info');
+      return;
+    }
+
+    let refreshed = 0;
+    let flagged = 0;
+    for (const book of selectedBooks) {
+      const meta = await lookupByIsbn(book.isbn);
+      if (!meta) {
+        bulkUpdateBooks([book.id], { needsReview: true, reviewReason: 'No metadata found during bulk refresh.' });
+        flagged++;
+        continue;
+      }
+      const edited = book.userEditedFields ?? {};
+      const updates: Partial<BookEntry> = { metadataSource: meta.source };
+      const reviewReasons: string[] = [];
+      if (!edited.title && meta.title) updates.title = meta.title;
+      if (!edited.author && meta.authors.length) updates.author = meta.authors.join(', ');
+      if (!edited.pageCount && meta.pageCount) updates.pageCount = meta.pageCount;
+      if (!edited.coverImg && meta.thumbnail) updates.coverImg = meta.thumbnail;
+      if (meta.editionFallback) reviewReasons.push(`Matched alternate ISBN edition ${meta.matchedIsbn}.`);
+      if (meta.conflicts?.length) {
+        const fields = [...new Set(meta.conflicts.flatMap((conflict) => conflict.reasons))].join(', ');
+        reviewReasons.push(`Metadata providers disagree on ${fields}.`);
+      }
+      if (!updates.coverImg && !book.coverImg) reviewReasons.push('No cover image found.');
+      if (reviewReasons.length > 0) {
+        updates.needsReview = true;
+        updates.reviewReason = reviewReasons.join(' ');
+        flagged++;
+      }
+      bulkUpdateBooks([book.id], updates);
+      refreshed++;
+    }
+
+    toast(
+      `Refreshed ${refreshed} book${refreshed === 1 ? '' : 's'}${flagged ? `; ${flagged} need review` : ''}.`,
+      flagged ? 'warning' : 'success',
+    );
+  }, [books, bulkUpdateBooks, lookupByIsbn, selectedIds, toast]);
 
   const handleBulkAssignShelf = useCallback(() => {
     if (!bulkShelfId || selectedIds.length === 0) return;
@@ -1089,6 +1137,9 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
             </button>
             <button type="button" className={`glass ${s.bulkBtn}`} onClick={handleBulkResolveReview}>
               Resolve review
+            </button>
+            <button type="button" className={`glass ${s.bulkBtn}`} onClick={() => void handleBulkRefreshMetadata()}>
+              Refresh metadata
             </button>
             <select
               aria-label="Bulk assign shelf"

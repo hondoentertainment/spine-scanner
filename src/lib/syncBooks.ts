@@ -326,7 +326,9 @@ export async function mergeSync(
   const pushOk = await pushBooks(userId, mergedBooks);
   if (!pushOk) return null;
 
-  await pushShelves(userId, mergedShelves);
+  const shelvesPushOk = await pushShelves(userId, mergedShelves);
+  if (!shelvesPushOk) return null;
+
   addBreadcrumb('sync', 'Merge sync completed', {
     mergedBooks: mergedBooks.length,
     mergedShelves: mergedShelves.length,

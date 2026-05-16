@@ -1,6 +1,94 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { BookEntry, Shelf } from '../../types.ts';
 import { mergeBooksLists, mergeShelvesLists, toBookEntry, toBookRow } from '../syncBooks';
-import type { BookEntry, Shelf } from '../../types';
+
+type TableName = 'books' | 'shelves';
+
+const { upsertErrors, fromMock } = vi.hoisted(() => {
+  const remoteBooks = [{ id: 'remote-book', user_id: 'user-1', isbn: '9780000000002', title: 'Remote Book', author: 'Remote Author', page_count: 222, amazon_link: '', cover_img: '', status: 'read', notes: '', date_added: '2026-01-02T00:00:00.000Z', shelf_ids: [], updated_at: '2026-01-02T00:00:00.000Z' }];
+  const remoteShelves = [{ id: 'remote-shelf', user_id: 'user-1', name: 'Remote Shelf', color: '#6366f1' }];
+  const upsertErrors: Partial<Record<TableName, { message: string } | null>> = {};
+
+  function makeQuery(table: TableName) {
+    return {
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          order: vi.fn(() => Promise.resolve({ data: remoteBooks, error: null })),
+          then: (resolve: (value: unknown) => unknown) => resolve({
+            data: table === 'books'
+              ? remoteBooks.map(({ id }) => ({ id }))
+              : remoteShelves.map(({ id }) => ({ id })),
+            error: null,
+          }),
+        })),
+      })),
+      upsert: vi.fn(() => Promise.resolve({ error: upsertErrors[table] ?? null })),
+      delete: vi.fn(() => ({
+        in: vi.fn(() => Promise.resolve({ error: null })),
+      })),
+    };
+  }
+
+  return {
+    upsertErrors,
+    fromMock: vi.fn((table: TableName) => makeQuery(table)),
+  };
+});
+
+vi.mock('../supabase.ts', () => ({
+  supabase: {
+    from: fromMock,
+  },
+}));
+
+vi.mock('../errorMonitoring.ts', () => ({
+  addBreadcrumb: vi.fn(),
+  captureException: vi.fn(),
+}));
+
+const localBook: BookEntry = {
+  id: 'local-book',
+  isbn: '9780000000001',
+  title: 'Local Book',
+  author: 'Local Author',
+  pageCount: 111,
+  amazonLink: '',
+  coverImg: '',
+  status: 'to-read',
+  notes: '',
+  dateAdded: '2026-01-01T00:00:00.000Z',
+  shelfIds: ['local-shelf'],
+};
+
+const localShelf: Shelf = {
+  id: 'local-shelf',
+  name: 'Local Shelf',
+  color: '#22c55e',
+};
+
+describe('syncBooks', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    upsertErrors.books = null;
+    upsertErrors.shelves = null;
+  });
+
+  it('returns merged data when books and shelves both push successfully', async () => {
+    const { mergeSync } = await import('../syncBooks.ts');
+
+    const result = await mergeSync('user-1', [localBook], [localShelf]);
+
+    expect(result?.books.map((book) => book.id)).toEqual(['remote-book', 'local-book']);
+    expect(result?.shelves.map((shelf) => shelf.id)).toEqual(['remote-shelf', 'local-shelf']);
+  });
+
+  it('fails merge sync when shelf push fails after books push', async () => {
+    const { mergeSync } = await import('../syncBooks.ts');
+    upsertErrors.shelves = { message: 'shelf write failed' };
+
+    await expect(mergeSync('user-1', [localBook], [localShelf])).resolves.toBeNull();
+  });
+});
 
 const makeBook = (overrides: Partial<BookEntry> = {}): BookEntry => ({
   id: 'b1',

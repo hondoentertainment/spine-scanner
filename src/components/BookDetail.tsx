@@ -124,13 +124,30 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
     }
     const edited = book.userEditedFields ?? {};
     const updates: Partial<BookEntry> = { metadataSource: meta.source };
+    const reviewReasons: string[] = [];
     if (!edited.title && meta.title) updates.title = meta.title;
     if (!edited.author && meta.authors.length) updates.author = meta.authors.join(', ');
     if (!edited.pageCount && meta.pageCount) updates.pageCount = meta.pageCount;
     if (!edited.coverImg && meta.thumbnail) updates.coverImg = meta.thumbnail;
+    if (meta.editionFallback) {
+      reviewReasons.push(`Matched alternate ISBN edition ${meta.matchedIsbn}.`);
+    }
+    if (meta.conflicts?.length) {
+      const fields = [...new Set(meta.conflicts.flatMap((conflict) => conflict.reasons))].join(', ');
+      reviewReasons.push(`Metadata providers disagree on ${fields}.`);
+    }
+    if (!updates.coverImg && !book.coverImg) {
+      reviewReasons.push('No cover image found.');
+    }
+    if (reviewReasons.length > 0) {
+      updates.needsReview = true;
+      updates.reviewReason = reviewReasons.join(' ');
+    }
     updateBook(book.id, updates);
     const protectedFields = (Object.keys(edited) as (keyof UserEditedFields)[]).filter(k => edited[k]);
-    if (protectedFields.length > 0) {
+    if (meta.conflicts?.length) {
+      toast(`Metadata refreshed from ${METADATA_SOURCE_LABEL[meta.source]}, but providers disagree. Marked for review.`, 'warning');
+    } else if (protectedFields.length > 0) {
       toast(`Metadata refreshed from ${METADATA_SOURCE_LABEL[meta.source]}. Kept your edits to: ${protectedFields.join(', ')}.`, 'success');
     } else {
       toast(`Metadata refreshed from ${METADATA_SOURCE_LABEL[meta.source]}.`, 'success');
@@ -325,6 +342,11 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                         aria-label={`Metadata source: ${METADATA_SOURCE_LABEL[book.metadataSource]}`}
                       >
                         {METADATA_SOURCE_LABEL[book.metadataSource]}
+                      </span>
+                    )}
+                    {book.needsReview && book.reviewReason && (
+                      <span className={styles.reviewReason}>
+                        {book.reviewReason}
                       </span>
                     )}
                     <button

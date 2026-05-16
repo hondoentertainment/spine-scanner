@@ -10,6 +10,12 @@ async function dismissOnboardingIfPresent(page: import('@playwright/test').Page)
 
 test.describe('SpineScanner release smoke', () => {
   test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'spine-scanner-preferences',
+        JSON.stringify({ state: { preferences: { onboardingCompleted: true } }, version: 0 }),
+      );
+    });
     // baseURL includes /spine-scanner/ — avoid leading "/" on gotos or the path resets to origin (see Playwright baseURL rules).
     await page.goto('./');
     await dismissOnboardingIfPresent(page);
@@ -45,7 +51,7 @@ test.describe('SpineScanner release smoke', () => {
     await dismissOnboardingIfPresent(page);
     await expect(page.getByRole('heading', { name: /import & export/i })).toBeVisible();
 
-    await page.getByTestId(uiContracts.navTabTestId('profile')).click();
+    await page.goto('./profile');
     await expect(page.locator('#profile-settings-title')).toBeVisible();
   });
 

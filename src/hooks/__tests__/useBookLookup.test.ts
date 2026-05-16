@@ -14,15 +14,19 @@ const mockApiResponse = {
   }],
 };
 
+const mockOpenLibraryEmptyResponse = {};
+
 beforeEach(() => {
   vi.restoreAllMocks();
 });
 
 describe('useBookLookup', () => {
   it('returns book metadata on successful lookup', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockApiResponse),
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('googleapis.com')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockApiResponse) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockOpenLibraryEmptyResponse) });
     }));
 
     const { result } = renderHook(() => useBookLookup());
@@ -69,9 +73,11 @@ describe('useBookLookup', () => {
   });
 
   it('returns null when no book found on any source', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ totalItems: 0 }),
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('googleapis.com')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ totalItems: 0 }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockOpenLibraryEmptyResponse) });
     }));
 
     const { result } = renderHook(() => useBookLookup());
@@ -100,9 +106,11 @@ describe('useBookLookup', () => {
   });
 
   it('returns cached result on second call', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockApiResponse),
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('googleapis.com')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockApiResponse) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockOpenLibraryEmptyResponse) });
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -122,5 +130,59 @@ describe('useBookLookup', () => {
 
     expect(metadata!.title).toBe('The Great Gatsby');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('reports conflicts when providers disagree materially', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('googleapis.com')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockApiResponse) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          'ISBN:6666666666': {
+            title: 'A Different Gatsby',
+            authors: [{ name: 'Another Author' }],
+            number_of_pages: 260,
+          },
+        }),
+      });
+    }));
+
+    const { result } = renderHook(() => useBookLookup());
+
+    let metadata: Awaited<ReturnType<typeof result.current.lookupByIsbn>>;
+    await act(async () => {
+      metadata = await result.current.lookupByIsbn('6666666666');
+    });
+
+    expect(metadata?.source).toBe('google_books');
+    expect(metadata?.conflicts?.[0]).toMatchObject({
+      source: 'open_library',
+      reasons: expect.arrayContaining(['title', 'author', 'page count']),
+    });
+  });
+
+  it('uses alternate ISBN edition lookup when the requested form is missing', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('9780306406157')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ totalItems: 0 }) });
+      }
+      if (url.includes('0306406152')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockApiResponse) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockOpenLibraryEmptyResponse) });
+    }));
+
+    const { result } = renderHook(() => useBookLookup());
+
+    let metadata: Awaited<ReturnType<typeof result.current.lookupByIsbn>>;
+    await act(async () => {
+      metadata = await result.current.lookupByIsbn('9780306406157');
+    });
+
+    expect(metadata?.isbn).toBe('9780306406157');
+    expect(metadata?.matchedIsbn).toBe('0306406152');
+    expect(metadata?.editionFallback).toBe(true);
   });
 });
