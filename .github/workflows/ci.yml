@@ -75,10 +75,8 @@ jobs:
           path: ./dist
 
       - name: Install Playwright browsers
+        timeout-minutes: 5
         run: npx playwright install --with-deps chromium
-
-      - name: Verify Playwright install
-        run: npx playwright --version && ls ~/.cache/ms-playwright/ 2>/dev/null || true
 
       - name: Generate OCR fixture
         run: node scripts/generate-ocr-fixture.mjs
@@ -94,10 +92,19 @@ jobs:
           VITE_APP_RELEASE: ${{ github.sha }}
         run: npm run build
 
+      - name: Start preview server
+        run: npx vite preview --port 4174 &
+        env:
+          VITE_BASE_PATH: /spine-scanner/
+
+      - name: Wait for preview server
+        run: timeout 30 bash -c 'until curl -sf http://localhost:4174/spine-scanner/ > /dev/null; do sleep 1; done'
+
       - name: E2E release tests
         timeout-minutes: 12
         env:
           CI: 'true'
+          PLAYWRIGHT_BASE_URL: 'http://localhost:4174/spine-scanner/'
           VITE_SITE_URL: ${{ github.ref == 'refs/heads/main' && (vars.VITE_SITE_URL != '' && vars.VITE_SITE_URL || format('https://{0}.github.io', github.repository_owner)) || 'https://example.com' }}
           VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH != '' && vars.VITE_BASE_PATH || '/spine-scanner/' }}
           VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL != '' && vars.VITE_SUPPORT_EMAIL || 'noreply@example.com' }}
@@ -106,6 +113,10 @@ jobs:
           VITE_APP_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'test' }}
           VITE_APP_RELEASE: ${{ github.sha }}
         run: npx playwright test e2e/app.spec.ts e2e/recent-features.spec.ts --project=chromium --workers=1
+
+      - name: Kill preview server
+        if: always()
+        run: pkill -f "vite preview" || true
 
       - name: Upload Playwright report
         if: failure()
