@@ -306,7 +306,7 @@ benchDescribe('benchmark:scan runner', () => {
 
         const meanMs = timings.reduce((a, b) => a + b, 0) / timings.length;
         const r = lastCombined!;
-        if (Boolean(r.isbn)) successes += 1;
+        if (r.isbn) successes += 1;
 
         const cb = r.confidenceBand;
         const bandKey = cb === 'high' || cb === 'medium' || cb === 'low' ? cb : 'none';
