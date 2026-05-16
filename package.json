@@ -19,6 +19,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:integration": "cross-env RUN_OCR_INTEGRATION=1 vitest run",
+    "bench:scan": "vitest run --config vitest.bench.config.ts",
     "test:all": "vitest run && cross-env RUN_OCR_INTEGRATION=1 vitest run",
     "benchmark:scan": "tsx scripts/benchmark-scan.ts",
     "generate-ocr-fixture": "node scripts/generate-ocr-fixture.mjs",

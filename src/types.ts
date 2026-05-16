@@ -1,13 +1,3 @@
-/** Where a book's metadata was originally sourced from. */
-export type MetadataSource = 'google_books' | 'open_library' | 'manual';
-
-/** A field-level disagreement between Google Books and Open Library for the same ISBN. */
-export interface MetadataConflict {
-  field: 'author' | 'pageCount' | 'title';
-  googleBooks?: string | number;
-  openLibrary?: string | number;
-}
-
 export interface BookEntry {
   id: string;
   isbn: string;
@@ -34,15 +24,38 @@ export interface BookEntry {
   seriesIndex?: number;
   /** Short quotes or reading notes kept as separate lines. */
   highlights?: string[];
-  /** Where this book's metadata came from. */
+  /** Which provider supplied this book's metadata (Phase 26). */
   metadataSource?: MetadataSource;
   /** Fields that Google Books and Open Library disagreed on at lookup time. */
   metadataConflicts?: MetadataConflict[];
-  /** Fields the user has manually edited — these are preserved on metadata refresh. */
-  userEditedFields?: string[];
-  /** Schema version of this book entry; bumped when migrations are added. */
-  schemaVersion?: number;
+  /**
+   * Per-field flag indicating the user has manually edited that field.
+   * A subsequent "Refresh metadata" must not overwrite flagged fields.
+   */
+  userEditedFields?: UserEditedFields;
 }
+
+export type MetadataSource = 'google_books' | 'open_library' | 'manual';
+
+/** A field-level disagreement between Google Books and Open Library for the same ISBN. */
+export interface MetadataConflict {
+  field: 'author' | 'pageCount' | 'title';
+  googleBooks?: string | number;
+  openLibrary?: string | number;
+}
+
+export interface UserEditedFields {
+  title?: boolean;
+  author?: boolean;
+  pageCount?: boolean;
+  coverImg?: boolean;
+}
+
+export const METADATA_SOURCE_LABEL: Record<MetadataSource, string> = {
+  google_books: 'Google Books',
+  open_library: 'Open Library',
+  manual: 'Manual entry',
+};
 
 export interface Shelf {
   id: string;

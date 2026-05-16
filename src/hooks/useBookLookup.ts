@@ -10,7 +10,8 @@ export interface BookMetadata {
     pageCount: number;
     thumbnail: string;
     isbn: string;
-    metadataSource: MetadataSource;
+    /** Provider that returned this metadata. Phase 26 attribution. */
+    source: MetadataSource;
     metadataConflicts?: MetadataConflict[];
 }
 
@@ -48,6 +49,7 @@ interface RawBookMetadata {
     pageCount: number;
     thumbnail: string;
     isbn: string;
+    source: MetadataSource;
 }
 
 const lookupGoogleBooks = async (isbn: string): Promise<RawBookMetadata | null> => {
@@ -64,6 +66,7 @@ const lookupGoogleBooks = async (isbn: string): Promise<RawBookMetadata | null> 
         pageCount: volumeInfo.pageCount || 0,
         thumbnail: volumeInfo.imageLinks?.thumbnail || '',
         isbn,
+        source: 'google_books',
     };
 };
 
@@ -81,6 +84,7 @@ const lookupOpenLibrary = async (isbn: string): Promise<RawBookMetadata | null> 
         pageCount: entry.number_of_pages || 0,
         thumbnail: entry.cover?.medium || entry.cover?.small || '',
         isbn,
+        source: 'open_library',
     };
 };
 
@@ -137,7 +141,7 @@ export const fetchBookMetadata = async (isbn: string): Promise<BookMetadata | nu
         });
     }
 
-    return { ...primary, metadataSource: source, metadataConflicts: conflicts?.length ? conflicts : undefined };
+    return { ...primary, source, metadataConflicts: conflicts?.length ? conflicts : undefined };
 };
 
 export const useBookLookup = () => {
@@ -189,7 +193,7 @@ export const useBookLookup = () => {
                 isbnLength: isbn.length,
                 pageCount: result.pageCount,
                 authorCount: result.authors.length,
-                source: result.metadataSource,
+                source: result.source,
             });
             return result;
         } catch (err) {
@@ -211,13 +215,13 @@ export const useBookLookup = () => {
                 setError('No book found with this ISBN');
                 return null;
             }
-            const edited = new Set(book.userEditedFields ?? []);
+            const edited = book.userEditedFields ?? {};
             return {
-                ...(edited.has('title') ? {} : { title: result.title }),
-                ...(edited.has('author') ? {} : { author: result.authors.join(', ') }),
-                ...(edited.has('pageCount') ? {} : { pageCount: result.pageCount }),
-                ...(edited.has('coverImg') ? {} : { coverImg: result.thumbnail }),
-                metadataSource: result.metadataSource,
+                ...(!edited.title ? { title: result.title } : {}),
+                ...(!edited.author ? { author: result.authors.join(', ') } : {}),
+                ...(!edited.pageCount ? { pageCount: result.pageCount } : {}),
+                ...(!edited.coverImg ? { coverImg: result.thumbnail } : {}),
+                metadataSource: result.source,
                 metadataConflicts: result.metadataConflicts,
             };
         } catch (err) {

@@ -1,139 +1,148 @@
 # Spine Scanner - Next Steps
 
-Status of recommended improvements. Items marked ✅ are implemented and shipped.
+Status of recommended improvements. Items marked completed are implemented.
 
 ---
 
-## Recently Shipped (this wave)
+## Recommended Immediate Actions
 
-| Phase | Item | Status |
-|-------|------|--------|
-| 25 | Scan Accuracy Hardening — benchmark runner closes the phase | ✅ |
-| 26 | Metadata Quality Layer — source attribution, conflict detection, safe refresh | ✅ |
-| 26 | Bulk metadata refresh in DataManagement (Issue #47) | ✅ |
-| 26 | Edition-level duplicate detection — title+author across ISBNs (Issue #53) | ✅ |
-| 27 | Pages-read input in BookDetail edit mode (Issue #43) | ✅ |
-| 27 | Reading streak tracking (Issue #42) + timezone-correct date logic (Issue #51) | ✅ |
-| 27 | Year in Books stats card (Issue #49) | ✅ |
-| 27 | **Reading session log** — `useReadingSessionStore`, Start/Stop timer on BookCard, session history + stats in BookDetail | ✅ |
-| 28 | Bulk multi-select in LibraryList (Issue #50) | ✅ (already shipped) |
-| 30 | Sync status panel in ProfileSettings (Issue #45) | ✅ |
-| 30 | **Sync resilience** — `withRetry` exponential backoff, pre-push snapshot + restore, conflict detection | ✅ |
-| 31 | Series completion hints in HomeFeed (Issue #46) | ✅ |
-| 33 | Goodreads CSV import (Issue #44) | ✅ |
-| 33 | **StoryGraph CSV import** — all statuses, dates, series | ✅ |
-| 33 | **ICS calendar export** — RFC 5545, one VEVENT per finished book | ✅ |
-| 34 | **Feature flag scaffolding** — `FEATURE_FLAGS` + `useFeatureFlag(name)` with localStorage override | ✅ |
-| 34 | **In-app changelog** — `ChangelogModal` + "What's new" in Profile | ✅ |
-| 34 | **Diagnostics download** — one-click `spinescanner-diagnostics-YYYYMMDD.json` bundle | ✅ |
-| 30 | **Schema migration runner** — `migrateBook`/`migrateBooks` wired into store and pullBooks/mergeSync | ✅ |
-| 32 | **High-contrast theme** — `'high-contrast'` variant with WCAG AAA palette, 4-step toggle cycle | ✅ |
-| 32 | **Reduced-motion audit** — global `prefers-reduced-motion` clamp + guarded BookCard/PasswordReset/torch animations | ✅ |
-| 33 | **Notion CSV export** — RFC 4180 escaping, ISO→YYYY-MM-DD, status capitalization | ✅ |
-| 34 | **Privacy controls** — `analyticsOptIn` opt-in default + "Delete all my data" (cloud + local + sign-out) | ✅ |
-| 34 | **Onboarding tour** — 4-step accessible modal, marks `onboardingCompleted: true` on close | ✅ |
-| — | E2E coverage for the new wave (Issue #52) | ✅ |
-| — | Branch coverage uplift, raised vitest thresholds (Issue #41) | ✅ |
-| — | Tooling: ESLint and Vitest exclude `.claude/**` so agent worktrees don't contaminate local runs | ✅ |
-| — | CI: auto-deploy to GitHub Pages + Vercel on push to main | ✅ |
+These are the highest-value, lowest-risk improvements based on the current codebase audit.
 
----
+### 1. ~~Fix remaining mobile touch target issues~~ ✅ Complete
 
-## Open priorities (next wave)
+~~The MOBILE_UX_AUDIT identified two pending items that affect real-device usability:~~
 
-### 1. Issue #40 — Production launch (highest priority, gates everything else)
+- ~~Add `min-height: 44px; min-width: 44px` to `.navBtn` in `App.module.css`~~
+- ~~Add `touch-action: manipulation` to all buttons and links in `index.css`~~
 
-The product is feature-complete enough to ship. The remaining work is config and verification, not code:
+Both were already implemented in `App.module.css` and `index.css`. MOBILE_UX_AUDIT.md checklist updated.
 
-- Set real values for `VITE_SITE_URL`, `VITE_BASE_PATH`, `VITE_SUPPORT_EMAIL`, `VITE_SENTRY_DSN`, `VITE_APP_ENV=production`
-- Apply Supabase migrations to production
-- Full pre-flight: `npm run lint`, `npm run test`, `npm run build`, `npm run test:e2e:release`
-- Smoke test on real iOS Safari + Android Chrome
-- Submit `sitemap.xml` to Search Console post-deploy
+### 2. ~~Build the analytics dashboard UI~~ ✅ Complete
 
-Owner: human (needs deploy access).
+Added a **Scan statistics panel** to `ProfileSettings.tsx`. It uses `useAnalyticsStore.getSummary()` (read-only) and surfaces:
 
-### 2. Phase 29 — Social and Household Sharing
+- Total scans and colour-coded success rate (green ≥ 75%, amber ≥ 50%, red below)
+- Barcode vs OCR hit counts
+- Visual method-split bar (barcode = indigo, OCR = remainder)
 
-Begin with simple trusted sharing before broader discovery:
+The panel is hidden when `totalScans === 0` to avoid cluttering new installs. Responsive grid collapses to 2 columns on narrow viewports.
 
-- Household mode: invite users by email to share a library (read-only or editor)
-- Lend/borrow tracking: mark a book as lent to a named contact with an optional due date
-- Shared shelves: one shelf visible across a household
-- Viewer/editor permission model with per-book visibility
+### 3. ~~Phase 25 — Scan Accuracy Hardening~~ ✅ Complete
 
-### 3. Phase 30 continuation — multi-device test coverage
+1. **Confidence scoring** ✅ — `ScanConfidenceBand` (`low` / `medium` / `high`) computed in `useScanPipeline` and surfaced in the Scanner UI via the `scanHealthCard` panel. Tests in `useScanPipeline.test.ts`.
+2. **Regression fixture test suite** ✅ — `src/hooks/__tests__/scanRegressionFixtures.test.ts` covers dim-light capture, glossy/over-exposed cover, partial barcode with checksum-repair, rotated spine (90°/270° pass), low-resolution (move-closer), and confidence band mapping.
+3. **OCR diagnostics panel** ✅ — `DebugPanel.tsx` exposes live telemetry and timestamped scan logs, toggled by the terminal icon in the scanner toolbar.
+4. **Device benchmark runner** ✅ — `scripts/benchmark-scan.test.ts` runs the pipeline against fixture scenarios with mocked OCR/barcode and emits `scan-benchmark.csv` (fixture, scenario, detection method, confidence band, latency, pass/fail). Run with `npm run bench:scan`. Replace the mocked stages with captured device frames + real Tesseract to produce on-device numbers.
 
-Backoff, snapshot, conflict detection, AND schema migration runner are all shipped. Still missing:
+### 4. Phase 26 — Metadata Quality Layer (in progress)
 
-- A first real migration entry in `MIGRATIONS` exercising the runner end-to-end
-- Multi-device concurrent-edit test coverage in CI (simulated two-client merge fixture)
-- Document migration policy in release notes template
+Foundation slice landed:
 
-### 4. Phase 32 continuation — assistive-tech validation
+1. **Source attribution** ✅ — `metadataSource: 'google_books' | 'open_library' | 'manual'` on `BookEntry`, populated by `useBookLookup` (per-provider) and by all add paths in `App.tsx` and `DataManagement.tsx`.
+2. **Source badge in `BookDetail`** ✅ — read-only chip in the meta block showing where the data came from.
+3. **Refresh metadata action** ✅ — re-queries the APIs and merges results, but skips any field flagged in `userEditedFields`. `BookDetail.handleSave` now sets that flag for `title`, `author`, `pageCount`, and `coverImg` whenever the value changes.
 
-High-contrast theme and reduced-motion audit shipped. The remaining gap is *real assistive-tech validation*:
+Still pending in Phase 26:
 
-- Run a full VoiceOver pass on iOS Safari (scan flow, library, BookDetail)
-- Run an NVDA pass on Windows Chrome
-- Verify keyboard-only access to the scanner (no mouse-only paths)
-- Add automated axe-core checks in Playwright E2E
-
-### 5. Phase 33 expansion — webhook automation
-
-Goodreads + StoryGraph imports and ICS + Notion exports all shipped. Remaining (post-launch):
-
-- Webhook events for sync-server integrations
-- Calendar subscription URL (instead of one-shot ICS download)
-- Richer share targets (Mastodon, Bluesky)
+- Conflict UI when Google Books and Open Library disagree on author or page count.
+- Edition-aware matching.
+- Bulk metadata refresh.
+- Missing-cover recovery flow.
 
 ---
 
-## Roadmap: phases beyond this wave
+## Completed
 
-| # | Phase | Goal | Key remaining deliverables |
+| # | Item | Status |
+|---|------|--------|
+| 1 | TypeScript build errors | Completed |
+| 2 | Test coverage | Completed - 266 unit tests, Playwright E2E, mobile matrix |
+| 3 | ISBN checksum validation | Completed - `isbnValidation.ts` |
+| 4 | API resilience & caching | Completed - Retry, cache, debounce, Open Library fallback |
+| 5 | Barcode scanning | Completed - ZXing + OCR pipeline |
+| 6 | Library sorting & filtering | Completed - Sort, status filter, shelves, stats |
+| 7 | JSON export/import | Completed - Full backup/restore |
+| 8 | README & docs | Completed |
+| 9 | Offline / PWA support | Completed - `vite-plugin-pwa`, service worker |
+| 10 | Test step in deploy workflow | Completed - `npm run test` before build |
+| 11 | Duplicate scan "Update notes" | Completed - Confirm dialog -> Open in library |
+| 12 | PWA icons (192, 512) | Completed - Generated from SVG |
+| 13 | LibraryThing TSV, StoryGraph CSV | Completed - Export formats |
+| 14 | Accessibility: aria-labels, focus ring | Completed - Icon buttons, nav, shelf chips |
+| 15 | Amazon affiliate tag | Completed - `VITE_AMAZON_AFFILIATE_TAG` in `.env` |
+| 16 | Individual book sharing | Completed - Share button, Web Share API, copy link, deep links `#book-ISBN` |
+| 17 | Camera torch | Completed - Flashlight toggle for low light (mobile) |
+| 18 | Scanner UX | Completed - Haptics, faster auto-scan, OCR pre-warm |
+| 19 | Version 1.0.0 | Completed - `package.json` version bumped |
+| 20 | Vitest coverage | Completed - `@vitest/coverage-v8`, `npm run test:coverage`, CI reports |
+| 21 | Accessibility: skip link, focus trap, reduced motion | Completed - Skip link, modal focus trap, reduced motion, SR announcements |
+| 22 | Grid view virtualization | Completed - `@tanstack/react-virtual` for 1000+ book libraries |
+| 23 | Client-side usage analytics | Completed - `useAnalyticsStore` with aggregated summary |
+| 24 | Error monitoring (Sentry) | Completed - Optional env-gated `@sentry/react` integration |
+
+---
+
+## Roadmap: Next 10 Phases
+
+| # | Phase | Goal | Key deliverables |
 |---|-------|------|------------------|
-| 27 | Reading Workflow Expansion | Active reading tracker | ✅ Complete (streaks, Year in Books, session log + timer shipped) |
-| 29 | Social and Household Sharing | Shared libraries across families/clubs | Household mode, lend/borrow tracking, shared shelves, viewer/editor permissions, activity feed |
-| 30 | Cloud Sync V2 | Safe, clear, resilient sync | ✅ Complete (backoff, snapshot, conflict detection, schema migration runner shipped); multi-device CI fixture ahead |
-| 31 | Insights and Recommendations (partial) | Useful library patterns | Personalised recs from owned books, unread-backlog insights, exportable yearly reading reports |
-| 32 | Accessibility and Inclusive UX (partial) | Production accessibility bar | ✅ High-contrast theme + reduced-motion audit shipped. Real VoiceOver/NVDA audits + keyboard-only scanner + axe-core CI ahead |
-| 33 | Platform Integrations | Connect to reader ecosystems | ✅ Goodreads + StoryGraph imports, ICS + Notion exports shipped. Webhooks + richer share targets post-launch |
-| 34 | Release Readiness and Growth | Broad public launch + maintenance | ✅ Feature flags, changelog, diagnostics, privacy controls (opt-in + delete), onboarding tour shipped. Admin telemetry + deploy/rollback playbooks ahead |
-
-Phases 25, 26, 27, 28, 30, 33, and 34 are now substantially complete. Phase 31 is partly started (series hints + duplicates shipped; recommendations ahead). Phase 32 is partly started (high-contrast theme + reduced-motion shipped; assistive-tech validation ahead). The only fully-pending phase is **#29 (household sharing)**.
+| 25 | Scan Accuracy Hardening | Reduce failed scans and shorten time-to-add on real devices | Device-based scanner benchmark set, confidence scoring in pipeline, low-light / glare presets, OCR diagnostics surfaced in UI, regression suite for difficult covers and barcodes |
+| 26 | Metadata Quality Layer | Make imported book data more trustworthy and editable in bulk | Metadata source attribution, conflict resolution when Google/Open Library disagree, edition-aware matching, bulk metadata refresh, missing-cover recovery flow |
+| 27 | Reading Workflow Expansion | Turn the library into an active reading tracker instead of just a catalog | Reading sessions, progress percent / pages finished, start-finish dates, quick status actions, reading streak / yearly goals, richer stats cards |
+| 28 | Collections and Smart Shelves | Help users organize large libraries without manual tagging overhead | Rule-based shelves, saved searches, shelf templates, sort presets, multi-select bulk actions, archive / hidden shelf support |
+| 29 | Social and Household Sharing | Support shared libraries across families, clubs, or small teams | Household mode, lend/borrow tracking, shared shelves, permissions for viewers vs editors, activity feed for collaborative changes |
+| 30 | Cloud Sync V2 | Make sync safer, clearer, and more resilient across devices | Sync history panel, conflict UI, offline queue inspector, background retry strategy, last-good snapshot restore, migration tooling for schema changes |
+| 31 | Insights and Recommendations | Surface useful patterns from the user's own library behavior | Personalized recommendations from owned books, unread backlog insights, duplicate / edition detection, series completion hints, exportable reading reports |
+| 32 | Accessibility and Inclusive UX | Reach a production-ready accessibility bar across devices | Real-device VoiceOver / NVDA audits, larger touch-target pass, high-contrast mode, motion controls, keyboard-only scanner alternatives, accessibility CI checks |
+| 33 | Platform Integrations | Connect Spine Scanner to the rest of a reader's ecosystem | Native importers for Goodreads / StoryGraph history, calendar export for reading goals, Notion / CSV automation endpoints, optional webhook events, richer share targets |
+| 34 | Release Readiness and Growth | Prepare the app for broader public launch and ongoing maintenance | In-app onboarding, feature flags, changelog / release notes view, support diagnostics bundle, privacy controls, admin telemetry dashboard, deployment / rollback playbooks |
 
 ---
 
-## Notes by Phase (still active)
+## Notes by Phase
 
-### Phase 27 - Reading Workflow Expansion (continuation)
-- Sessions should be optional, not required — a user who only marks status changes shouldn't see a worse experience.
-- Keep one-tap progress logging from the library view (already shipped via BookCard +25 pages).
-- Goal pacing should remain useful offline.
+### Phase 25 - Scan Accuracy Hardening
+- Prioritize the top 20 scan failure patterns from real device testing before adding new scan modes.
+- Add fixtures for glossy covers, partial barcodes, rotated spines, and dim-light captures.
+- Define a measurable target such as scan success rate and median time-to-add.
+
+### Phase 26 - Metadata Quality Layer
+- Keep manual edits first-class so metadata refreshes never overwrite user-authored fields silently.
+- Store source and confidence per field where practical.
+- Treat cover image repair as part of metadata quality, not just visual polish.
+
+### Phase 27 - Reading Workflow Expansion
+- Build around lightweight interactions so the app stays fast during scanning sessions.
+- Prefer one-tap progress logging and status updates from the library view.
+- Let stats remain useful offline.
+
+### Phase 28 - Collections and Smart Shelves
+- Start with saved filters built on current shelf/status/search logic.
+- Add bulk edit flows only after selection UX is solid on mobile.
+- Keep manual shelves and smart shelves visually distinct.
 
 ### Phase 29 - Social and Household Sharing
 - Begin with simple trusted sharing before broader public discovery features.
 - Model ownership clearly so edits and deletes remain reversible.
 - Include book lending reminders as a small but high-value early feature.
 
-### Phase 30 - Cloud Sync V2 (continuation)
-- We have visibility (#45). Add recovery tooling next, *before* pushing more aggressive background sync behavior.
+### Phase 30 - Cloud Sync V2
+- Ship visibility before complexity: users should understand pending changes and conflicts.
+- Add recovery tooling before pushing more aggressive background sync behavior.
 - Test multi-device edits explicitly in CI and manual QA.
-- Make schema migrations explicit in release notes.
 
-### Phase 31 - Insights and Recommendations (continuation)
+### Phase 31 - Insights and Recommendations
 - Use only library-owned and user-entered data by default.
-- Keep recommendation logic explainable: show *why* a title is surfaced.
-- Exportable summaries can double as shareable year-in-books reports — we already track the data.
+- Keep recommendation logic explainable: show why a title or trend is being surfaced.
+- Exportable summaries can double as shareable year-in-books reports.
 
 ### Phase 32 - Accessibility and Inclusive UX
 - Treat scanner accessibility as more than labels: guidance, alternatives, and feedback all matter.
-- Add real assistive-tech validation to the release checklist.
+- Add real assistive tech validation to the release checklist.
 - Consider dyslexia-friendly typography and clearer error wording where it helps.
 
-### Phase 33 - Platform Integrations (continuation)
-- StoryGraph and Calendar are the two highest-value remaining adapters.
+### Phase 33 - Platform Integrations
+- Focus on integrations users already rely on for book tracking first.
 - Keep external integrations optional and easy to revoke.
 - Use stable import/export contracts before adding automation hooks.
 
@@ -144,39 +153,20 @@ Phases 25, 26, 27, 28, 30, 33, and 34 are now substantially complete. Phase 31 i
 
 ---
 
-## Reference
+## Still Worth Doing Alongside the Roadmap
 
-- `PRODUCTION_PLAN.md` — phased plan focused on launch readiness
-- `LAUNCH_CHECKLIST.md` — release-day checklist
-- `CHANGELOG.md` — all shipped changes, including this wave under **Unreleased**
+- See `PRODUCTION_PLAN.md` for the launch-focused phased plan.
+- See `LAUNCH_CHECKLIST.md` for the release-day checklist.
+
+### Accessibility
+- Screen reader testing (VoiceOver / NVDA) on real devices
+
+### Optional polish
+- Individual book sharing: card image export
+- ~~Analytics dashboard UI panel (data is tracked; display panel is still future)~~ ✅ Done — scan stats panel added to Profile view
 
 ---
 
-## Completed (foundational, pre-roadmap)
+## Archived
 
-| # | Item | Status |
-|---|------|--------|
-| 1 | TypeScript build errors | Completed |
-| 2 | Test coverage | Completed - unit + Playwright + mobile matrix |
-| 3 | ISBN checksum validation | Completed - `isbnValidation.ts` |
-| 4 | API resilience & caching | Completed - retry, cache, debounce, Open Library fallback |
-| 5 | Barcode scanning | Completed - ZXing + OCR pipeline |
-| 6 | Library sorting & filtering | Completed - sort, status filter, shelves, stats |
-| 7 | JSON export/import | Completed - full backup/restore |
-| 8 | README & docs | Completed |
-| 9 | Offline / PWA support | Completed - `vite-plugin-pwa`, service worker |
-| 10 | Test step in deploy workflow | Completed - `npm run test` before build |
-| 11 | Duplicate scan "Update notes" | Completed - confirm dialog → open in library |
-| 12 | PWA icons (192, 512) | Completed - generated from SVG |
-| 13 | LibraryThing TSV, StoryGraph CSV | Completed - export formats |
-| 14 | Accessibility: aria-labels, focus ring | Completed - icon buttons, nav, shelf chips |
-| 15 | Amazon affiliate tag | Completed - `VITE_AMAZON_AFFILIATE_TAG` in `.env` |
-| 16 | Individual book sharing | Completed - Web Share API, copy link, deep links `#book-ISBN` |
-| 17 | Camera torch | Completed - flashlight toggle for low light (mobile) |
-| 18 | Scanner UX | Completed - haptics, faster auto-scan, OCR pre-warm |
-| 19 | Version 1.0.0 | Completed - `package.json` version bumped |
-| 20 | Vitest coverage | Completed - `@vitest/coverage-v8`, `npm run test:coverage`, CI reports |
-| 21 | Accessibility: skip link, focus trap, reduced motion | Completed |
-| 22 | Grid view virtualization | Completed - `@tanstack/react-virtual` for 1000+ book libraries |
-| 23 | Client-side usage analytics | Completed - `useAnalyticsStore` with aggregated summary |
-| 24 | Error monitoring (Sentry) | Completed - optional env-gated `@sentry/react` integration |
+This doc previously listed many items as recommended next steps. Those have been implemented. The phases above extend the roadmap beyond the completed core app work.

@@ -95,8 +95,11 @@ const Scanner: React.FC<ScannerProps> = ({
     const [isbnSuggestions, setIsbnSuggestions] = useState<string[]>([]);
     const [repairedMap, setRepairedMap] = useState<Record<string, string>>({});
     const [debugLogs, setDebugLogs] = useState<string[]>([]);
+    // Mirror of `debugLogs` for reads that must not invalidate dependent callbacks.
+    // Without this, `capture` (below) lists `debugLogs` in its deps; every `addLog`
+    // call recreates `capture`, which retriggers the auto-scan effect that calls
+    // `addLog` again — an infinite render loop under React 19's scheduling.
     const debugLogsRef = useRef<string[]>([]);
-    useEffect(() => { debugLogsRef.current = debugLogs; }, [debugLogs]);
     const [showDebug, setShowDebug] = useState(false);
     const [liveTelemetry, setLiveTelemetry] = useState<LiveScanTelemetry>({ ...EMPTY_TELEMETRY });
     const [liveQualityHint, setLiveQualityHint] = useState<'ready' | 'blurry' | 'dark' | 'blurry-dark' | null>(null);
@@ -166,7 +169,11 @@ const Scanner: React.FC<ScannerProps> = ({
 
     const addLog = useCallback((msg: string) => {
         console.log(`[Scanner] ${msg}`);
-        setDebugLogs(prev => [msg, ...prev].slice(0, 50));
+        setDebugLogs(prev => {
+            const next = [msg, ...prev].slice(0, 50);
+            debugLogsRef.current = next;
+            return next;
+        });
     }, []);
 
     const { preWarm, runOcr, runOcrWithLang, ocrState } = useOcrEngine({

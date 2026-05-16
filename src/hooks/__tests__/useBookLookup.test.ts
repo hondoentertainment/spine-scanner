@@ -41,19 +41,35 @@ describe('useBookLookup', () => {
     await act(async () => { metadata = await result.current.lookupByIsbn('1111111111'); });
     expect(metadata!.title).toBe('The Great Gatsby');
     expect(metadata!.isbn).toBe('1111111111');
-    expect(metadata!.metadataSource).toBe('google_books');
+    expect(metadata!.source).toBe('google_books');
   });
 
-  it('sets metadataSource to open_library when only Open Library returns data', async () => {
-    vi.stubGlobal('fetch', vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ totalItems: 0 }) })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(openLibEntry('2020202020')) }),
-    );
+  it('reports open_library source when Google Books returns nothing', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('googleapis.com')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ totalItems: 0 }) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          'ISBN:5555555555': {
+            title: 'Open Library Result',
+            authors: [{ name: 'Some Author' }],
+            number_of_pages: 200,
+          },
+        }),
+      });
+    }));
+
     const { result } = renderHook(() => useBookLookup());
+
     let metadata: Awaited<ReturnType<typeof result.current.lookupByIsbn>>;
-    await act(async () => { metadata = await result.current.lookupByIsbn('2020202020'); });
-    expect(metadata!.metadataSource).toBe('open_library');
-    expect(metadata!.title).toBe('The Great Gatsby (OL)');
+    await act(async () => {
+      metadata = await result.current.lookupByIsbn('5555555555');
+    });
+
+    expect(metadata!).not.toBeNull();
+    expect(metadata!.source).toBe('open_library');
   });
 
   it('returns null when no book found on any source', async () => {

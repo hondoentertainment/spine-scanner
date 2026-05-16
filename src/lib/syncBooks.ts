@@ -1,5 +1,5 @@
 import { supabase } from './supabase.ts';
-import type { BookEntry, Shelf } from '../types.ts';
+import type { BookEntry, MetadataSource, Shelf, UserEditedFields } from '../types.ts';
 import { addBreadcrumb, captureException } from './errorMonitoring.ts';
 import { migrateBooks } from './schemaMigrations.ts';
 import { withRetry } from './syncRetry.ts';
@@ -26,6 +26,8 @@ interface BookRow {
   started_at?: string | null;
   finished_at?: string | null;
   last_progress_at?: string | null;
+  metadata_source?: MetadataSource | null;
+  user_edited_fields?: UserEditedFields | null;
   updated_at: string;
 }
 
@@ -59,6 +61,10 @@ export function toBookEntry(row: BookRow): BookEntry {
     startedAt: row.started_at ?? null,
     finishedAt: row.finished_at ?? null,
     lastProgressAt: row.last_progress_at ?? null,
+    ...(row.metadata_source ? { metadataSource: row.metadata_source } : {}),
+    ...(row.user_edited_fields && Object.keys(row.user_edited_fields).length > 0
+      ? { userEditedFields: row.user_edited_fields }
+      : {}),
   };
 }
 
@@ -83,6 +89,8 @@ export function toBookRow(book: BookEntry, userId: string): Omit<BookRow, 'updat
     started_at: book.startedAt ?? null,
     finished_at: book.finishedAt ?? null,
     last_progress_at: book.lastProgressAt ?? null,
+    metadata_source: book.metadataSource ?? null,
+    user_edited_fields: book.userEditedFields ?? {},
   };
 }
 

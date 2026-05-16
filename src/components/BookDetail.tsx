@@ -4,7 +4,8 @@ import { useReadingSessionStore } from '../store/useReadingSessionStore.ts';
 import { useToast } from './Toast.tsx';
 import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import { useBookLookup } from '../hooks/useBookLookup.ts';
-import type { BookEntry } from '../types.ts';
+import type { BookEntry, UserEditedFields } from '../types.ts';
+import { METADATA_SOURCE_LABEL } from '../types.ts';
 import { generateAmazonLink } from '../utils/amazonLink.ts';
 import { getBookCoverSrc } from '../utils/bookPresentation.ts';
 import { shareBook } from '../utils/shareBook.ts';
@@ -55,7 +56,7 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   } = useBookStore();
   const { sessions: allSessions, addSession, removeSession, sessionsForBook, stats } = useReadingSessionStore();
   const { toast, confirm } = useToast();
-  const { refreshMetadata, loading: refreshLoading } = useBookLookup();
+  const { lookupByIsbn, loading: lookupLoading } = useBookLookup();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
   const shelfAnchorRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState(false);
@@ -128,29 +129,56 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   const handleSave = () => {
     const idxRaw = draft.seriesIndex.trim();
     const parsedIdx = idxRaw === '' ? undefined : Number(idxRaw);
+    const nextTitle = draft.title.trim() || book.title;
+    const nextAuthor = draft.author.trim() || book.author;
+    const nextPageCount = draft.pageCount || 0;
+    const nextCover = draft.coverImg.trim();
 
-    // Track which fields the user changed so they are preserved on metadata refresh
-    const changedFields: string[] = [];
-    if (draft.title.trim() !== book.title) changedFields.push('title');
-    if (draft.author.trim() !== book.author) changedFields.push('author');
-    if (draft.isbn.trim() !== book.isbn) changedFields.push('isbn');
-    if ((draft.pageCount || 0) !== book.pageCount) changedFields.push('pageCount');
-    if (draft.coverImg.trim() !== book.coverImg) changedFields.push('coverImg');
-    const userEditedFields = [...new Set([...(book.userEditedFields ?? []), ...changedFields])];
+    // Mark fields as user-edited so a subsequent metadata refresh leaves them alone.
+    const edited: UserEditedFields = { ...(book.userEditedFields ?? {}) };
+    if (nextTitle !== book.title) edited.title = true;
+    if (nextAuthor !== book.author) edited.author = true;
+    if (nextPageCount !== book.pageCount) edited.pageCount = true;
+    if (nextCover !== book.coverImg) edited.coverImg = true;
 
     updateBook(book.id, {
-      title: draft.title.trim() || book.title,
-      author: draft.author.trim() || book.author,
+      title: nextTitle,
+      author: nextAuthor,
       isbn: draft.isbn.trim() || book.isbn,
-      pageCount: draft.pageCount || 0,
-      coverImg: draft.coverImg.trim(),
+      pageCount: nextPageCount,
+      coverImg: nextCover,
       amazonLink: generateAmazonLink(draft.isbn.trim() || book.isbn),
       seriesName: draft.seriesName.trim() || undefined,
       seriesIndex: parsedIdx !== undefined && Number.isFinite(parsedIdx) ? parsedIdx : undefined,
-      userEditedFields,
+      userEditedFields: edited,
     });
     setEditing(false);
     toast('Book updated', 'success');
+  };
+
+  const handleRefreshMetadata = async () => {
+    if (isBookPhotoOnly(book)) {
+      toast('Photo-only entries have no ISBN to refresh.', 'info');
+      return;
+    }
+    const meta = await lookupByIsbn(book.isbn);
+    if (!meta) {
+      toast('No metadata found for that ISBN.', 'error');
+      return;
+    }
+    const edited = book.userEditedFields ?? {};
+    const updates: Partial<BookEntry> = { metadataSource: meta.source };
+    if (!edited.title && meta.title) updates.title = meta.title;
+    if (!edited.author && meta.authors.length) updates.author = meta.authors.join(', ');
+    if (!edited.pageCount && meta.pageCount) updates.pageCount = meta.pageCount;
+    if (!edited.coverImg && meta.thumbnail) updates.coverImg = meta.thumbnail;
+    updateBook(book.id, updates);
+    const protectedFields = (Object.keys(edited) as (keyof UserEditedFields)[]).filter(k => edited[k]);
+    if (protectedFields.length > 0) {
+      toast(`Metadata refreshed from ${METADATA_SOURCE_LABEL[meta.source]}. Kept your edits to: ${protectedFields.join(', ')}.`, 'success');
+    } else {
+      toast(`Metadata refreshed from ${METADATA_SOURCE_LABEL[meta.source]}.`, 'success');
+    }
   };
 
   const handleCancel = () => setEditing(false);
@@ -167,54 +195,6 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
       onClose();
       toast('Book removed', 'info');
     }
-  };
-
-  const handleRefreshMetadata = async () => {
-    const newMeta = await refreshMetadata(book);
-    if (!newMeta) {
-      toast('Could not find updated metadata for this ISBN', 'error');
-      return;
-    }
-
-    const editedFields = book.userEditedFields ?? [];
-    const REFRESHABLE = ['title', 'author', 'pageCount', 'coverImg'] as const;
-
-    const willUpdate = REFRESHABLE.filter((f) => {
-      if (editedFields.includes(f)) return false;
-      const newVal = f === 'title' ? newMeta.title
-        : f === 'author' ? (newMeta.author ?? '')
-        : f === 'pageCount' ? newMeta.pageCount
-        : newMeta.coverImg;
-      const curVal = f === 'author' ? book.author : book[f];
-      return newVal !== curVal;
-    });
-    const willKeep = REFRESHABLE.filter((f) => editedFields.includes(f));
-
-    if (willUpdate.length === 0) {
-      toast('Metadata is already up to date', 'info');
-      return;
-    }
-
-    const updateSummary = willUpdate.join(', ');
-    const keepSummary = willKeep.length > 0 ? ` Your edits to ${willKeep.join(', ')} will be kept.` : '';
-    const yes = await confirm({
-      title: 'Refresh Metadata',
-      message: `Will update: ${updateSummary}.${keepSummary}`,
-      confirmLabel: 'Refresh',
-    });
-    if (!yes) return;
-
-    const updates: Partial<Omit<BookEntry, 'id'>> = {
-      metadataSource: newMeta.metadataSource,
-      metadataConflicts: newMeta.metadataConflicts,
-    };
-    if (willUpdate.includes('title')) updates.title = newMeta.title;
-    if (willUpdate.includes('author')) updates.author = newMeta.author ?? book.author;
-    if (willUpdate.includes('pageCount')) updates.pageCount = newMeta.pageCount;
-    if (willUpdate.includes('coverImg')) updates.coverImg = newMeta.coverImg;
-
-    updateBook(book.id, updates);
-    toast('Metadata refreshed', 'success');
   };
 
   useEffect(() => {
@@ -413,6 +393,28 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                     <Share2 size={12} /> Share
                   </button>
                 </div>
+                {!isBookPhotoOnly(book) && (
+                  <div className={styles.sourceRow}>
+                    {book.metadataSource && (
+                      <span
+                        className={styles.sourceBadge}
+                        title={`Metadata from ${METADATA_SOURCE_LABEL[book.metadataSource]}`}
+                        aria-label={`Metadata source: ${METADATA_SOURCE_LABEL[book.metadataSource]}`}
+                      >
+                        {METADATA_SOURCE_LABEL[book.metadataSource]}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleRefreshMetadata}
+                      disabled={lookupLoading}
+                      className={styles.refreshBtn}
+                      aria-label="Refresh metadata from provider"
+                    >
+                      <RefreshCw size={12} /> {lookupLoading ? 'Refreshing…' : 'Refresh metadata'}
+                    </button>
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -619,7 +621,7 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
             <button
               onClick={handleRefreshMetadata}
               className={styles.refreshBtn}
-              disabled={refreshLoading}
+              disabled={lookupLoading}
               aria-label="Refresh metadata from APIs"
             >
               <RefreshCw size={14} /> Refresh
