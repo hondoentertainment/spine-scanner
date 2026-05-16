@@ -27,22 +27,27 @@ Added a **Scan statistics panel** to `ProfileSettings.tsx`. It uses `useAnalytic
 
 The panel is hidden when `totalScans === 0` to avoid cluttering new installs. Responsive grid collapses to 2 columns on narrow viewports.
 
-### 3. Phase 25 — Scan Accuracy Hardening (in progress)
+### 3. ~~Phase 25 — Scan Accuracy Hardening~~ ✅ Complete
 
-Progress within Phase 25:
+1. **Confidence scoring** ✅ — `ScanConfidenceBand` (`low` / `medium` / `high`) computed in `useScanPipeline` and surfaced in the Scanner UI via the `scanHealthCard` panel. Tests in `useScanPipeline.test.ts`.
+2. **Regression fixture test suite** ✅ — `src/hooks/__tests__/scanRegressionFixtures.test.ts` covers dim-light capture, glossy/over-exposed cover, partial barcode with checksum-repair, rotated spine (90°/270° pass), low-resolution (move-closer), and confidence band mapping.
+3. **OCR diagnostics panel** ✅ — `DebugPanel.tsx` exposes live telemetry and timestamped scan logs, toggled by the terminal icon in the scanner toolbar.
+4. **Device benchmark runner** ✅ — `scripts/benchmark-scan.test.ts` runs the pipeline against fixture scenarios with mocked OCR/barcode and emits `scan-benchmark.csv` (fixture, scenario, detection method, confidence band, latency, pass/fail). Run with `npm run bench:scan`. Replace the mocked stages with captured device frames + real Tesseract to produce on-device numbers.
 
-1. **Confidence scoring** ✅ Already done — `ScanConfidenceBand` (`low` / `medium` / `high`) computed in `useScanPipeline` and surfaced in the Scanner UI via the `scanHealthCard` panel. Tests existed in `useScanPipeline.test.ts`.
-2. **Regression fixture test suite** ✅ Added — `src/hooks/__tests__/scanRegressionFixtures.test.ts` covers: dim-light capture, glossy/over-exposed cover, partial barcode with checksum-repair, rotated spine (90°/270° pass), low-resolution (move-closer), and confidence band mapping (low/medium/high).
-3. **OCR diagnostics panel** ✅ Already done — `DebugPanel.tsx` exposes live telemetry and timestamped scan logs, toggled by the terminal icon in the scanner toolbar.
-4. **Device benchmark runner** — still pending. A `scripts/benchmark-scan.ts` script that runs the pipeline against the fixture set and outputs a CSV would complete this phase.
+### 4. Phase 26 — Metadata Quality Layer (in progress)
 
-### 4. Phase 26 — Metadata Quality Layer (follow-on)
+Foundation slice landed:
 
-Once scan accuracy is solid, focus on data trust. Priority items:
+1. **Source attribution** ✅ — `metadataSource: 'google_books' | 'open_library' | 'manual'` on `BookEntry`, populated by `useBookLookup` (per-provider) and by all add paths in `App.tsx` and `DataManagement.tsx`.
+2. **Source badge in `BookDetail`** ✅ — read-only chip in the meta block showing where the data came from.
+3. **Refresh metadata action** ✅ — re-queries the APIs and merges results, but skips any field flagged in `userEditedFields`. `BookDetail.handleSave` now sets that flag for `title`, `author`, `pageCount`, and `coverImg` whenever the value changes.
 
-- Store `metadataSource` (`google_books` | `open_library` | `manual`) per book entry.
-- Show a source badge in `BookDetail` and flag entries where Google Books and Open Library disagree on author or page count.
-- Add a "Refresh metadata" action per book that re-queries APIs but never overwrites user-edited fields (check a `userEdited` flag per field).
+Still pending in Phase 26:
+
+- Conflict UI when Google Books and Open Library disagree on author or page count.
+- Edition-aware matching.
+- Bulk metadata refresh.
+- Missing-cover recovery flow.
 
 ---
 

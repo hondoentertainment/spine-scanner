@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   verify:
+    name: Lint, Test & Build
     runs-on: ubuntu-latest
     # lint + unit tests (up to 18m) + build + Playwright install + E2E (up to 12m)
     timeout-minutes: 45

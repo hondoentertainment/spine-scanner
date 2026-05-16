@@ -439,6 +439,7 @@ function App() {
       shelfIds: [],
       needsReview: true,
       reviewReason: 'Photo-only capture. Add metadata when ready.',
+      metadataSource: 'manual',
     };
     addBook(newBook);
     track('book_added', { method: 'photo' });
@@ -530,6 +531,7 @@ function App() {
         shelfIds: [],
         needsReview: true,
         reviewReason: 'Manual ISBN needs verification.',
+        metadataSource: 'manual',
       };
 
       addBookAndOpen(reviewBook, 'Added for review. Open the book to verify the ISBN and details.', 'manual_review', true);
@@ -552,6 +554,7 @@ function App() {
           notes: '',
           dateAdded: new Date().toISOString(),
           shelfIds: [],
+          metadataSource: metadata.source,
         };
         addBookAndOpen(newBook, `Added "${metadata.title}" to your library.`, options.source === 'manual' ? 'manual' : 'scan', options.source === 'manual');
       } else {
@@ -577,6 +580,7 @@ function App() {
             shelfIds: [],
             needsReview: true,
             reviewReason: 'Metadata not found. Add details manually.',
+            metadataSource: 'manual',
           };
           addBookAndOpen(newBook, 'Added with ISBN only. You can fill in the details in your library.', options.source === 'manual' ? 'manual_no_metadata' : 'scan_no_metadata', options.source === 'manual');
         } else {
