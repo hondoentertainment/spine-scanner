@@ -13,6 +13,7 @@
     "build": "node scripts/copy-tesseract-assets.mjs && node scripts/generate-pwa-icons.mjs && tsc -b && vite build",
     "build:mvp": "cross-env VITE_APP_MODE=mvp npm run build",
     "check:production": "node scripts/check-production-readiness.mjs",
+    "benchmark:scan": "vitest run --config vitest.benchmark.config.ts",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",

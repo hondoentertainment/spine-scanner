@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- _Nothing yet._
+- **Scan:** `npm run benchmark:scan` — device benchmark runner (`scripts/benchmark-scan.ts`) that measures scan-plan cost across the difficult-capture fixture set and writes `benchmark-results/scan-benchmark.csv`. Completes Phase 25 (Scan Accuracy Hardening).
+- **Chore:** Removed stale committed build logs (`ts_errors.txt`, `tsc_errors.txt`, `build_output.txt`); already covered by `.gitignore`.
 
 ## [1.2.2] - 2026-04-10
 
