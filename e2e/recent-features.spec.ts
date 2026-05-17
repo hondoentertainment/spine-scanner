@@ -116,12 +116,30 @@ test.describe('Recent feature waves', () => {
       },
     ]);
 
-    // Navigate with ?isbn= so LibraryList opens the book detail automatically
-    // via the initialOpenIsbn prop — bypasses the virtualizer entirely and
-    // avoids CI rendering timing issues with the grid container height.
-    await page.goto('./library?isbn=9780141036144');
+    // Step 1: navigate to the library without the isbn param so LibraryList's
+    // lazy chunk loads and the Zustand store fully hydrates before we attempt
+    // to open the detail dialog.
+    await page.goto('./library');
     await dismissOnboardingIfPresent(page);
 
+    // Wait for LibraryList to render: the "Library scope" tablist is rendered
+    // by LibraryList (not by the Suspense fallback skeleton), confirming the
+    // chunk is loaded and the store is hydrated.
+    await expect(page.getByRole('tablist', { name: /library scope/i })).toBeVisible({ timeout: 10_000 });
+
+    // Step 2: push the isbn param into the URL via the browser History API and
+    // dispatch a popstate event so React Router (which listens to popstate)
+    // updates searchParams in-place — no full page reload, no lazy-load race,
+    // books already in the store.
+    await page.evaluate(() => {
+      const url = new URL(window.location.href);
+      url.searchParams.set('isbn', '9780141036144');
+      window.history.pushState(null, '', url.toString());
+      window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
+    });
+
+    // React Router picks up the new searchParams, AppLibraryRoute passes the
+    // isbn as initialOpenIsbn to LibraryList, and the useEffect opens the dialog.
     await expect(page.getByRole('dialog', { name: /Details for 1984/i })).toBeVisible({ timeout: 10_000 });
 
     // Enter edit mode.
