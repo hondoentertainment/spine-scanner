@@ -96,6 +96,10 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   const [logPages, setLogPages] = useState(0);
 
   const handleAddSession = () => {
+    if (!logDate) {
+      toast('Please select a date', 'error');
+      return;
+    }
     addSession({
       id: crypto.randomUUID(),
       bookId: book.id,

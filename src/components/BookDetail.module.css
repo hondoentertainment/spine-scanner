@@ -656,17 +656,6 @@
 }
 
 /* ---- Actions ---- */
-.sourceBadge {
-  display: inline-flex;
-  align-items: center;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 9999px;
-  padding: 0.15rem 0.5rem;
-  width: fit-content;
-}
-
 .conflictWarning {
   display: inline-flex;
   align-items: center;

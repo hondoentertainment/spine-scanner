@@ -33,6 +33,8 @@ export interface BookEntry {
    * A subsequent "Refresh metadata" must not overwrite flagged fields.
    */
   userEditedFields?: UserEditedFields;
+  /** Schema version of this book entry; bumped when migrations are added. */
+  schemaVersion?: number;
 }
 
 export type MetadataSource = 'google_books' | 'open_library' | 'manual';
