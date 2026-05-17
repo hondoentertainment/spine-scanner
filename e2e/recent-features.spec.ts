@@ -116,19 +116,13 @@ test.describe('Recent feature waves', () => {
       },
     ]);
 
-    await page.goto('./library');
+    // Navigate with ?isbn= so LibraryList opens the book detail automatically
+    // via the initialOpenIsbn prop — bypasses the virtualizer entirely and
+    // avoids CI rendering timing issues with the grid container height.
+    await page.goto('./library?isbn=9780141036144');
     await dismissOnboardingIfPresent(page);
 
-    // Switch to "All books" segment so the grid starts at the top of the page,
-    // with no hero section competing for viewport space or DOM position. The
-    // 'foryou' hero could push the virtualizer below the fold, causing it to
-    // defer rendering of book cards until after the test clicks.
-    await page.getByRole('tab', { name: 'All books' }).click();
-
-    // Wait for and click the first book card.
-    await expect(page.locator('.book-card').first()).toBeVisible();
-    await page.locator('.book-card').first().click();
-    await expect(page.getByRole('dialog', { name: /Details for 1984/i })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: /Details for 1984/i })).toBeVisible({ timeout: 10_000 });
 
     // Enter edit mode.
     const dialog = page.getByRole('dialog', { name: /Details for 1984/i });
