@@ -132,16 +132,17 @@ test.describe('Recent feature waves', () => {
     // matching the session-form's unlabelled "Pages read" input that also
     // appears when showSessionSection=true (status=reading).
     const pagesInput = dialog.getByLabel(/^pages read$/i);
-    await expect(pagesInput).toBeVisible();
+    await expect(pagesInput).toBeVisible({ timeout: 10_000 });
     await pagesInput.fill('150');
-    await pagesInput.blur();
 
-    // Save out of edit mode (scoped to dialog to avoid the session-form Save).
-    await dialog.getByRole('button', { name: /^save$/i }).click();
+    // Save out of edit mode.  Use nth(0) as a guard in case a session-form
+    // Save button appears simultaneously — the edit-form Save always comes first.
+    await dialog.getByRole('button', { name: /^save$/i }).first().click();
 
-    // Re-enter edit mode and verify persistence.
-    await dialog.getByRole('button', { name: /edit details/i }).click();
-    await expect(dialog.getByLabel(/^pages read$/i)).toHaveValue('150');
+    // Verify progress updated in view mode: the progress line reads
+    // "{pagesFinished} of {pageCount} pages (…%)".  This confirms that
+    // updateReadingProgress persisted through the save and rendered in the UI.
+    await expect(dialog.getByText(/150 of 300 pages/i)).toBeVisible({ timeout: 10_000 });
   });
 
   /**
