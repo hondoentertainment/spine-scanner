@@ -119,8 +119,11 @@ test.describe('Recent feature waves', () => {
     await page.goto('./library');
     await dismissOnboardingIfPresent(page);
 
-    // Open the book card (BookCard is role=button with the title in its accessible name).
-    await page.getByRole('button', { name: /1984/i }).first().click();
+    // Click the BookCard directly via its stable CSS class (.book-card).
+    // Cannot use getByRole('button', { name: /1984/ }).first() because the
+    // library hero renders a "Currently reading" highlight card that also
+    // contains the book title text and appears first in DOM order.
+    await page.locator('.book-card').first().click();
     await expect(page.getByRole('dialog', { name: /Details for 1984/i })).toBeVisible();
 
     // Enter edit mode.
