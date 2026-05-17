@@ -80,7 +80,7 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   const bookSessions = sessionsForBook(book.id);
   const bookStats = stats(book.id);
   const showSessionSection =
-    (book.status === 'reading' || book.status === 'read') && bookSessions.length > 0;
+    book.status === 'reading' || book.status === 'read';
 
   const todayKey = (() => {
     const d = new Date();
