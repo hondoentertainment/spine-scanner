@@ -123,7 +123,7 @@ test.describe('Recent feature waves', () => {
     // with no hero section competing for viewport space or DOM position. The
     // 'foryou' hero could push the virtualizer below the fold, causing it to
     // defer rendering of book cards until after the test clicks.
-    await page.getByRole('button', { name: 'All books' }).click();
+    await page.getByRole('tab', { name: 'All books' }).click();
 
     // Wait for and click the first book card.
     await expect(page.locator('.book-card').first()).toBeVisible();
