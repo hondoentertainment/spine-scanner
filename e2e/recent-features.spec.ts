@@ -119,28 +119,35 @@ test.describe('Recent feature waves', () => {
     await page.goto('./library');
     await dismissOnboardingIfPresent(page);
 
-    // Click the BookCard directly via its stable CSS class (.book-card).
-    // Cannot use getByRole('button', { name: /1984/ }).first() because the
-    // library hero renders a "Currently reading" highlight card that also
-    // contains the book title text and appears first in DOM order.
+    // Switch to "All books" segment so the grid starts at the top of the page,
+    // with no hero section competing for viewport space or DOM position. The
+    // 'foryou' hero could push the virtualizer below the fold, causing it to
+    // defer rendering of book cards until after the test clicks.
+    await page.getByRole('button', { name: 'All books' }).click();
+
+    // Wait for and click the first book card.
+    await expect(page.locator('.book-card').first()).toBeVisible();
     await page.locator('.book-card').first().click();
     await expect(page.getByRole('dialog', { name: /Details for 1984/i })).toBeVisible();
 
     // Enter edit mode.
-    await page.getByRole('button', { name: /edit details/i }).click();
+    const dialog = page.getByRole('dialog', { name: /Details for 1984/i });
+    await dialog.getByRole('button', { name: /edit details/i }).click();
 
-    // Fill the labelled "Pages read" input.
-    const pagesInput = page.getByLabel(/^pages read$/i);
+    // Fill the labelled "Pages read" input. Scope to the dialog to avoid
+    // matching the session-form's unlabelled "Pages read" input that also
+    // appears when showSessionSection=true (status=reading).
+    const pagesInput = dialog.getByLabel(/^pages read$/i);
     await expect(pagesInput).toBeVisible();
     await pagesInput.fill('150');
     await pagesInput.blur();
 
-    // Save out of edit mode.
-    await page.getByRole('button', { name: /^save$/i }).click();
+    // Save out of edit mode (scoped to dialog to avoid the session-form Save).
+    await dialog.getByRole('button', { name: /^save$/i }).click();
 
     // Re-enter edit mode and verify persistence.
-    await page.getByRole('button', { name: /edit details/i }).click();
-    await expect(page.getByLabel(/^pages read$/i)).toHaveValue('150');
+    await dialog.getByRole('button', { name: /edit details/i }).click();
+    await expect(dialog.getByLabel(/^pages read$/i)).toHaveValue('150');
   });
 
   /**
