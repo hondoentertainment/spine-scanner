@@ -12,7 +12,7 @@ test.describe('OCR photo upload', () => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
     // Ensure SpineScanner app loaded (not another app on same port)
-    await expect(page.getByText(/SpineScanner|Scan Book Spine/i)).toBeVisible({
+    await expect(page.getByText(/SpineScanner|Scan Book Spine/i).first()).toBeVisible({
       timeout: 15000,
     });
   });
