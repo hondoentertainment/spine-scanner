@@ -344,7 +344,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
             });
             if (!ok) return;
             const { clearLocalAppData } = await import('../utils/clearLocalAppData.ts');
-            clearLocalAppData();
+            await clearLocalAppData();
             toast('Local data cleared', 'success');
           }}
         >

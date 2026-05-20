@@ -188,6 +188,7 @@ export async function pushBooks(userId: string, books: BookEntry[]): Promise<boo
     const { error: deleteError } = await supabase
       .from('books')
       .delete()
+      .eq('user_id', userId)
       .in('id', toDelete);
 
     if (deleteError) {
@@ -240,6 +241,7 @@ export async function pushShelves(userId: string, shelves: Shelf[]): Promise<boo
     const { error: deleteError } = await supabase
       .from('shelves')
       .delete()
+      .eq('user_id', userId)
       .in('id', toDeleteIds);
 
     if (deleteError) {

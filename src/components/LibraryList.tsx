@@ -1262,10 +1262,9 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
                     width: '100%',
                     transform: `translateY(${virtualItem.start}px)`,
                   }}
-                  onClick={() => handleBookOpen(book)}
                 >
                   {selectionMode && (
-                    <label className={s.listSelect} onClick={(event) => event.stopPropagation()}>
+                    <label className={s.listSelect}>
                       <input
                         type="checkbox"
                         checked={selectedIds.includes(book.id)}
@@ -1273,25 +1272,32 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
                       />
                     </label>
                   )}
-                  <img
-                    src={getBookCoverSrc(book.coverImg)}
-                    alt={book.title}
-                    className={s.listCover}
-                    loading="lazy"
-                    decoding="async"
-                    fetchPriority="low"
-                  />
-                  <div className={s.listInfo}>
-                    <div className={s.listTitle}>{book.title}</div>
-                    <div className={s.listAuthor}>{book.author}</div>
-                    <div className={s.listMeta}>
-                      <span>{book.pageCount > 0 ? `${book.pageCount} pages` : 'Page count unknown'}</span>
-                      <span>{progress}% read</span>
-                      {book.needsReview && <span className={s.reviewBadgeInline}>Needs review</span>}
+                  <button
+                    type="button"
+                    className={s.listOpenButton}
+                    onClick={() => handleBookOpen(book)}
+                    aria-label={`Open ${book.title}`}
+                  >
+                    <img
+                      src={getBookCoverSrc(book.coverImg)}
+                      alt=""
+                      className={s.listCover}
+                      loading="lazy"
+                      decoding="async"
+                      fetchPriority="low"
+                    />
+                    <div className={s.listInfo}>
+                      <div className={s.listTitle}>{book.title}</div>
+                      <div className={s.listAuthor}>{book.author}</div>
+                      <div className={s.listMeta}>
+                        <span>{book.pageCount > 0 ? `${book.pageCount} pages` : 'Page count unknown'}</span>
+                        <span>{progress}% read</span>
+                        {book.needsReview && <span className={s.reviewBadgeInline}>Needs review</span>}
+                      </div>
                     </div>
-                  </div>
+                  </button>
                   <span className={`status-badge status-${book.status} ${s.listStatus}`}>{book.status}</span>
-                  <div className={s.listStatusChips} onClick={(event) => event.stopPropagation()}>
+                  <div className={s.listStatusChips}>
                     <button
                       type="button"
                       className={`${s.listStatusChip} ${book.status === 'to-read' ? s.listStatusChipActive : ''}`}

@@ -68,6 +68,14 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   const availableShelves = shelves.filter((s) => !bookShelfIds.includes(s.id));
   const progressPercent = getReadingProgressPercent(book);
   const progressValue = book.pagesFinished || 0;
+  const titleInputId = `detail-title-${book.id}`;
+  const authorInputId = `detail-author-${book.id}`;
+  const isbnInputId = `detail-isbn-${book.id}`;
+  const pagesInputId = `detail-pages-${book.id}`;
+  const seriesInputId = `detail-series-${book.id}`;
+  const seriesIndexInputId = `detail-series-index-${book.id}`;
+  const coverInputId = `detail-cover-${book.id}`;
+  const notesInputId = `detail-notes-${book.id}`;
 
   const handleEdit = () => {
     setDraft({
@@ -212,31 +220,35 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                 className={styles.coverSmall}
               />
               <div className={styles.editFields}>
-                <label className={styles.label}>Title</label>
+                <label className={styles.label} htmlFor={titleInputId}>Title</label>
                 <input
+                  id={titleInputId}
                   className={styles.input}
                   value={draft.title}
                   onChange={(e) => setDraft({ ...draft, title: e.target.value })}
                   autoFocus
                 />
-                <label className={styles.label}>Author</label>
+                <label className={styles.label} htmlFor={authorInputId}>Author</label>
                 <input
+                  id={authorInputId}
                   className={styles.input}
                   value={draft.author}
                   onChange={(e) => setDraft({ ...draft, author: e.target.value })}
                 />
                 <div className={styles.row}>
                   <div style={{ flex: 1 }}>
-                    <label className={styles.label}>ISBN</label>
+                    <label className={styles.label} htmlFor={isbnInputId}>ISBN</label>
                     <input
+                      id={isbnInputId}
                       className={styles.input}
                       value={draft.isbn}
                       onChange={(e) => setDraft({ ...draft, isbn: e.target.value })}
                     />
                   </div>
                   <div style={{ width: '90px' }}>
-                    <label className={styles.label}>Pages</label>
+                    <label className={styles.label} htmlFor={pagesInputId}>Pages</label>
                     <input
+                      id={pagesInputId}
                       className={styles.input}
                       type="number"
                       value={draft.pageCount || ''}
@@ -247,8 +259,9 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                 </div>
                 <div className={styles.row}>
                   <div style={{ flex: 1 }}>
-                    <label className={styles.label}>Series</label>
+                    <label className={styles.label} htmlFor={seriesInputId}>Series</label>
                     <input
+                      id={seriesInputId}
                       className={styles.input}
                       value={draft.seriesName}
                       onChange={(e) => setDraft({ ...draft, seriesName: e.target.value })}
@@ -256,8 +269,9 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                     />
                   </div>
                   <div style={{ width: '90px' }}>
-                    <label className={styles.label}>Vol.#</label>
+                    <label className={styles.label} htmlFor={seriesIndexInputId}>Vol.#</label>
                     <input
+                      id={seriesIndexInputId}
                       className={styles.input}
                       inputMode="decimal"
                       value={draft.seriesIndex}
@@ -266,8 +280,9 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                     />
                   </div>
                 </div>
-                <label className={styles.label}>Cover URL</label>
+                <label className={styles.label} htmlFor={coverInputId}>Cover URL</label>
                 <input
+                  id={coverInputId}
                   className={styles.input}
                   type="url"
                   value={draft.coverImg}
@@ -458,7 +473,11 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
         </div>
 
         {/* Notes */}
+        <label className={styles.highlightsLabel} htmlFor={notesInputId}>
+          Notes
+        </label>
         <textarea
+          id={notesInputId}
           placeholder="Add your notes or quotes..."
           value={book.notes}
           onChange={(e) => updateBookNotes(book.id, e.target.value)}

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FIXTURE_PATH = join(__dirname, 'fixtures', 'book-spine-isbn.png');
+const FIXTURE_PATH = join(__dirname, 'fixtures', 'book-spine-isbn.svg');
 
 test.describe('OCR photo upload', () => {
   test.beforeEach(async ({ page }) => {
@@ -56,13 +56,13 @@ test.describe('OCR photo upload', () => {
     await fileInput.setInputFiles(FIXTURE_PATH);
 
     // OCR runs (15–45s first load, up to 2 min in CI); when ISBN found, onScan fires -> Google Books lookup -> "Added X to library"
-    await expect(page.getByText(new RegExp(`Added.*${mockTitle}.*library`, 'i'))).toBeVisible({
+    await expect(page.locator('[role="status"]').getByText(new RegExp(`Added.*${mockTitle}.*library`, 'i'))).toBeVisible({
       timeout: process.env.CI ? 120000 : 60000,
     });
 
     // Verify book appears in library
-    await page.goto('./library');
-    await expect(page.getByRole('heading', { name: /Your Library/ })).toBeVisible();
-    await expect(page.getByText(mockTitle)).toBeVisible({ timeout: 5000 });
+    await page.goto('/spine-scanner/library');
+    await expect(page.getByRole('heading', { name: /Your Library|Library/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: `Open ${mockTitle}` })).toBeVisible({ timeout: 5000 });
   });
 });

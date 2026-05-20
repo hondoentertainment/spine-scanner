@@ -89,6 +89,15 @@ export default defineConfig({
             },
           },
           {
+            urlPattern: ({ url }) => /\/tesseract\/.*\.wasm\.js$/.test(url.pathname),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'tesseract-local',
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 90 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
             urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/npm\/@tesseract\.js-data/,
             handler: 'CacheFirst',
             options: {
@@ -127,6 +136,14 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: {
               cacheName: 'book-covers',
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/covers\.openlibrary\.org\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'openlibrary-covers',
               expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
             },
           },

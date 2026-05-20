@@ -8,8 +8,9 @@ import { hapticSuccess } from '../utils/haptics.ts';
  *  Constants
  * ================================================================ */
 
-/** Interval (ms) between native BarcodeDetector polls. ~10fps. */
-const NATIVE_SCAN_INTERVAL = 100;
+/** Interval (ms) between native BarcodeDetector polls. Tuned for mobile battery/thermal headroom. */
+const NATIVE_SCAN_INTERVAL = 300;
+const NATIVE_SCAN_HIDDEN_INTERVAL = 900;
 /** Prevent repeated triggers of the same live code in quick succession. */
 const LIVE_SCAN_DUPLICATE_COOLDOWN_MS = 3000;
 
@@ -321,9 +322,8 @@ export function useBarcodeScanner({
 
     /* ================================================================
      *  Native BarcodeDetector polling loop (faster, GPU-accelerated)
-     *  P4: Does NOT gate on isScanning — runs independently.
+     *  Pauses work while the app is busy so OCR/camera UI can stay responsive.
      *  P6: Validates video dimensions before detection.
-     *  Lower: 100ms interval (~10fps).
      * ================================================================ */
     useEffect(() => {
         if (!enabled || !cameraReady || cameraError) return;
@@ -344,6 +344,12 @@ export function useBarcodeScanner({
             // P6: Validate dimensions
             if (!video || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
                 if (active) setTimeout(scan, 500);
+                return;
+            }
+
+            if (isBusy()) {
+                bumpTelemetry('busySuppressed');
+                if (active) setTimeout(scan, document.hidden ? NATIVE_SCAN_HIDDEN_INTERVAL : NATIVE_SCAN_INTERVAL);
                 return;
             }
 
@@ -378,8 +384,7 @@ export function useBarcodeScanner({
                 addLog(`Scan #${scanCount}: native=${t.nativeHits}, zxing=${t.zxingHits}, confirmed=${t.confirmed}`);
             }
 
-            // Lower: 100ms (~10fps), 600ms when hidden
-            if (active) setTimeout(scan, document.hidden ? 600 : NATIVE_SCAN_INTERVAL);
+            if (active) setTimeout(scan, document.hidden ? NATIVE_SCAN_HIDDEN_INTERVAL : NATIVE_SCAN_INTERVAL);
         };
 
         setTimeout(scan, 300);
@@ -389,7 +394,7 @@ export function useBarcodeScanner({
             continuousActiveRef.current = false;
             addLog('Continuous scanning stopped');
         };
-    }, [enabled, cameraReady, cameraError, webcamRef, getBarcodeDetector, addLog, bumpTelemetry, acceptIsbn]);
+    }, [enabled, cameraReady, cameraError, webcamRef, getBarcodeDetector, addLog, bumpTelemetry, acceptIsbn, isBusy]);
 
     /* ── Refocus helper ───────────────────────────────────────── */
     const refocus = useCallback(() => {

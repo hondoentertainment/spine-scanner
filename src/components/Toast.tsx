@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { CheckCircle, AlertCircle, Info, X, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import styles from './Toast.module.css';
 
 type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -66,6 +67,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     resolve: (value: boolean) => void;
   } | null>(null);
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const confirmDialogRef = useFocusTrap<HTMLDivElement>(Boolean(confirmState));
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -121,10 +123,23 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [],
   );
 
-  const handleConfirm = (value: boolean) => {
+  const handleConfirm = useCallback((value: boolean) => {
     confirmState?.resolve(value);
     setConfirmState(null);
-  };
+  }, [confirmState]);
+
+  useEffect(() => {
+    if (!confirmState) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        handleConfirm(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [confirmState, handleConfirm]);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -188,17 +203,27 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       {/* Confirm dialog */}
       {confirmState && (
         <div className={styles.overlay} onClick={() => handleConfirm(false)}>
-          <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
-            <h3 className={styles.dialogTitle}>{confirmState.options.title}</h3>
-            <p className={styles.dialogMessage}>{confirmState.options.message}</p>
+          <div
+            ref={confirmDialogRef}
+            className={styles.dialog}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="toast-confirm-title"
+            aria-describedby="toast-confirm-message"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="toast-confirm-title" className={styles.dialogTitle}>{confirmState.options.title}</h3>
+            <p id="toast-confirm-message" className={styles.dialogMessage}>{confirmState.options.message}</p>
             <div className={styles.dialogActions}>
               <button
+                type="button"
                 onClick={() => handleConfirm(false)}
                 className={styles.dialogCancel}
               >
                 {confirmState.options.cancelLabel || 'Cancel'}
               </button>
               <button
+                type="button"
                 onClick={() => handleConfirm(true)}
                 className={`${styles.dialogConfirm} ${confirmState.options.danger ? styles.dialogDanger : ''}`}
               >

@@ -20,10 +20,13 @@ import { generateAmazonLink } from './utils/amazonLink.ts';
 import { isValidIsbn, normalizeToIsbn13 } from './utils/isbnValidation.ts';
 import { isbnExistsInLibrary } from './utils/libraryUtils.ts';
 import { useAnalyticsStore } from './store/useAnalyticsStore.ts';
+import { useConsentStore } from './store/useConsentStore.ts';
 import { getLibraryInsights } from './utils/bookPresentation.ts';
 import PublicInfoPage, { type PublicPage } from './components/PublicInfoPage.tsx';
 import PwaInstallPrompt from './components/PwaInstallPrompt.tsx';
 import OnboardingModal from './components/OnboardingModal.tsx';
+import AnalyticsConsentBanner from './components/AnalyticsConsentBanner.tsx';
+import PlausibleScript from './components/PlausibleScript.tsx';
 import { DEFAULT_ONBOARDING_STEPS } from './components/onboardingContent.tsx';
 import { addBreadcrumb, captureException, isEnabled as isMonitoringEnabled, setTag, setUser as setMonitoringUser } from './lib/errorMonitoring.ts';
 import { isSupabaseConfigured } from './lib/supabase.ts';
@@ -188,6 +191,7 @@ function App() {
   const { theme, toggleTheme } = useTheme();
   const { toast, confirm } = useToast();
   const { track } = useAnalyticsStore();
+  const analyticsConsent = useConsentStore((s) => s.analyticsConsent);
   const [srAnnouncement, setSrAnnouncement] = useState('');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
@@ -300,9 +304,9 @@ function App() {
       void preloadProfile();
     };
     const idleId = typeof requestIdleCallback !== 'undefined'
-      ? requestIdleCallback(preloadAll, { timeout: 150 })
+      ? requestIdleCallback(preloadAll, { timeout: 2500 })
       : 0;
-    const timeoutId = setTimeout(preloadAll, 150);
+    const timeoutId = setTimeout(preloadAll, 2500);
     return () => {
       if (typeof cancelIdleCallback !== 'undefined' && idleId) cancelIdleCallback(idleId);
       clearTimeout(timeoutId);
@@ -323,6 +327,9 @@ function App() {
         setBooks(merged.books);
         setShelves(merged.shelves);
         markSynced();
+      } else if (!cancelled) {
+        markSyncFailed();
+        toast('Cloud sync failed during sign-in. Your local library is safe and will retry when online.', 'warning');
       }
       if (!cancelled) {
         setFlushing(false);
@@ -399,6 +406,17 @@ function App() {
     await flushQueue();
   }, [user, flushQueue]);
 
+  const pushLatestBooks = useCallback((bookToInclude?: BookEntry) => {
+    if (!user || !online) return;
+    const latestBooks = useBookStore.getState().books;
+    const booksToPush = bookToInclude && !latestBooks.some((book) => book.id === bookToInclude.id)
+      ? [bookToInclude, ...latestBooks]
+      : latestBooks;
+    void pushBooks(user.id, booksToPush).then((ok) => {
+      if (!ok) toast('Cloud sync failed. Changes saved locally.', 'warning');
+    }).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
+  }, [online, toast, user]);
+
   const completeOnboarding = useCallback(() => {
     setShowOnboarding(false);
     setOnboardingStep(0);
@@ -444,11 +462,9 @@ function App() {
     addBook(newBook);
     track('book_added', { method: 'photo' });
     toast('Book added with photo. Edit details in your library.', 'success');
-    if (user && online) {
-      void pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
-    }
+    pushLatestBooks(newBook);
     navigate(`/library?isbn=${encodeURIComponent(photoIsbn)}`);
-  }, [addBook, books, user, online, toast, track, navigate]);
+  }, [addBook, pushLatestBooks, toast, track, navigate]);
 
   useEffect(() => {
     if (isMvpMode()) {
@@ -484,10 +500,8 @@ function App() {
       navigate(`/library?isbn=${encodeURIComponent(newBook.isbn)}`);
     }
 
-    if (user && online) {
-      void pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
-    }
-  }, [addBook, batchMode, books, navigate, online, toast, track, user]);
+    pushLatestBooks(newBook);
+  }, [addBook, batchMode, navigate, pushLatestBooks, toast, track]);
 
   const handleScan = async (isbn: string, options: ScanRequestOptions = {}) => {
     const normalizedInput = isbn.replace(/[^0-9Xx]/g, '').replace(/x$/i, 'X') || isbn;
@@ -652,6 +666,7 @@ function App() {
 
   return (
     <div className="app-container">
+      <PlausibleScript enabled={analyticsConsent === 'granted'} />
       <a
         href="#main-content"
         className={styles.skipLink}
@@ -1047,6 +1062,7 @@ function App() {
       )}
 
       <PwaInstallPrompt />
+      <AnalyticsConsentBanner />
 
       <footer className={`glass ${styles.siteFooter}`}>
         <div>

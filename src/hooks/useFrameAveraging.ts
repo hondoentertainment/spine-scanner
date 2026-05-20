@@ -1,6 +1,8 @@
 import { useRef, useCallback } from 'react';
 
-const DEFAULT_FRAME_COUNT = 3;
+const isConstrainedMobile = typeof navigator !== 'undefined'
+    && (navigator.maxTouchPoints > 0 || /Mobi|Android/i.test(navigator.userAgent));
+const DEFAULT_FRAME_COUNT = isConstrainedMobile ? 1 : 3;
 const MAX_FRAME_COUNT = 5;
 const FRAME_CAPTURE_INTERVAL_MS = 80;
 

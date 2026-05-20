@@ -143,7 +143,7 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
         <div className={styles.stack}>
           <article className={styles.card}>
             <h3>What data the app stores</h3>
-            <p>Your library data, shelves, preferences, and local analytics summary are stored in your browser so the app can work offline.</p>
+            <p>Your library, shelves, preferences, notes, highlights, reading progress, and local analytics summary are stored in your browser so the app can work offline.</p>
           </article>
           <article className={styles.card}>
             <h3>Camera and photos</h3>
@@ -151,7 +151,7 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
           </article>
           <article className={styles.card}>
             <h3>Optional cloud sync</h3>
-            <p>If Supabase is configured and you sign in, your library data syncs to the connected Supabase project so you can use multiple devices.</p>
+            <p>If Supabase is configured and you sign in, your library, profile, and preferences sync to the connected Supabase project so you can use multiple devices.</p>
           </article>
           <article className={styles.card}>
             <h3>Third-party requests</h3>
@@ -159,11 +159,18 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
           </article>
           <article className={styles.card}>
             <h3>Monitoring</h3>
-            <p>Error reporting is optional and only active when the site operator configures it. This deployment strips ISBN breadcrumb data before sending Sentry events.</p>
+            <p>Error reporting is optional and only active when the site operator configures it. Diagnostics are scrubbed before sending so library content, ISBNs, notes, highlights, tokens, and account identifiers are redacted.</p>
+          </article>
+          <article className={styles.card}>
+            <h3>Privacy-friendly analytics</h3>
+            <p>
+              Some deployments may offer optional Plausible analytics. When configured, analytics only loads after you grant consent, uses no tracking cookies,
+              and can be declined from the banner without affecting app features.
+            </p>
           </article>
           <article className={styles.card}>
             <h3>Your controls</h3>
-            <p>You can export your library, clear local analytics, sign out of sync, or remove local browser storage at any time from the app’s data tools.</p>
+            <p>You can export your library, clear local analytics, sign out of sync, or remove local browser storage at any time from the app’s data tools. Clearing local data does not delete cloud data or a signed-in account.</p>
           </article>
           <article className={styles.card}>
             <h3>Reading goals, series, and highlights</h3>
@@ -184,6 +191,13 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
             <p>
               Profile includes a control to clear all local library data from this browser. That is separate from optional cloud sync and does not by itself delete a
               registered account on the server.
+            </p>
+          </article>
+          <article className={styles.card}>
+            <h3>Web imports and support diagnostics</h3>
+            <p>
+              Web imports fetch the URL you provide from your browser, so that site may receive normal browser request metadata. Support diagnostics include app,
+              release, route, browser, and sync status metadata, but not your full library contents.
             </p>
           </article>
         </div>

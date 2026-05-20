@@ -1,0 +1,51 @@
+name: Quality (bundle budgets)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Check production
+        env:
+          VITE_SITE_URL: https://example.com
+          VITE_BASE_PATH: /spine-scanner/
+          VITE_SUPPORT_EMAIL: noreply@example.com
+          VITE_ENABLE_SCANNER_DEBUG: 'false'
+          VITE_APP_ENV: test
+          VITE_APP_RELEASE: ${{ github.sha }}
+        run: npm run check:production
+
+      - name: Build
+        env:
+          VITE_SITE_URL: https://example.com
+          VITE_BASE_PATH: /spine-scanner/
+          VITE_SUPPORT_EMAIL: noreply@example.com
+          VITE_ENABLE_SCANNER_DEBUG: 'false'
+          VITE_APP_ENV: test
+          VITE_APP_RELEASE: ${{ github.sha }}
+        run: npm run build
+
+      - name: Check bundle budgets
+        run: node scripts/check-bundle-budget.mjs

@@ -136,6 +136,7 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
     const workerPromise = useRef<Promise<any> | null>(null);
     const workerRetries = useRef(0);
     const progressCallbackRef = useRef<((pct: number) => void) | null>(null);
+    const preWarmPromiseRef = useRef<Promise<void> | null>(null);
     const [ocrState, setOcrState] = useState<OcrEngineState>('idle');
 
     const loadTessModule = useCallback(async (): Promise<ResolvedTesseract> => {
@@ -219,26 +220,33 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
 
     /** Pre-warm the OCR engine when capture is ready (e.g. camera on mount / cameraReady). Creates and reuses worker across passes. Prefetches eng traineddata for offline. */
     const preWarm = useCallback(async () => {
+        if (preWarmPromiseRef.current) return preWarmPromiseRef.current;
         setOcrState('loading');
-        addLog('Pre-warming OCR engine...');
-        // Prefetch eng traineddata so it's cached before first scan (helps offline after first load)
-        const langUrl = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz';
-        fetch(langUrl, { mode: 'cors' }).catch(() => {}); // Fire-and-forget; worker will fetch again if needed
-        try {
-            const w = await getWorker();
-            if (w) {
-                addLog('OCR engine pre-warmed and ready');
-                setOcrState('ready');
-                onOcrReady?.();
-            } else {
-                addLog('OCR worker unavailable — will use fallback on scan');
+        preWarmPromiseRef.current = (async () => {
+            addLog('Pre-warming OCR engine...');
+            try {
+                const w = await getWorker();
+                if (w) {
+                    // Prefetch language data after the local worker/core path succeeds.
+                    const langUrl = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz';
+                    fetch(langUrl, { mode: 'cors' }).catch(() => {});
+                    addLog('OCR engine pre-warmed and ready');
+                    setOcrState('ready');
+                    onOcrReady?.();
+                } else {
+                    addLog('OCR worker unavailable — will use fallback on scan');
+                    setOcrState('fallback');
+                    onOcrReady?.();
+                }
+            } catch (err) {
+                addLog(`Pre-warm failed: ${err instanceof Error ? err.message : String(err)}`);
                 setOcrState('fallback');
                 onOcrReady?.();
+            } finally {
+                preWarmPromiseRef.current = null;
             }
-        } catch (err) {
-            addLog(`Pre-warm failed: ${err instanceof Error ? err.message : String(err)}`);
-            setOcrState('fallback');
-        }
+        })();
+        return preWarmPromiseRef.current;
     }, [getWorker, addLog, onOcrReady]);
 
     // Terminate worker on unmount

@@ -1,15 +1,17 @@
 import { useEffect, useRef } from 'react';
+import type { RefObject } from 'react';
 
 /**
  * Traps focus within the referenced element while it is mounted.
  * When the trap activates, the previously-focused element is saved
  * and focus moves into the container. On unmount, focus is restored.
  */
-export function useFocusTrap<T extends HTMLElement = HTMLElement>() {
+export function useFocusTrap<T extends HTMLElement = HTMLElement>(active = true) {
     const containerRef = useRef<T>(null);
     const previousFocusRef = useRef<HTMLElement | null>(null);
 
     useEffect(() => {
+        if (!active) return;
         const container = containerRef.current;
         if (!container) return;
 
@@ -66,9 +68,49 @@ export function useFocusTrap<T extends HTMLElement = HTMLElement>() {
                 previousFocusRef.current.focus();
             }
         };
-    }, []);
+    }, [active]);
 
     return containerRef;
+}
+
+export function useFocusTrapEffect<T extends HTMLElement = HTMLElement>(
+    active: boolean,
+    containerRef: RefObject<T | null>,
+) {
+    useEffect(() => {
+        if (!active) return;
+        const container = containerRef.current;
+        if (!container) return;
+
+        const previousFocus = document.activeElement as HTMLElement | null;
+        const focusable = getFocusableElements(container);
+        if (focusable.length > 0) focusable[0].focus();
+        else {
+            container.setAttribute('tabindex', '-1');
+            container.focus();
+        }
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key !== 'Tab') return;
+            const elements = getFocusableElements(container);
+            if (elements.length === 0) return;
+            const firstEl = elements[0];
+            const lastEl = elements[elements.length - 1];
+            if (e.shiftKey && document.activeElement === firstEl) {
+                e.preventDefault();
+                lastEl.focus();
+            } else if (!e.shiftKey && document.activeElement === lastEl) {
+                e.preventDefault();
+                firstEl.focus();
+            }
+        };
+
+        container.addEventListener('keydown', handleKeyDown);
+        return () => {
+            container.removeEventListener('keydown', handleKeyDown);
+            previousFocus?.focus?.();
+        };
+    }, [active, containerRef]);
 }
 
 /** Get all focusable elements within a container, in DOM order. */

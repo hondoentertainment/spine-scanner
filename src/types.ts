@@ -26,14 +26,45 @@ export interface BookEntry {
   highlights?: string[];
   /** Which provider supplied this book's metadata (Phase 26). */
   metadataSource?: MetadataSource;
+  /** Raw provider snapshots retained when metadata sources disagree. */
+  metadataPeers?: MetadataPeers;
   /**
    * Per-field flag indicating the user has manually edited that field.
    * A subsequent "Refresh metadata" must not overwrite flagged fields.
    */
   userEditedFields?: UserEditedFields;
+  /** Legacy alias used by metadata helper modules. */
+  metadataUserEdited?: UserEditedFields;
 }
 
 export type MetadataSource = 'google_books' | 'open_library' | 'manual';
+
+export interface BookMetadata {
+  title: string;
+  authors: string[];
+  pageCount: number;
+  thumbnail: string;
+  isbn: string;
+  source?: MetadataSource;
+}
+
+export interface BookLookupResult extends BookMetadata {
+  metadataSource: MetadataSource;
+  google: BookMetadata | null;
+  openLibrary: BookMetadata | null;
+}
+
+export interface MetadataPeerSnapshot {
+  title?: string;
+  author: string;
+  pageCount: number;
+  thumbnail?: string;
+}
+
+export interface MetadataPeers {
+  google?: MetadataPeerSnapshot;
+  openLibrary?: MetadataPeerSnapshot;
+}
 
 export interface UserEditedFields {
   title?: boolean;

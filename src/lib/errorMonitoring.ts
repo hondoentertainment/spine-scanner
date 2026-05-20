@@ -12,10 +12,33 @@ const APP_RELEASE = import.meta.env.VITE_APP_RELEASE as string | undefined;
 const APP_ENVIRONMENT = (import.meta.env.VITE_APP_ENV as string | undefined) || import.meta.env.MODE;
 const BASE_PATH = (import.meta.env.VITE_BASE_PATH as string | undefined) || import.meta.env.BASE_URL;
 const IS_ENABLED = !!SENTRY_DSN;
+const REDACTED = '[redacted]';
+const SENSITIVE_KEY_PATTERN = /user(id)?|email|isbn|title|author|note|highlight|cover|image|photo|token|password|secret/i;
 
 /** Lazily loaded Sentry module (only imported when DSN is present). */
 let sentryModule: typeof import('@sentry/react') | null = null;
 let initPromise: Promise<void> | null = null;
+
+function scrubValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(scrubValue);
+  if (value && typeof value === 'object') {
+    return scrubObject(value as Record<string, unknown>);
+  }
+  if (typeof value === 'string') {
+    if (value.startsWith('data:image/')) return REDACTED;
+    if (/^\S+@\S+\.\S+$/.test(value)) return REDACTED;
+  }
+  return value;
+}
+
+function scrubObject<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      key,
+      SENSITIVE_KEY_PATTERN.test(key) ? REDACTED : scrubValue(entry),
+    ]),
+  ) as T;
+}
 
 /**
  * Initialize error monitoring. Call once at app startup (e.g. in main.tsx).
@@ -36,12 +59,15 @@ export async function initErrorMonitoring(): Promise<void> {
         tracesSampleRate: 0.1,
         // Only send errors, not warnings
         beforeSend(event) {
+          delete event.user;
+          if (event.contexts) event.contexts = scrubObject(event.contexts);
+          if (event.extra) event.extra = scrubObject(event.extra);
+
           // Strip PII from breadcrumbs
           if (event.breadcrumbs) {
             event.breadcrumbs = event.breadcrumbs.map(bc => ({
               ...bc,
-              // Don't send ISBN values as breadcrumb data
-              data: bc.data ? { ...bc.data, isbn: undefined } : bc.data,
+              data: bc.data ? scrubObject(bc.data) : bc.data,
             }));
           }
           return event;
@@ -71,7 +97,7 @@ export function getErrorMonitoringInitPromise(): Promise<void> | null {
  */
 export function captureException(error: unknown, context?: Record<string, unknown>): void {
   if (!sentryModule) return;
-  sentryModule.captureException(error, context ? { extra: context } : undefined);
+  sentryModule.captureException(error, context ? { extra: scrubObject(context) } : undefined);
 }
 
 /**
@@ -86,7 +112,7 @@ export function addBreadcrumb(
   sentryModule.addBreadcrumb({
     category,
     message,
-    data,
+    data: data ? scrubObject(data) as Record<string, string | number | boolean> : undefined,
     level: 'info',
   });
 }
@@ -96,7 +122,7 @@ export function addBreadcrumb(
  */
 export function setUser(id: string | null): void {
   if (!sentryModule) return;
-  sentryModule.setUser(id ? { id } : null);
+  sentryModule.setUser(id ? { id: REDACTED } : null);
 }
 
 /**

@@ -38,7 +38,9 @@ function validateSiteUrl(rawValue) {
 
 function validateBasePath(rawValue) {
   if (!rawValue) {
-    addWarning('VITE_BASE_PATH is not set. The app will fall back to its build defaults.');
+    if (!process.env.VERCEL) {
+      addWarning('VITE_BASE_PATH is not set. The app will fall back to its build defaults.');
+    }
     return;
   }
 
@@ -53,11 +55,16 @@ function validateBasePath(rawValue) {
   if (rawValue.includes(' ')) {
     addError('VITE_BASE_PATH must not contain spaces.');
   }
+
+  if (process.env.VERCEL && rawValue !== '/') {
+    addError('Vercel production builds must use VITE_BASE_PATH=/ so routes and PWA scope resolve from the domain root.');
+  }
 }
 
-function validateSupportEmail(rawValue) {
+function validateSupportEmail(rawValue, appEnvironment) {
   if (!rawValue) {
-    addWarning('VITE_SUPPORT_EMAIL is not set. Public support links will be incomplete.');
+    if (appEnvironment === 'production') addError('VITE_SUPPORT_EMAIL is required for production support links.');
+    else addWarning('VITE_SUPPORT_EMAIL is not set. Public support links will be incomplete.');
     return;
   }
 
@@ -79,9 +86,10 @@ function validateMonitoring(rawValue) {
   }
 }
 
-function validateAppEnvironment(rawValue) {
+function validateAppEnvironment(rawValue, requireProduction) {
   if (!rawValue) {
-    addWarning('VITE_APP_ENV is not set. Monitoring will fall back to the Vite mode.');
+    if (requireProduction) addError('VITE_APP_ENV=production is required for production deploy checks.');
+    else addWarning('VITE_APP_ENV is not set. Monitoring will fall back to the Vite mode.');
     return;
   }
 
@@ -89,11 +97,16 @@ function validateAppEnvironment(rawValue) {
   if (!allowed.has(rawValue)) {
     addWarning(`VITE_APP_ENV is "${rawValue}". Use a stable environment label for monitoring filters.`);
   }
+
+  if (requireProduction && rawValue !== 'production') {
+    addError(`VITE_APP_ENV must be "production" for production deploy checks. Received "${rawValue}".`);
+  }
 }
 
-function validateRelease(rawValue) {
+function validateRelease(rawValue, appEnvironment) {
   if (!rawValue) {
-    addWarning('VITE_APP_RELEASE is not set. Monitoring events will not be tied to a release identifier.');
+    if (appEnvironment === 'production') addError('VITE_APP_RELEASE is required for production release traceability.');
+    else addWarning('VITE_APP_RELEASE is not set. Monitoring events will not be tied to a release identifier.');
   }
 }
 
@@ -105,6 +118,33 @@ function validateAppMode(rawValue) {
   }
 }
 
+function validateSupabasePair(url, anonKey) {
+  if ((url && !anonKey) || (!url && anonKey)) {
+    addError('VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set together, or both omitted for local-only mode.');
+  }
+}
+
+function validatePlausible(domain, scriptSrc) {
+  if (!domain && scriptSrc) {
+    addError('VITE_PLAUSIBLE_SCRIPT_SRC requires VITE_PLAUSIBLE_DOMAIN so analytics can be attributed correctly.');
+  }
+
+  if (domain && domain.includes(' ')) {
+    addError('VITE_PLAUSIBLE_DOMAIN must not contain spaces.');
+  }
+
+  if (scriptSrc) {
+    try {
+      const parsed = new URL(scriptSrc);
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        addError('VITE_PLAUSIBLE_SCRIPT_SRC must use http or https.');
+      }
+    } catch {
+      addError(`VITE_PLAUSIBLE_SCRIPT_SRC must be a valid absolute URL. Received "${scriptSrc}".`);
+    }
+  }
+}
+
 const siteUrl = readEnv('VITE_SITE_URL');
 const basePath = readEnv('VITE_BASE_PATH');
 const supportEmail = readEnv('VITE_SUPPORT_EMAIL');
@@ -113,15 +153,22 @@ const sentryDsn = readEnv('VITE_SENTRY_DSN');
 const appEnvironment = readEnv('VITE_APP_ENV');
 const appRelease = readEnv('VITE_APP_RELEASE');
 const appMode = readEnv('VITE_APP_MODE');
+const supabaseUrl = readEnv('VITE_SUPABASE_URL');
+const supabaseAnonKey = readEnv('VITE_SUPABASE_ANON_KEY');
+const plausibleDomain = readEnv('VITE_PLAUSIBLE_DOMAIN');
+const plausibleScriptSrc = readEnv('VITE_PLAUSIBLE_SCRIPT_SRC');
+const requireProduction = process.env.VERCEL_ENV === 'production' || process.env.SPINESCANNER_PRODUCTION_CHECK === 'true';
 
 validateSiteUrl(siteUrl);
 validateBasePath(basePath);
-validateSupportEmail(supportEmail);
+validateSupportEmail(supportEmail, appEnvironment);
 validateDebugFlag(scannerDebug);
 validateMonitoring(sentryDsn);
-validateAppEnvironment(appEnvironment);
-validateRelease(appRelease);
+validateAppEnvironment(appEnvironment, requireProduction);
+validateRelease(appRelease, appEnvironment);
 validateAppMode(appMode);
+validateSupabasePair(supabaseUrl, supabaseAnonKey);
+validatePlausible(plausibleDomain, plausibleScriptSrc);
 
 if (errors.length > 0) {
   console.error('Production readiness check failed:\n');

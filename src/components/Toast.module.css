@@ -208,7 +208,8 @@
 }
 
 .dialogCancel {
-  padding: 0.5rem 1rem;
+  min-height: 44px;
+  padding: 0.65rem 1rem;
   border-radius: 0.5rem;
   font-size: 0.85rem;
   font-weight: 600;
@@ -225,7 +226,8 @@
 }
 
 .dialogConfirm {
-  padding: 0.5rem 1rem;
+  min-height: 44px;
+  padding: 0.65rem 1rem;
   border-radius: 0.5rem;
   font-size: 0.85rem;
   font-weight: 600;

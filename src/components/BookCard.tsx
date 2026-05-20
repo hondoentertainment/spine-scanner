@@ -83,6 +83,12 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
     const availableShelves = shelves.filter((sh) => !bookShelfIds.includes(sh.id));
     const progressPercent = getReadingProgressPercent(book);
     const progressValue = Math.min(book.pageCount || 0, book.pagesFinished || 0);
+    const titleInputId = `book-title-${book.id}`;
+    const authorInputId = `book-author-${book.id}`;
+    const isbnInputId = `book-isbn-${book.id}`;
+    const pagesInputId = `book-pages-${book.id}`;
+    const coverInputId = `book-cover-${book.id}`;
+    const notesInputId = `book-notes-${book.id}`;
 
     const openCard = () => {
         if (onActivateBookId) onActivateBookId(book.id);
@@ -159,30 +165,30 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
 
                 <div className={s.editForm} onKeyDown={handleKeyDown}>
                     <div>
-                        <div className={s.fieldLabel}>Title</div>
-                        <input className={s.input} type="text" value={draft.title}
+                        <label className={s.fieldLabel} htmlFor={titleInputId}>Title</label>
+                        <input id={titleInputId} className={s.input} type="text" value={draft.title}
                             onChange={(e) => setDraft({ ...draft, title: e.target.value })} autoFocus />
                     </div>
                     <div>
-                        <div className={s.fieldLabel}>Author</div>
-                        <input className={s.input} type="text" value={draft.author}
+                        <label className={s.fieldLabel} htmlFor={authorInputId}>Author</label>
+                        <input id={authorInputId} className={s.input} type="text" value={draft.author}
                             onChange={(e) => setDraft({ ...draft, author: e.target.value })} />
                     </div>
                     <div className={s.isbnRow}>
                         <div style={{ flex: 1 }}>
-                            <div className={s.fieldLabel}>ISBN</div>
-                            <input className={s.input} type="text" value={draft.isbn}
+                            <label className={s.fieldLabel} htmlFor={isbnInputId}>ISBN</label>
+                            <input id={isbnInputId} className={s.input} type="text" value={draft.isbn}
                                 onChange={(e) => setDraft({ ...draft, isbn: e.target.value })} />
                         </div>
                         <div style={{ width: '90px' }}>
-                            <div className={s.fieldLabel}>Pages</div>
-                            <input className={s.input} type="number" value={draft.pageCount || ''}
+                            <label className={s.fieldLabel} htmlFor={pagesInputId}>Pages</label>
+                            <input id={pagesInputId} className={s.input} type="number" value={draft.pageCount || ''}
                                 onChange={(e) => setDraft({ ...draft, pageCount: parseInt(e.target.value) || 0 })} min={0} />
                         </div>
                     </div>
                     <div>
-                        <div className={s.fieldLabel}>Cover Image URL</div>
-                        <input className={s.input} type="url" value={draft.coverImg}
+                        <label className={s.fieldLabel} htmlFor={coverInputId}>Cover Image URL</label>
+                        <input id={coverInputId} className={s.input} type="url" value={draft.coverImg}
                             onChange={(e) => setDraft({ ...draft, coverImg: e.target.value })} placeholder="https://..." />
                     </div>
                     {draft.coverImg && (
@@ -197,22 +203,17 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
     }
 
     return (
-        <div
-            className={`book-card glass ${s.card}`}
-            onClick={openCard}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    openCard();
-                }
-            }}
-        >
+        <div className={`book-card glass ${s.card}`}>
+            <button
+                type="button"
+                className={s.openBookButton}
+                onClick={openCard}
+                aria-label={`Open ${book.title}`}
+            >
             <div className={s.cardInner}>
                 <img
                     src={getBookCoverSrc(book.coverImg)}
-                    alt={book.title}
+                    alt=""
                     className={s.coverImg}
                     loading="lazy"
                     decoding="async"
@@ -221,23 +222,24 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                 <div className={s.info}>
                     <h3 className={s.bookTitle}>{book.title}</h3>
                     <p className={s.bookAuthor}>{book.author}</p>
-                    <div className={s.links}>
-                        {generateAmazonLink(book.isbn) && (
-                            <a href={generateAmazonLink(book.isbn)} target="_blank" rel="noopener noreferrer"
-                               className={`glass ${s.amazonBtn}`} onClick={(e) => e.stopPropagation()}>
-                                <ExternalLink size={12} /> Amazon
-                            </a>
-                        )}
-                        <button type="button" onClick={async (e) => {
-                            e.stopPropagation();
-                            const ok = await shareBook(book.isbn, book.title, book.author, () => toast('Link copied to clipboard', 'success'));
-                            if (!ok) toast('Could not share', 'error');
-                        }} className={`glass ${s.amazonBtn}`}
-                            aria-label={`Share ${book.title}`} title="Share book">
-                            <Share2 size={12} /> Share
-                        </button>
-                    </div>
                 </div>
+            </div>
+            </button>
+
+            <div className={s.links}>
+                {generateAmazonLink(book.isbn) && (
+                    <a href={generateAmazonLink(book.isbn)} target="_blank" rel="noopener noreferrer"
+                       className={`glass ${s.amazonBtn}`}>
+                        <ExternalLink size={12} /> Amazon
+                    </a>
+                )}
+                <button type="button" onClick={async () => {
+                    const ok = await shareBook(book.isbn, book.title, book.author, () => toast('Link copied to clipboard', 'success'));
+                    if (!ok) toast('Could not share', 'error');
+                }} className={`glass ${s.amazonBtn}`}
+                    aria-label={`Share ${book.title}`} title="Share book">
+                    <Share2 size={12} /> Share
+                </button>
             </div>
 
             {/* Shelf chips */}
@@ -325,10 +327,11 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                 </div>
             </div>
 
-            <textarea placeholder="Add your notes or quotes..." value={book.notes}
+            <label className={s.srOnly} htmlFor={notesInputId}>Notes for {book.title}</label>
+            <textarea id={notesInputId} placeholder="Add your notes or quotes..." value={book.notes}
                 onChange={(e) => updateBookNotes(book.id, e.target.value)}
                 className={`glass ${s.notes}`}
-                onClick={(e) => e.stopPropagation()} />
+            />
 
             <div className={s.actionsRow} onClick={(e) => e.stopPropagation()}>
                 <button onClick={handleEdit} aria-label={`Edit ${book.title}`} className={s.editBtn}>

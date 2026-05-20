@@ -17,8 +17,7 @@ jobs:
   verify:
     name: Lint, Test & Build
     runs-on: ubuntu-latest
-    # lint + unit tests (up to 18m) + build + Playwright install + E2E (up to 12m)
-    timeout-minutes: 45
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
 
@@ -56,9 +55,34 @@ jobs:
         run: npm run build
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
 
-      - name: E2E release tests
+      - name: E2E launch tests
+        timeout-minutes: 25
+        env:
+          CI: 'true'
+          VITE_SITE_URL: https://example.com
+          VITE_BASE_PATH: /spine-scanner/
+          VITE_SUPPORT_EMAIL: noreply@example.com
+          VITE_ENABLE_SCANNER_DEBUG: 'false'
+          VITE_APP_ENV: test
+          VITE_APP_RELEASE: ${{ github.sha }}
+        run: npm run test:e2e:launch
+
+      - name: OCR E2E test
+        timeout-minutes: 15
+        env:
+          CI: 'true'
+          RUN_OCR_E2E: '1'
+          VITE_SITE_URL: https://example.com
+          VITE_BASE_PATH: /spine-scanner/
+          VITE_SUPPORT_EMAIL: noreply@example.com
+          VITE_ENABLE_SCANNER_DEBUG: 'false'
+          VITE_APP_ENV: test
+          VITE_APP_RELEASE: ${{ github.sha }}
+        run: npm run test:e2e:ocr
+
+      - name: Accessibility E2E test
         timeout-minutes: 12
         env:
           CI: 'true'
@@ -68,4 +92,4 @@ jobs:
           VITE_ENABLE_SCANNER_DEBUG: 'false'
           VITE_APP_ENV: test
           VITE_APP_RELEASE: ${{ github.sha }}
-        run: npm run test:e2e:release
+        run: npm run test:e2e:a11y

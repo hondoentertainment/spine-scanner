@@ -27,6 +27,7 @@
     "test:e2e:mvp": "node scripts/generate-ocr-fixture.mjs && cross-env VITE_APP_MODE=mvp npm run build && cross-env VITE_APP_MODE=mvp playwright test e2e/mvp.spec.ts --project=chromium-mvp --workers=1",
     "test:e2e:launch": "npm run build && playwright test e2e/app.spec.ts --project=chromium --project=mobile-chrome-pixel-7 --project=mobile-safari-iphone-14 --project=mobile-chrome-galaxy-s9 --workers=1",
     "test:e2e:ocr": "node scripts/generate-ocr-fixture.mjs && npm run build && playwright test e2e/ocr-upload.spec.ts --project=chromium --workers=1",
+    "test:e2e:a11y": "npm run build && playwright test e2e/a11y.spec.ts --project=chromium --workers=1",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:mobile": "playwright test --project=mobile-chrome-pixel-7 --project=mobile-safari-iphone-14 --project=mobile-chrome-galaxy-s9",
     "test:e2e:desktop": "playwright test --project=chromium"
@@ -47,6 +48,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@axe-core/playwright": "^4.11.0",
     "@playwright/test": "^1.58.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

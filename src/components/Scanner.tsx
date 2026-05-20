@@ -69,6 +69,9 @@ const getVideoConstraints = (facing: 'environment' | 'user' = 'environment'): Me
 });
 
 const SCANNER_DEBUG_ENABLED = import.meta.env.DEV || import.meta.env.VITE_ENABLE_SCANNER_DEBUG === 'true';
+const OCR_PREWARM_DELAY_MS = 2500;
+const LIVE_QUALITY_INTERVAL_MS = 1200;
+const AUTO_OCR_INTERVAL_MS = 4000;
 
 /* ================================================================
  *  Component
@@ -206,11 +209,21 @@ const Scanner: React.FC<ScannerProps> = ({
     });
 
     useEffect(() => {
-        preWarm();
-    }, [preWarm]);
+        const run = () => {
+            if (ocrState === 'idle') void preWarm();
+        };
+        const idleId = typeof requestIdleCallback !== 'undefined'
+            ? requestIdleCallback(run, { timeout: OCR_PREWARM_DELAY_MS })
+            : 0;
+        const timeoutId = setTimeout(run, OCR_PREWARM_DELAY_MS);
+        return () => {
+            if (typeof cancelIdleCallback !== 'undefined' && idleId) cancelIdleCallback(idleId);
+            clearTimeout(timeoutId);
+        };
+    }, [ocrState, preWarm]);
     useEffect(() => {
-        if (cameraReady && !cameraError) preWarm();
-    }, [cameraReady, cameraError, preWarm]);
+        if (cameraReady && !cameraError && ocrState === 'idle') void preWarm();
+    }, [cameraReady, cameraError, ocrState, preWarm]);
 
     const inOcrPhase = processing && scanProgress && (scanProgress.phase === 'ocr' || scanProgress.phase === 'ocr-multilang');
     useEffect(() => {
@@ -245,7 +258,7 @@ const Scanner: React.FC<ScannerProps> = ({
             } else {
                 setLiveQualityHint('ready');
             }
-        }, 600);
+        }, LIVE_QUALITY_INTERVAL_MS);
         return () => clearInterval(interval);
     }, [cameraReady, cameraError, processing, isScanning]);
 
@@ -498,8 +511,8 @@ const Scanner: React.FC<ScannerProps> = ({
         addLog('Auto-scan (OCR) started');
         setStatus('Auto-scanning... hold book steady');
         const interval = setInterval(() => {
-            if (!isBusy() && autoScan && liveQualityHintRef.current !== 'blurry' && liveQualityHintRef.current !== 'blurry-dark') capture();
-        }, 2000);
+            if (!isBusy() && autoScan && liveQualityHintRef.current === 'ready') capture();
+        }, AUTO_OCR_INTERVAL_MS);
         return () => { clearInterval(interval); addLog('Auto-scan (OCR) stopped'); };
     }, [autoScan, capture, addLog, isBusy]);
 

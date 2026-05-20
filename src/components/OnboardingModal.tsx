@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { ArrowRight, BookMarked } from 'lucide-react';
+import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import styles from './OnboardingModal.module.css';
 import type { OnboardingStep } from './onboardingContent.tsx';
 
@@ -19,12 +21,33 @@ export default function OnboardingModal({
 }: OnboardingModalProps) {
   const step = steps[currentStep];
   const isLast = currentStep === steps.length - 1;
+  const modalRef = useFocusTrap<HTMLDivElement>(Boolean(step));
+
+  useEffect(() => {
+    if (!step) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onSkip();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onSkip, step]);
 
   if (!step) return null;
 
   return (
-    <div className={styles.overlay} role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
-      <div className={`glass ${styles.modal}`}>
+    <div className={styles.overlay}>
+      <div
+        ref={modalRef}
+        className={`glass ${styles.modal}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="onboarding-title"
+        aria-describedby="onboarding-body"
+      >
         <div className={styles.progressRow}>
           <span className={styles.eyebrow}><BookMarked size={14} /> Quick tour</span>
           <span className={styles.progressText}>Step {currentStep + 1} of {steps.length}</span>
@@ -40,7 +63,7 @@ export default function OnboardingModal({
           </div>
           <div>
             <h2 id="onboarding-title" className={styles.title}>{step.title}</h2>
-            <p className={styles.body}>{step.body}</p>
+            <p id="onboarding-body" className={styles.body}>{step.body}</p>
           </div>
         </div>
 

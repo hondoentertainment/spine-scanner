@@ -133,6 +133,20 @@ const lookupOpenLibrary = async (isbn: string): Promise<BookMetadata | null> => 
     };
 };
 
+const settleMetadataLookups = async (isbn: string): Promise<Array<BookMetadata | null>> => {
+    const results = await Promise.allSettled([
+        lookupGoogleBooks(isbn),
+        lookupOpenLibrary(isbn),
+    ]);
+
+    if (results.every((result) => result.status === 'rejected')) {
+        const firstRejected = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+        throw firstRejected?.reason ?? new Error('Metadata lookup failed');
+    }
+
+    return results.map((result) => (result.status === 'fulfilled' ? result.value : null));
+};
+
 export const useBookLookup = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -157,8 +171,7 @@ export const useBookLookup = () => {
         setError(null);
         try {
             addBreadcrumb('metadata', 'Lookup started', { isbnLength: isbn.length });
-            const googleResult = await lookupGoogleBooks(isbn);
-            const openLibraryResult = await lookupOpenLibrary(isbn);
+            const [googleResult, openLibraryResult] = await settleMetadataLookups(isbn);
             let result = googleResult ?? openLibraryResult;
             const candidates: Array<BookMetadata | null> = [googleResult, openLibraryResult];
 
@@ -166,8 +179,7 @@ export const useBookLookup = () => {
             if (!result) {
                 const alt = isbn.length === 13 ? isbn13To10(isbn) : isbn10To13(isbn);
                 if (alt) {
-                    const altGoogleResult = await lookupGoogleBooks(alt);
-                    const altOpenLibraryResult = await lookupOpenLibrary(alt);
+                    const [altGoogleResult, altOpenLibraryResult] = await settleMetadataLookups(alt);
                     candidates.push(altGoogleResult, altOpenLibraryResult);
                     result = altGoogleResult ?? altOpenLibraryResult;
                 }
