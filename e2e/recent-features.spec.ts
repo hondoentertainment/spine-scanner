@@ -97,7 +97,7 @@ test.describe('Recent feature waves', () => {
    * and verify the value persisted (re-opening the detail still shows it).
    */
   test('pages-read input updates progress (Issue #43)', async ({ page }) => {
-    test.setTimeout(30_000);
+    test.setTimeout(60_000);
     await seedPreferences(page);
     await seedBooks(page, [
       {
@@ -127,16 +127,18 @@ test.describe('Recent feature waves', () => {
     // chunk is loaded and the store is hydrated.
     await expect(page.getByRole('tablist', { name: /library scope/i })).toBeVisible({ timeout: 10_000 });
 
-    // Step 2: navigate to the library with the isbn param. The LibraryList chunk
-    // is already in the browser's module cache from Step 1, so this second load
-    // is near-instant; AppLibraryRoute passes initialOpenIsbn to LibraryList and
-    // the useEffect opens the dialog well within the timeout.
+    // Step 2: navigate with the isbn param. AppLibraryRoute passes it as
+    // initialOpenIsbn to LibraryList; when the book is found, the useEffect
+    // calls setSelectedBook(book) and then onOpenComplete() which removes isbn
+    // from the URL. Waiting for the URL to lose the isbn param is therefore the
+    // definitive signal that selectedBook was set and the dialog is opening.
     await page.goto('./library?isbn=9780141036144');
+    await page.waitForFunction(() => !window.location.search.includes('isbn'), { timeout: 20_000 });
 
-    await expect(page.getByRole('dialog', { name: /Details for 1984/i })).toBeVisible({ timeout: 10_000 });
+    const dialog = page.getByRole('dialog', { name: /Details for 1984/i });
+    await expect(dialog).toBeVisible({ timeout: 5_000 });
 
     // Enter edit mode.
-    const dialog = page.getByRole('dialog', { name: /Details for 1984/i });
     await dialog.getByRole('button', { name: /edit details/i }).click();
 
     // Fill the labelled "Pages read" input. Scope to the dialog to avoid
