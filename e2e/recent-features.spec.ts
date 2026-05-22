@@ -194,7 +194,9 @@ test.describe('Recent feature waves', () => {
     await fileInput.setInputFiles(GOODREADS_CSV);
 
     // Inline result message: "Imported N books (M duplicates skipped)" or similar.
-    await expect(page.getByText(/imported \d+ book/i)).toBeVisible({ timeout: 10_000 });
+    // Scope to the <p> element — the importer also fires a toast with the same
+    // text (a <span>), so an unscoped getByText is a strict-mode violation.
+    await expect(page.locator('p', { hasText: /imported \d+ book/i })).toBeVisible({ timeout: 10_000 });
 
     // Books should appear in the library after import.
     await page.getByTestId(uiContracts.navTabTestId('library')).click();
