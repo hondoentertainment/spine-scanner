@@ -127,19 +127,12 @@ test.describe('Recent feature waves', () => {
     // chunk is loaded and the store is hydrated.
     await expect(page.getByRole('tablist', { name: /library scope/i })).toBeVisible({ timeout: 10_000 });
 
-    // Step 2: push the isbn param into the URL via the browser History API and
-    // dispatch a popstate event so React Router (which listens to popstate)
-    // updates searchParams in-place — no full page reload, no lazy-load race,
-    // books already in the store.
-    await page.evaluate(() => {
-      const url = new URL(window.location.href);
-      url.searchParams.set('isbn', '9780141036144');
-      window.history.pushState(null, '', url.toString());
-      window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
-    });
+    // Step 2: navigate to the library with the isbn param. The LibraryList chunk
+    // is already in the browser's module cache from Step 1, so this second load
+    // is near-instant; AppLibraryRoute passes initialOpenIsbn to LibraryList and
+    // the useEffect opens the dialog well within the timeout.
+    await page.goto('./library?isbn=9780141036144');
 
-    // React Router picks up the new searchParams, AppLibraryRoute passes the
-    // isbn as initialOpenIsbn to LibraryList, and the useEffect opens the dialog.
     await expect(page.getByRole('dialog', { name: /Details for 1984/i })).toBeVisible({ timeout: 10_000 });
 
     // Enter edit mode.
