@@ -26,14 +26,25 @@ export interface BookEntry {
   highlights?: string[];
   /** Which provider supplied this book's metadata (Phase 26). */
   metadataSource?: MetadataSource;
+  /** Fields that Google Books and Open Library disagreed on at lookup time. */
+  metadataConflicts?: MetadataConflict[];
   /**
    * Per-field flag indicating the user has manually edited that field.
    * A subsequent "Refresh metadata" must not overwrite flagged fields.
    */
   userEditedFields?: UserEditedFields;
+  /** Schema version of this book entry; bumped when migrations are added. */
+  schemaVersion?: number;
 }
 
 export type MetadataSource = 'google_books' | 'open_library' | 'manual';
+
+/** A field-level disagreement between Google Books and Open Library for the same ISBN. */
+export interface MetadataConflict {
+  field: 'author' | 'pageCount' | 'title';
+  googleBooks?: string | number;
+  openLibrary?: string | number;
+}
 
 export interface UserEditedFields {
   title?: boolean;
@@ -79,6 +90,14 @@ export interface SavedView {
   maxPageCount?: number | null;
 }
 
+export interface ReadingSession {
+  id: string;
+  bookId: string;
+  durationMin: number;
+  pagesRead: number;
+  date: string;
+}
+
 export const SHELF_COLORS = [
   '#6366f1', // indigo
   '#f43f5e', // rose
@@ -94,7 +113,7 @@ export const SHELF_COLORS = [
 
 /** User profile preferences stored per-profile (local or cloud). */
 export interface ProfilePreferences {
-  theme: 'light' | 'dark' | 'system';
+  theme: 'light' | 'dark' | 'system' | 'high-contrast';
   librarySortBy: 'title' | 'author' | 'dateAdded' | 'pageCount';
   librarySortAsc: boolean;
   libraryViewMode: 'grid' | 'list' | 'masonry';
@@ -111,6 +130,14 @@ export interface ProfilePreferences {
   readingGoalPagesPerYear: number | null;
   /** When true, warn before adding a second copy of the same ISBN. */
   warnOnDuplicateIsbn: boolean;
+  /** Consecutive days with reading activity. */
+  currentStreak: number;
+  /** All-time best streak. */
+  longestStreak: number;
+  /** ISO date string (YYYY-MM-DD) of the last day reading activity was recorded. */
+  lastStreakDate: string | null;
+  /** When true, anonymous usage analytics are recorded locally. Opt-in. */
+  analyticsOptIn: boolean;
 }
 
 export const DEFAULT_PREFERENCES: ProfilePreferences = {
@@ -128,4 +155,8 @@ export const DEFAULT_PREFERENCES: ProfilePreferences = {
   readingGoalBooksPerYear: null,
   readingGoalPagesPerYear: null,
   warnOnDuplicateIsbn: true,
+  currentStreak: 0,
+  longestStreak: 0,
+  lastStreakDate: null,
+  analyticsOptIn: false,
 };

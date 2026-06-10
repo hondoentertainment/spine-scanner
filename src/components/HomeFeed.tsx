@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Library, ScanLine, Sparkles, Clock, Target, Cloud, Inbox, Lightbulb } from 'lucide-react';
+import { BookOpen, Library, ScanLine, Sparkles, Clock, Target, Cloud, Inbox, Lightbulb, BarChart3 } from 'lucide-react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useProfileStore } from '../store/useProfileStore.ts';
 import { useAuthStore } from '../store/useAuthStore.ts';
@@ -58,6 +58,69 @@ export default function HomeFeed() {
   const pageGoalTarget = showPageGoal ? pageGoal : 0;
   const bookGoalPct = showBookGoal ? Math.min(100, Math.round((insights.finishedThisYear / bookGoalTarget) * 100)) : 0;
   const pageGoalPct = showPageGoal ? Math.min(100, Math.round((insights.pagesReadThisYear / pageGoalTarget) * 100)) : 0;
+
+  const currentStreak = preferences.currentStreak ?? 0;
+  const longestStreak = preferences.longestStreak ?? 0;
+
+  interface SeriesSummary {
+    name: string;
+    owned: number;
+    read: number;
+  }
+
+  const topSeries = useMemo((): SeriesSummary | null => {
+    const map = new Map<string, SeriesSummary>();
+    for (const b of books) {
+      if (!b.seriesName) continue;
+      const key = b.seriesName;
+      const entry = map.get(key) ?? { name: key, owned: 0, read: 0 };
+      entry.owned += 1;
+      if (b.status === 'read') entry.read += 1;
+      map.set(key, entry);
+    }
+    let best: SeriesSummary | null = null;
+    for (const s of map.values()) {
+      if (s.owned < 2) continue;
+      if (s.read >= s.owned) continue;
+      if (!best || s.owned > best.owned) best = s;
+    }
+    return best;
+  }, [books]);
+
+  const yearStats = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const finishedThisYear = books.filter(
+      (b) =>
+        b.status === 'read' &&
+        b.finishedAt &&
+        new Date(b.finishedAt).getFullYear() === currentYear,
+    );
+    const booksRead = finishedThisYear.length;
+    const totalPages = finishedThisYear.reduce((sum, b) => sum + (b.pageCount || 0), 0);
+    const avgPages = booksRead > 0 ? Math.round(totalPages / booksRead) : 0;
+
+    let busiestMonthLabel = '';
+    if (booksRead > 0) {
+      const counts = new Array<number>(12).fill(0);
+      finishedThisYear.forEach((b) => {
+        const m = new Date(b.finishedAt as string).getMonth();
+        counts[m] += 1;
+      });
+      let bestMonth = 0;
+      let bestCount = 0;
+      counts.forEach((c, i) => {
+        if (c > bestCount) {
+          bestCount = c;
+          bestMonth = i;
+        }
+      });
+      const monthName = new Date(currentYear, bestMonth, 1).toLocaleString(undefined, { month: 'long' });
+      busiestMonthLabel = `${monthName} (${bestCount} book${bestCount === 1 ? '' : 's'})`;
+    }
+
+    return { currentYear, booksRead, totalPages, avgPages, busiestMonthLabel };
+  }, [books]);
 
   const suggestions = useMemo(() => {
     const out: { book: BookEntry; reason: string }[] = [];
@@ -165,6 +228,82 @@ export default function HomeFeed() {
           <button type="button" className={s.goalLink} onClick={() => navigate('/profile')}>
             Adjust goals in profile
           </button>
+        </section>
+      )}
+
+      {currentStreak >= 1 && (
+        <section className={`glass ${s.streak}`} aria-label="Reading streak">
+          <div className={s.streakMain}>
+            <span className={s.streakEmoji} aria-hidden>🔥</span>
+            <div className={s.streakInfo}>
+              <span className={s.streakValue}>{currentStreak}-day streak</span>
+              {longestStreak > currentStreak && (
+                <span className={s.streakBest}>Best: {longestStreak} days</span>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {topSeries && (
+        <section className={`glass ${s.seriesCard}`} aria-label="Continue a series">
+          <div className={s.sectionHead}>
+            <span className={s.seriesHeading}>Continue a series</span>
+          </div>
+          <strong className={s.seriesName}>{topSeries.name}</strong>
+          <div className={s.goalRow}>
+            <div className={s.goalMeta}>
+              <span>{topSeries.read} of {topSeries.owned} books read</span>
+            </div>
+            <div
+              className={s.goalTrack}
+              role="progressbar"
+              aria-valuenow={Math.round((topSeries.read / topSeries.owned) * 100)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <span
+                className={s.goalFill}
+                style={{ width: `${Math.round((topSeries.read / topSeries.owned) * 100)}%` }}
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            className={s.goalLink}
+            onClick={() => navigate(`/library?series=${encodeURIComponent(topSeries.name)}`)}
+          >
+            View series
+          </button>
+        </section>
+      )}
+
+      {yearStats.booksRead > 0 && (
+        <section className={`glass ${s.yearStats}`} aria-label="Your reading year">
+          <div className={s.sectionHead}>
+            <BarChart3 size={16} aria-hidden />
+            <h2 className={s.sectionTitle}>{yearStats.currentYear} in books</h2>
+          </div>
+          <div className={s.yearStatsGrid}>
+            <div className={s.yearStatTile}>
+              <span className={s.yearStatValue}>{yearStats.booksRead}</span>
+              <span className={s.yearStatLabel}>books finished</span>
+            </div>
+            <div className={s.yearStatTile}>
+              <span className={s.yearStatValue}>{yearStats.totalPages.toLocaleString()}</span>
+              <span className={s.yearStatLabel}>pages read</span>
+            </div>
+            <div className={s.yearStatTile}>
+              <span className={s.yearStatValue}>{yearStats.avgPages}</span>
+              <span className={s.yearStatLabel}>avg pages/book</span>
+            </div>
+            {yearStats.booksRead >= 2 && (
+              <div className={s.yearStatTile}>
+                <span className={s.yearStatValue}>{yearStats.busiestMonthLabel}</span>
+                <span className={s.yearStatLabel}>busiest month</span>
+              </div>
+            )}
+          </div>
         </section>
       )}
 

@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore.ts';
 import { useBookStore } from '../store/useBookStore.ts';
+import { useSyncQueue } from '../store/useSyncQueue.ts';
 import { useProfileStore } from '../store/useProfileStore.ts';
 import { useAnalyticsStore, summarizeAnalyticsEvents } from '../store/useAnalyticsStore.ts';
 import { useTheme } from '../hooks/useTheme.ts';
@@ -9,14 +10,16 @@ import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
 import { isMvpMode } from '../lib/appMode.ts';
 import {
-  X, User, Sun, Moon, Monitor, LayoutGrid, List, ArrowUpDown, Columns2,
+  X, User, Sun, Moon, Monitor, Contrast, LayoutGrid, List, ArrowUpDown, Columns2,
   CheckCircle, Layers, BarChart3, Tag, BookOpen, Clock3, Bookmark, Flame, ScanLine,
-  Database, Share2, Target, Download, Eraser,
+  Database, Share2, Target, Download, Eraser, ScrollText, Bug, ShieldCheck, Trash2,
 } from 'lucide-react';
 import type { ProfilePreferences } from '../types.ts';
 import { getShareBaseUrl } from '../utils/shareBook.ts';
 import { exportAccountSnapshot } from '../utils/exportFormats.ts';
+import { downloadDiagnosticsBundle } from '../utils/supportDiagnostics.ts';
 import { useToast } from './Toast.tsx';
+import ChangelogModal from './ChangelogModal.tsx';
 import s from './ProfileSettings.module.css';
 
 interface ProfileSettingsProps {
@@ -28,6 +31,7 @@ const themeOptions: { value: ProfilePreferences['theme']; label: string; icon: R
   { value: 'dark', label: 'Dark', icon: <Moon size={16} /> },
   { value: 'light', label: 'Light', icon: <Sun size={16} /> },
   { value: 'system', label: 'System', icon: <Monitor size={16} /> },
+  { value: 'high-contrast', label: 'High contrast', icon: <Contrast size={16} /> },
 ];
 
 const sortOptions: { value: ProfilePreferences['librarySortBy']; label: string }[] = [
@@ -61,6 +65,7 @@ const statusSummary = [
 const SUPPORT_EMAIL_ENV = (import.meta.env.VITE_SUPPORT_EMAIL as string | undefined)?.trim();
 
 const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = false }) => {
+  const [changelogOpen, setChangelogOpen] = useState(false);
   const navigate = useNavigate();
   const { toast, confirm } = useToast();
   const { user, profile } = useAuthStore();
@@ -70,6 +75,11 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
   const analyticsEvents = useAnalyticsStore((s) => s.events);
   const scanStats = useMemo(() => summarizeAnalyticsEvents(analyticsEvents), [analyticsEvents]);
+  const {
+    pendingChanges, lastSyncedAt, lastSyncFailedAt, flushing,
+    lastGoodSnapshot, lastGoodSnapshotAt, hadConflictLastSync,
+    clearSnapshot, markConflict,
+  } = useSyncQueue();
   const displayName = profile?.username ?? profile?.displayName ?? user?.user_metadata?.full_name ?? user?.email ?? 'Local reader';
   const avatarUrl = profile?.avatarUrl ?? user?.user_metadata?.avatar_url ?? null;
   const joinedLabel = user?.created_at
@@ -118,7 +128,17 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
         </button>
       )}
 
-      <h2 id="profile-settings-title" className={s.title}>Profile & Settings</h2>
+      <div className={s.titleRow}>
+        <h2 id="profile-settings-title" className={s.title}>Profile & Settings</h2>
+        <button
+          type="button"
+          className={s.optBtn}
+          onClick={() => setChangelogOpen(true)}
+        >
+          <ScrollText size={15} aria-hidden />
+          What's new
+        </button>
+      </div>
       <p className={s.subtitle}>
         {isMvpMode()
           ? 'Essentials only: theme, data, and export. Use the full build for the home feed and advanced preferences.'
@@ -327,6 +347,83 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
         </div>
       )}
 
+      {user !== null && (
+        <div className={s.syncSection}>
+          <h3 className={s.sectionTitle}>Sync status</h3>
+          <div className={s.syncRow}>
+            <span>Last synced:</span>
+            <span>
+              {lastSyncedAt === null
+                ? 'Never'
+                : (() => {
+                    const diffSec = Math.floor((Date.now() - new Date(lastSyncedAt).getTime()) / 1000);
+                    if (diffSec < 60) return 'Just now';
+                    if (diffSec < 3600) return `${Math.floor(diffSec / 60)} minutes ago`;
+                    return new Date(lastSyncedAt).toLocaleDateString();
+                  })()}
+            </span>
+          </div>
+          {flushing ? (
+            <div className={s.syncRow}>
+              <span className={s.syncMuted}>Syncing…</span>
+            </div>
+          ) : pendingChanges > 0 ? (
+            <div className={s.syncRow}>
+              <span className={s.syncMuted}>{pendingChanges} change{pendingChanges !== 1 ? 's' : ''} pending</span>
+            </div>
+          ) : null}
+          {lastSyncFailedAt !== null && (
+            <div className={s.syncWarningRow}>
+              <span>Sync failed — check your connection</span>
+              <button
+                type="button"
+                className={s.retryBtn}
+                onClick={() => window.location.reload()}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          {hadConflictLastSync && (
+            <div className={s.syncWarningRow}>
+              <span>Last sync detected conflicting edits on another device. Last write won.</span>
+              <button
+                type="button"
+                className={s.retryBtn}
+                onClick={() => markConflict(false)}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+          {lastGoodSnapshot !== null && (
+            <div className={s.syncRow}>
+              <button
+                type="button"
+                className={s.optBtn}
+                onClick={() => {
+                  try {
+                    const parsed = JSON.parse(lastGoodSnapshot) as import('../types.ts').BookEntry[];
+                    useBookStore.getState().setBooks(parsed);
+                    clearSnapshot();
+                    toast('Library restored from snapshot', 'success');
+                  } catch {
+                    toast('Failed to restore snapshot', 'error');
+                  }
+                }}
+              >
+                Restore from snapshot
+                {lastGoodSnapshotAt !== null && (
+                  <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.25rem' }}>
+                    (taken {new Date(lastGoodSnapshotAt).toLocaleString()})
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className={s.section}>
         <h3 className={s.sectionTitle}>Data on this device</h3>
         <p className={s.sectionHint}>
@@ -419,6 +516,82 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
             Download my data (JSON)
           </button>
         </div>
+      </div>
+
+      <div className={s.section}>
+        <h3 className={s.sectionTitle}>Support</h3>
+        <p className={s.sectionHint}>
+          Download a diagnostics bundle to help report issues. The file includes your book count, preferences, recent analytics events, and app storage — passwords, tokens, and keys are excluded.
+        </p>
+        <button
+          type="button"
+          className={s.optBtn}
+          onClick={() => {
+            downloadDiagnosticsBundle(books, preferences, analyticsEvents);
+            toast('Diagnostics downloaded', 'success');
+          }}
+        >
+          <Bug size={16} aria-hidden />
+          Download diagnostics
+        </button>
+      </div>
+
+      <div className={s.section}>
+        <h3 className={s.sectionTitle}>
+          <ShieldCheck size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} aria-hidden />
+          Privacy
+        </h3>
+        <button
+          type="button"
+          onClick={() => updatePreferences({ analyticsOptIn: !preferences.analyticsOptIn })}
+          className={`${s.toggleRow} ${preferences.analyticsOptIn ? s.toggleRowActive : ''}`}
+          aria-pressed={preferences.analyticsOptIn}
+        >
+          <BarChart3 size={18} />
+          <div className={s.toggleLabel}>
+            <span>Anonymous usage analytics</span>
+            <span className={s.toggleHint}>
+              Help improve SpineScanner by sharing anonymized usage data. No book content is collected. You can turn this off any time.
+            </span>
+          </div>
+          {preferences.analyticsOptIn && <CheckCircle size={18} className={s.check} />}
+        </button>
+        <p className={s.sectionHint}>
+          Permanently delete your entire library, shelves, preferences, and analytics. If you are signed in, your cloud data is removed too.
+        </p>
+        <button
+          type="button"
+          className={s.dangerOutlineBtn}
+          onClick={async () => {
+            const ok = await confirm({
+              title: 'Delete all your data?',
+              message:
+                "This permanently deletes your entire library, shelves, preferences, and analytics from this device. If you're signed in, your cloud data will also be deleted. This cannot be undone.",
+              confirmLabel: 'Delete all my data',
+              danger: true,
+            });
+            if (!ok) return;
+
+            const signedIn = user !== null;
+            if (signedIn && user) {
+              const { deleteAllCloudData } = await import('../lib/syncBooks.ts');
+              await deleteAllCloudData(user.id);
+            }
+
+            const { clearLocalAppData } = await import('../utils/clearLocalAppData.ts');
+            clearLocalAppData();
+
+            if (signedIn) {
+              await useAuthStore.getState().signOut();
+            }
+
+            toast('All data deleted', 'success');
+            setTimeout(() => window.location.reload(), 1500);
+          }}
+        >
+          <Trash2 size={16} aria-hidden />
+          Delete all my data
+        </button>
       </div>
 
       {!isMvpMode() && (
@@ -618,14 +791,22 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
   );
 
   if (inline) {
-    return <section aria-labelledby="profile-settings-title">{content}</section>;
+    return (
+      <>
+        <section aria-labelledby="profile-settings-title">{content}</section>
+        <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
+      </>
+    );
   }
 
   return (
-    <div className={s.overlay} role="dialog" aria-modal="true" aria-labelledby="profile-settings-title"
-      onClick={(e) => e.target === e.currentTarget && onClose?.()}>
-      {content}
-    </div>
+    <>
+      <div className={s.overlay} role="dialog" aria-modal="true" aria-labelledby="profile-settings-title"
+        onClick={(e) => e.target === e.currentTarget && onClose?.()}>
+        {content}
+      </div>
+      <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
+    </>
   );
 };
 

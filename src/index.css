@@ -34,6 +34,34 @@
   );
 }
 
+/* ---- High-contrast theme (WCAG AAA, color-blind safe) ---- */
+[data-theme="high-contrast"] {
+  color-scheme: dark;
+  --primary: #ffeb3b;
+  --primary-hover: #fff176;
+  --bg-dark: #000000;
+  --bg-card: #000000;
+  --text-main: #ffffff;
+  --text-muted: #cccccc;
+  --glass-border: #ffffff;
+  --glass-bg: #000000;
+  --accent-blue: #00ffff;
+  --accent-purple: #ffeb3b;
+  --body-bg: #000000;
+  --body-bg-color: #000000;
+  --input-bg: #000000;
+  --input-border: #ffffff;
+  --error: #ff5252;
+  --error-bg: #000000;
+  --error-border: #ff5252;
+  --shadow-glass: 0 0 0 1px #ffffff;
+  --bottom-nav-bar-height: 3.5rem;
+  --bottom-nav-padding-y: 0.5rem;
+  --main-bottom-pad-mobile: calc(
+    var(--bottom-nav-bar-height) + var(--bottom-nav-padding-y) + env(safe-area-inset-bottom, 0px)
+  );
+}
+
 /* ---- Light theme ---- */
 [data-theme="light"] {
   color-scheme: light;
@@ -267,5 +295,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 @supports (padding: env(safe-area-inset-bottom)) {
   .app-container {
     padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* ---- Global reduced-motion safety net ----
+   Honors prefers-reduced-motion across every element so any
+   animation/transition we didn't catch locally still becomes near-instant. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

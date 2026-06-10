@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
+import { useReadingSessionStore } from '../store/useReadingSessionStore.ts';
 import { useToast } from './Toast.tsx';
 import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import { useBookLookup } from '../hooks/useBookLookup.ts';
@@ -12,7 +13,7 @@ import { isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
 import {
   X, ExternalLink, BookOpen, CheckCircle, Clock, XCircle,
-  Pencil, Save, Tag, Trash2, Share2, RefreshCw
+  Pencil, Save, Tag, Trash2, Share2, RefreshCw, AlertTriangle
 } from 'lucide-react';
 import styles from './BookDetail.module.css';
 
@@ -35,6 +36,12 @@ const statusIcons: Record<BookEntry['status'], React.ReactNode> = {
   dnf: <XCircle size={16} />,
 };
 
+const sourceLabels: Record<string, string> = {
+  google_books: 'Google Books',
+  open_library: 'Open Library',
+  manual: 'Manual entry',
+};
+
 const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   const {
     updateBook,
@@ -47,6 +54,7 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
     assignShelf,
     unassignShelf,
   } = useBookStore();
+  const { sessions: allSessions, addSession, removeSession, sessionsForBook, stats } = useReadingSessionStore();
   const { toast, confirm } = useToast();
   const { lookupByIsbn, loading: lookupLoading } = useBookLookup();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
@@ -68,6 +76,46 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   const availableShelves = shelves.filter((s) => !bookShelfIds.includes(s.id));
   const progressPercent = getReadingProgressPercent(book);
   const progressValue = book.pagesFinished || 0;
+
+  const bookSessions = sessionsForBook(book.id);
+  const bookStats = stats(book.id);
+  const showSessionSection =
+    book.status === 'reading' || book.status === 'read';
+
+  const todayKey = (() => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  })();
+
+  const [showLogForm, setShowLogForm] = useState(false);
+  const [logDate, setLogDate] = useState(todayKey);
+  const [logDuration, setLogDuration] = useState(30);
+  const [logPages, setLogPages] = useState(0);
+
+  const handleAddSession = () => {
+    if (!logDate) {
+      toast('Please select a date', 'error');
+      return;
+    }
+    addSession({
+      id: crypto.randomUUID(),
+      bookId: book.id,
+      durationMin: Math.max(1, logDuration),
+      pagesRead: Math.max(0, logPages),
+      date: logDate,
+    });
+    setShowLogForm(false);
+    setLogDate(todayKey);
+    setLogDuration(30);
+    setLogPages(0);
+    toast('Session logged', 'success');
+  };
+
+  // suppress unused warning from allSessions subscription (ensures reactivity)
+  void allSessions;
 
   const handleEdit = () => {
     setDraft({
@@ -257,6 +305,23 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                   onChange={(e) => setDraft({ ...draft, coverImg: e.target.value })}
                   placeholder="https://..."
                 />
+                {book.status === 'reading' && (
+                  <div className={styles.pagesReadRow}>
+                    <label className={styles.label} htmlFor={`pages-read-${book.id}`}>Pages read</label>
+                    <input
+                      id={`pages-read-${book.id}`}
+                      className={styles.input}
+                      type="number"
+                      min={0}
+                      max={book.pageCount || undefined}
+                      value={progressValue || ''}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        if (!Number.isNaN(val)) updateReadingProgress(book.id, val);
+                      }}
+                    />
+                  </div>
+                )}
                 <div className={styles.editActions}>
                   <button onClick={handleSave} className={styles.saveBtn}>
                     <Save size={14} /> Save
@@ -292,7 +357,23 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                   <span>Added {new Date(book.dateAdded).toLocaleDateString()}</span>
                   {book.startedAt && <span>Started {new Date(book.startedAt).toLocaleDateString()}</span>}
                   {book.finishedAt && <span>Finished {new Date(book.finishedAt).toLocaleDateString()}</span>}
+                  {book.metadataSource && (
+                    <span className={styles.sourceBadge}>
+                      via {sourceLabels[book.metadataSource] ?? book.metadataSource}
+                    </span>
+                  )}
                 </div>
+                {book.metadataConflicts && book.metadataConflicts.length > 0 && (
+                  <div className={styles.conflictWarning} role="status" aria-label="Metadata conflict">
+                    <AlertTriangle size={13} />
+                    <span>Sources disagree on {book.metadataConflicts.map(c => c.field).join(', ')}</span>
+                  </div>
+                )}
+                {book.status === 'reading' && book.pageCount > 0 && (
+                  <p className={styles.progressLine}>
+                    {progressValue} of {book.pageCount} pages ({progressPercent}%)
+                  </p>
+                )}
                 <div className={styles.linkRow}>
                   {generateAmazonLink(book.isbn) && (
                     <a
@@ -435,6 +516,82 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
           )}
         </div>
 
+        {/* Reading sessions */}
+        {showSessionSection && (
+          <div className={styles.sessionsSection}>
+            <div className={styles.sectionHeader}>
+              <strong className={styles.sectionTitle}>Reading sessions</strong>
+            </div>
+            <div className={styles.statsRow}>
+              <span>{bookStats.totalSessions} sessions</span>
+              <span>{bookStats.avgPagesPerHour} pg/hr avg</span>
+              <span>Longest: {bookStats.longestSessionMin}m</span>
+              <span>This week: {bookStats.sessionsThisWeek}</span>
+            </div>
+            <div className={styles.sessionList}>
+              {[...bookSessions].reverse().map((session) => (
+                <div key={session.id} className={styles.sessionItem}>
+                  <span className={styles.sessionDate}>{session.date}</span>
+                  <span className={styles.sessionDuration}>{session.durationMin}m</span>
+                  <span className={styles.sessionPages}>{session.pagesRead > 0 ? `${session.pagesRead} pg` : '—'}</span>
+                  <button
+                    type="button"
+                    className={styles.sessionRemoveBtn}
+                    aria-label="Remove session"
+                    onClick={() => removeSession(session.id)}
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {showLogForm ? (
+              <div className={styles.logForm}>
+                <input
+                  type="date"
+                  value={logDate}
+                  onChange={(e) => setLogDate(e.target.value)}
+                  className={styles.input}
+                />
+                <div className={styles.row}>
+                  <div style={{ flex: 1 }}>
+                    <label className={styles.label}>Duration (min)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={logDuration}
+                      onChange={(e) => setLogDuration(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                      className={styles.input}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label className={styles.label}>Pages read</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={logPages}
+                      onChange={(e) => setLogPages(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className={styles.input}
+                    />
+                  </div>
+                </div>
+                <div className={styles.editActions}>
+                  <button type="button" onClick={handleAddSession} className={styles.saveBtn}>
+                    <Save size={14} /> Save
+                  </button>
+                  <button type="button" onClick={() => setShowLogForm(false)} className={styles.cancelBtn}>
+                    <X size={14} /> Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" className={styles.logSessionBtn} onClick={() => setShowLogForm(true)}>
+                + Log session
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Notes */}
         <textarea
           placeholder="Add your notes or quotes..."
@@ -462,6 +619,16 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
           {!editing && (
             <button onClick={handleEdit} className={styles.editBtn}>
               <Pencil size={14} /> Edit Details
+            </button>
+          )}
+          {!editing && !isBookPhotoOnly(book) && (
+            <button
+              onClick={handleRefreshMetadata}
+              className={styles.refreshBtn}
+              disabled={lookupLoading}
+              aria-label="Refresh metadata from APIs"
+            >
+              <RefreshCw size={14} /> Refresh
             </button>
           )}
           <button onClick={handleRemove} className={styles.removeBtn}>

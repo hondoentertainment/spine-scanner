@@ -305,3 +305,98 @@
   color: var(--text-muted);
   font-size: 0.82rem;
 }
+
+/* ---- Goodreads import ---- */
+.goodreadsMsg {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #22c55e;
+}
+
+/* ---- Bulk refresh ---- */
+.refreshProgress {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.refreshCancelBtn {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-main);
+  background: var(--glass-bg);
+}
+
+.refreshResult {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* ---- Edition (fuzzy title+author) duplicates panel ---- */
+.editionCard {
+  composes: duplicateCard;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.editionHead {
+  composes: duplicateHead;
+  color: #f59e0b;
+}
+
+.editionGroupTitle {
+  font-weight: 700;
+  color: var(--text-main);
+  font-size: 0.95rem;
+}
+
+.editionMeta {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.editionBookList {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.editionBookRow {
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.5rem;
+  background: var(--glass-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.editionBookTitle {
+  font-weight: 600;
+  color: var(--text-main);
+  font-size: 0.88rem;
+}
+
+.editionBookAuthor {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.editionBookFacts {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.editionMergeBtn {
+  composes: exportBtn;
+  background: #f59e0b;
+}

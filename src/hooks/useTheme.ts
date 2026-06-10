@@ -1,11 +1,15 @@
 import { useEffect, useCallback } from 'react';
 import { useProfileStore } from '../store/useProfileStore.ts';
 
-export type Theme = 'dark' | 'light';
+export type Theme = 'dark' | 'light' | 'high-contrast';
+export type ThemePreference = 'dark' | 'light' | 'system' | 'high-contrast';
 
-/** Resolves 'system' to actual theme based on prefers-color-scheme */
-function resolveTheme(pref: 'dark' | 'light' | 'system'): Theme {
-  if (pref === 'light' || pref === 'dark') return pref;
+/** Order used by the cycle-toggle (light → dark → system → high-contrast → light). */
+const THEME_CYCLE: ThemePreference[] = ['light', 'dark', 'system', 'high-contrast'];
+
+/** Resolves a stored preference to an actually-applied theme. 'system' uses prefers-color-scheme. */
+function resolveTheme(pref: ThemePreference): Theme {
+  if (pref === 'light' || pref === 'dark' || pref === 'high-contrast') return pref;
   if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: light)').matches) return 'light';
   return 'dark';
 }
@@ -22,7 +26,10 @@ export const useTheme = () => {
   /** Match browser / PWA chrome to resolved theme (Android theme-color, iOS status bar). */
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    const themeColor = theme === 'light' ? '#f1f5f9' : '#0f172a';
+    const themeColor =
+      theme === 'light' ? '#f1f5f9'
+      : theme === 'high-contrast' ? '#000000'
+      : '#0f172a';
     document.getElementById('app-theme-color')?.setAttribute('content', themeColor);
     const apple = document.getElementById('apple-status-bar-style');
     if (apple) {
@@ -42,12 +49,14 @@ export const useTheme = () => {
     return () => mq.removeEventListener('change', handler);
   }, [themePreference]);
 
+  /** Cycle through light → dark → system → high-contrast → light. */
   const toggleTheme = useCallback(() => {
-    const next = theme === 'dark' ? 'light' : 'dark';
+    const idx = THEME_CYCLE.indexOf(themePreference);
+    const next = THEME_CYCLE[(idx + 1) % THEME_CYCLE.length];
     updatePreferences({ theme: next });
-  }, [theme, updatePreferences]);
+  }, [themePreference, updatePreferences]);
 
-  const setTheme = useCallback((t: 'dark' | 'light' | 'system') => {
+  const setTheme = useCallback((t: ThemePreference) => {
     updatePreferences({ theme: t });
   }, [updatePreferences]);
 

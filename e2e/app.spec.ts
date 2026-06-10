@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { uiContracts } from '../src/testing/uiContracts';
 
+const PROFILE_STORAGE_KEY = 'spine-scanner-preferences';
+
 async function dismissOnboardingIfPresent(page: import('@playwright/test').Page) {
   const skipButton = page.getByRole('button', { name: /skip tour/i });
   if (await skipButton.isVisible().catch(() => false)) {
@@ -10,9 +12,20 @@ async function dismissOnboardingIfPresent(page: import('@playwright/test').Page)
 
 test.describe('SpineScanner release smoke', () => {
   test.beforeEach(async ({ page }) => {
+    // Seed onboardingCompleted so the tour never blocks assertions via aria-modal.
+    // The useEffect that shows the modal fires after React mounts, which can race
+    // with goto's load event; seeding localStorage avoids the timing issue.
+    await page.addInitScript(
+      ({ key }) => {
+        window.localStorage.setItem(
+          key,
+          JSON.stringify({ state: { preferences: { onboardingCompleted: true } }, version: 0 }),
+        );
+      },
+      { key: PROFILE_STORAGE_KEY },
+    );
     // baseURL includes /spine-scanner/ — avoid leading "/" on gotos or the path resets to origin (see Playwright baseURL rules).
     await page.goto('./');
-    await dismissOnboardingIfPresent(page);
   });
 
   test('loads the app shell and primary navigation', async ({ page }) => {

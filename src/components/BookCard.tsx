@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
+import { useReadingSessionStore } from '../store/useReadingSessionStore.ts';
 import { useToast } from './Toast.tsx';
 import type { BookEntry } from '../types.ts';
-import { Trash2, ExternalLink, BookOpen, CheckCircle, Clock, XCircle, Pencil, X, Save, Tag, Share2 } from 'lucide-react';
+import { Trash2, ExternalLink, BookOpen, CheckCircle, Clock, XCircle, Pencil, X, Save, Tag, Share2, Square, Play } from 'lucide-react';
 import { generateAmazonLink } from '../utils/amazonLink.ts';
 import { shareBook } from '../utils/shareBook.ts';
 import { getBookCoverSrc } from '../utils/bookPresentation.ts';
@@ -45,11 +46,28 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
         assignShelf,
         unassignShelf,
     } = useBookStore();
+    const { activeBookId, startSession, stopSession, cancelSession } = useReadingSessionStore();
     const { toast, confirm } = useToast();
     const shelfAnchorRef = useRef<HTMLDivElement>(null);
     const shelfTriggerRef = useRef<HTMLButtonElement>(null);
     const [editing, setEditing] = useState(false);
     const [showShelfPicker, setShowShelfPicker] = useState(false);
+    const [showStopForm, setShowStopForm] = useState(false);
+    const [stopPages, setStopPages] = useState(0);
+    const [elapsedLabel, setElapsedLabel] = useState('');
+
+    useEffect(() => {
+      if (activeBookId !== book.id) return;
+      const activeStartMs = useReadingSessionStore.getState().activeStartMs;
+      if (activeStartMs === null) return;
+      const update = () => {
+        const mins = Math.floor((Date.now() - activeStartMs) / 60000);
+        setElapsedLabel(`${mins}m`);
+      };
+      update();
+      const id = setInterval(update, 30000);
+      return () => clearInterval(id);
+    }, [activeBookId, book.id]);
 
     useEffect(() => {
         if (!showShelfPicker) return;
@@ -324,6 +342,65 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                     )}
                 </div>
             </div>
+
+            {(book.status === 'reading' || activeBookId === book.id) && (
+              <div className={s.sessionRow} onClick={(e) => e.stopPropagation()}>
+                {activeBookId === book.id ? (
+                  showStopForm ? (
+                    <div className={s.stopForm}>
+                      <input
+                        type="number"
+                        min={0}
+                        value={stopPages}
+                        onChange={(e) => setStopPages(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                        className={s.stopInput}
+                        placeholder="Pages read"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        className={s.stopConfirmBtn}
+                        onClick={() => {
+                          stopSession(book.id, stopPages);
+                          setShowStopForm(false);
+                          setStopPages(0);
+                          toast('Session logged', 'success');
+                        }}
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        className={s.cancelBtn}
+                        onClick={() => { cancelSession(); setShowStopForm(false); setStopPages(0); }}
+                      >
+                        Discard
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className={s.stopBtn}
+                      onClick={() => setShowStopForm(true)}
+                    >
+                      <Square size={12} /> Stop {elapsedLabel && <span className={s.elapsed}>{elapsedLabel}</span>}
+                    </button>
+                  )
+                ) : activeBookId !== null ? (
+                  <button type="button" className={s.startBtn} disabled title="Another session is active">
+                    <Play size={12} /> Start session
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={s.startBtn}
+                    onClick={() => startSession(book.id)}
+                  >
+                    <Play size={12} /> Start session
+                  </button>
+                )}
+              </div>
+            )}
 
             <textarea placeholder="Add your notes or quotes..." value={book.notes}
                 onChange={(e) => updateBookNotes(book.id, e.target.value)}

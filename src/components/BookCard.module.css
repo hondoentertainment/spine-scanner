@@ -1,7 +1,12 @@
 /* ---- Card layout ---- */
 .card {
-  animation: fadeIn 0.2s ease-out;
   cursor: pointer;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .card {
+    animation: fadeIn 0.2s ease-out;
+  }
 }
 
 .cardInner {
@@ -331,6 +336,84 @@
   border-radius: 0.4rem;
   object-fit: cover;
   opacity: 0.8;
+}
+
+/* ---- Session timer row ---- */
+.sessionRow {
+  margin-top: 0.45rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.startBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.28rem 0.65rem;
+  border-radius: 9999px;
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.startBtn:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.22);
+}
+
+.startBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.stopBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.28rem 0.65rem;
+  border-radius: 9999px;
+  background: rgba(248, 113, 113, 0.12);
+  color: #f87171;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.stopBtn:hover {
+  background: rgba(248, 113, 113, 0.22);
+}
+
+.elapsed {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.stopForm {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.stopInput {
+  width: 80px;
+  padding: 0.28rem 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 0.4rem;
+  outline: none;
+  font-family: inherit;
+}
+
+.stopConfirmBtn {
+  padding: 0.28rem 0.6rem;
+  border-radius: 9999px;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  font-size: 0.68rem;
+  font-weight: 600;
 }
 
 @keyframes fadeIn {

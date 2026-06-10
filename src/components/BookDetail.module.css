@@ -482,6 +482,112 @@
   flex-shrink: 0;
 }
 
+/* ---- Reading sessions ---- */
+.sessionsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid color-mix(in srgb, var(--glass-border) 60%, transparent);
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sectionTitle {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: 0.02em;
+}
+
+.statsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.statsRow span {
+  padding: 0.15rem 0.45rem;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 9999px;
+}
+
+.sessionList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.sessionItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: 0.4rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.sessionDate {
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.sessionDuration {
+  font-weight: 600;
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+.sessionPages {
+  color: var(--text-muted);
+  min-width: 3rem;
+  text-align: right;
+}
+
+.sessionRemoveBtn {
+  background: none;
+  padding: 0.15rem;
+  display: flex;
+  color: var(--text-muted);
+  opacity: 0.5;
+  border-radius: 0.25rem;
+}
+
+.sessionRemoveBtn:hover {
+  opacity: 1;
+  color: #f87171;
+}
+
+.logForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.25rem;
+}
+
+.logSessionBtn {
+  align-self: flex-start;
+  padding: 0.3rem 0.7rem;
+  border-radius: 9999px;
+  background: rgba(99, 102, 241, 0.12);
+  color: #818cf8;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.logSessionBtn:hover {
+  background: rgba(99, 102, 241, 0.22);
+}
+
 /* ---- Notes ---- */
 .notes {
   width: 100%;
@@ -530,7 +636,39 @@
   border-color: var(--accent-purple);
 }
 
+/* ---- Progress line (view mode) ---- */
+.progressLine {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent-purple);
+  margin: 0.1rem 0 0.5rem;
+}
+
+/* ---- Pages read input (edit mode) ---- */
+.pagesReadRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.pagesReadRow .input {
+  max-width: 130px;
+}
+
 /* ---- Actions ---- */
+.conflictWarning {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 0.5rem;
+  padding: 0.3rem 0.6rem;
+  width: fit-content;
+}
+
 .actions {
   display: flex;
   justify-content: space-between;

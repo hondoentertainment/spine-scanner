@@ -1,7 +1,41 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { BookEntry, Shelf } from '../types.ts';
+import type { BookEntry, ProfilePreferences, Shelf } from '../types.ts';
 import { normalizeBookEntry, normalizeBooks, updateBookForStatus, updateBookProgress } from '../utils/bookState.ts';
+import { migrateBooks } from '../lib/schemaMigrations.ts';
+import { useProfileStore } from './useProfileStore.ts';
+
+export function toLocalDateKey(d: Date): string {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+export function advanceStreak(prefs: ProfilePreferences): Partial<ProfilePreferences> {
+  const todayDate = new Date();
+  const yesterdayDate = new Date(todayDate);
+  yesterdayDate.setDate(todayDate.getDate() - 1);
+  const today = toLocalDateKey(todayDate);
+  const yesterday = toLocalDateKey(yesterdayDate);
+
+  if (prefs.lastStreakDate === today) {
+    return {};
+  }
+  if (prefs.lastStreakDate === yesterday) {
+    const next = prefs.currentStreak + 1;
+    return {
+      currentStreak: next,
+      longestStreak: Math.max(prefs.longestStreak, next),
+      lastStreakDate: today,
+    };
+  }
+  return {
+    currentStreak: 1,
+    longestStreak: Math.max(prefs.longestStreak, 1),
+    lastStreakDate: today,
+  };
+}
 
 function pickBetterTitle(a: string, b: string): string {
   const ta = a.trim();
@@ -64,18 +98,33 @@ export const useBookStore = create<BookStore>()(
         set((state) => ({
           books: state.books.map((b) => (b.id === id ? normalizeBookEntry({ ...b, ...updates }) : b)),
         })),
-      updateBookStatus: (id, status) =>
-        set((state) => ({
-          books: state.books.map((b) => (b.id === id ? updateBookForStatus(b, status) : b)),
-        })),
+      updateBookStatus: (id, status) => {
+        let bookUpdated = false;
+        set((state) => {
+          bookUpdated = state.books.some((b) => b.id === id);
+          return { books: state.books.map((b) => (b.id === id ? updateBookForStatus(b, status) : b)) };
+        });
+        if (bookUpdated && (status === 'read' || status === 'reading')) {
+          const prefs = useProfileStore.getState().preferences;
+          useProfileStore.getState().updatePreferences(advanceStreak(prefs));
+        }
+      },
       updateBookNotes: (id, notes) =>
         set((state) => ({
           books: state.books.map((b) => (b.id === id ? { ...b, notes } : b)),
         })),
-      updateReadingProgress: (id, pagesFinished) =>
-        set((state) => ({
-          books: state.books.map((b) => (b.id === id ? updateBookProgress(b, pagesFinished) : b)),
-        })),
+      updateReadingProgress: (id, pagesFinished) => {
+        let bookUpdated = false;
+        set((state) => {
+          const hasBook = state.books.some((b) => b.id === id);
+          bookUpdated = hasBook;
+          return { books: state.books.map((b) => (b.id === id ? updateBookProgress(b, pagesFinished) : b)) };
+        });
+        if (pagesFinished > 0 && bookUpdated) {
+          const prefs = useProfileStore.getState().preferences;
+          useProfileStore.getState().updatePreferences(advanceStreak(prefs));
+        }
+      },
       markNeedsReview: (id, needsReview, reason = '') =>
         set((state) => ({
           books: state.books.map((b) => (
@@ -92,10 +141,18 @@ export const useBookStore = create<BookStore>()(
         set((state) => ({
           books: state.books.map((b) => (ids.includes(b.id) ? normalizeBookEntry({ ...b, ...updates }) : b)),
         })),
-      bulkUpdateStatus: (ids, status) =>
-        set((state) => ({
-          books: state.books.map((b) => (ids.includes(b.id) ? updateBookForStatus(b, status) : b)),
-        })),
+      bulkUpdateStatus: (ids, status) => {
+        let anyUpdated = false;
+        set((state) => {
+          const idSet = new Set(ids);
+          anyUpdated = state.books.some((b) => idSet.has(b.id));
+          return { books: state.books.map((b) => (idSet.has(b.id) ? updateBookForStatus(b, status) : b)) };
+        });
+        if (anyUpdated && (status === 'read' || status === 'reading')) {
+          const prefs = useProfileStore.getState().preferences;
+          useProfileStore.getState().updatePreferences(advanceStreak(prefs));
+        }
+      },
       bulkAssignShelf: (ids, shelfId) =>
         set((state) => ({
           books: state.books.map((b) =>
@@ -175,9 +232,11 @@ export const useBookStore = create<BookStore>()(
       name: 'spine-scanner-storage',
       merge: (persistedState, currentState) => {
         const p = persistedState as { books?: BookEntry[]; shelves?: Shelf[] } | undefined;
+        const persistedBooks = p?.books ?? currentState.books;
+        const migratedBooks = migrateBooks(persistedBooks);
         return {
           ...currentState,
-          books: normalizeBooks(p?.books ?? currentState.books),
+          books: normalizeBooks(migratedBooks),
           shelves: p?.shelves ?? currentState.shelves,
         };
       },

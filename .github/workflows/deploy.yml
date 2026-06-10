@@ -1,5 +1,7 @@
-# Production hosting is on Vercel (push to main). Use this workflow only when you
-# intentionally want a GitHub Pages build (e.g. fork without Vercel).
+# Manual fallback Pages deploy. The primary deploy path is ci.yml, which
+# auto-deploys to BOTH GitHub Pages and Vercel on push to main. Use this
+# workflow only for one-off rebuilds (e.g. to redeploy without a code push,
+# or to deploy a specific branch via workflow_dispatch).
 name: Deploy static content to Pages (manual)
 
 on:
