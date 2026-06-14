@@ -34,7 +34,7 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: OCR E2E test
-        timeout-minutes: 15
+        timeout-minutes: 20
         env:
           RUN_OCR_E2E: '1'
         run: npx playwright test e2e/ocr-upload.spec.ts --project=chromium

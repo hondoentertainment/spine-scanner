@@ -25,7 +25,7 @@ test.describe('OCR photo upload', () => {
 
   test('extracts ISBN from uploaded OCR fixture image', async ({ page, context }) => {
     test.skip(!!process.env.CI && !process.env.RUN_OCR_E2E, 'Tesseract.js OCR too slow on default CI runners; set RUN_OCR_E2E=1 to run.');
-    test.setTimeout(60000);
+    test.setTimeout(process.env.CI ? 180000 : 60000);
     const mockTitle = 'Test Book via OCR';
 
     // Mock APIs at context level

@@ -33,8 +33,63 @@ export interface BookEntry {
    * A subsequent "Refresh metadata" must not overwrite flagged fields.
    */
   userEditedFields?: UserEditedFields;
+  /** @deprecated Use userEditedFields — kept for legacy rows. */
+  metadataUserEdited?: UserEditedFields;
+  /** Snapshots from Google Books and Open Library for conflict resolution. */
+  metadataPeers?: BookMetadataPeers;
   /** Schema version of this book entry; bumped when migrations are added. */
   schemaVersion?: number;
+}
+
+export interface MetadataPeerSnapshot {
+  title?: string;
+  author: string;
+  pageCount: number;
+  thumbnail?: string;
+}
+
+export interface BookMetadataPeers {
+  google?: MetadataPeerSnapshot;
+  openLibrary?: MetadataPeerSnapshot;
+}
+
+export interface BookMetadata {
+  title: string;
+  authors: string[];
+  pageCount: number;
+  thumbnail: string;
+  isbn: string;
+  source: MetadataSource;
+  matchedIsbn?: string;
+  editionFallback?: boolean;
+  conflicts?: MetadataProviderConflict[];
+}
+
+export interface MetadataProviderConflict {
+  source: MetadataSource;
+  title: string;
+  authors: string[];
+  pageCount: number;
+  thumbnail: string;
+  isbn: string;
+  reasons: string[];
+}
+
+export interface BookLookupResult {
+  title: string;
+  authors: string[];
+  pageCount: number;
+  thumbnail: string;
+  isbn: string;
+  metadataSource: MetadataSource;
+  google: BookMetadata | null;
+  openLibrary: BookMetadata | null;
+}
+
+export interface MetadataLookupPayload {
+  meta: BookMetadata;
+  google: BookMetadata | null;
+  openLibrary: BookMetadata | null;
 }
 
 export type MetadataSource = 'google_books' | 'open_library' | 'manual';
