@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { BookLookupProvider, useBookLookup } from '../useBookLookup';
+import { BookLookupProvider, useBookLookup } from '../BookLookupProvider';
 
 function ReadLoading({ onReady }: { onReady: (loading: boolean) => void }) {
   const { loading } = useBookLookup();
