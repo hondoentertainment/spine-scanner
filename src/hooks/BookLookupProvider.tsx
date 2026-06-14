@@ -68,6 +68,8 @@ export function BookLookupProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// Hook export alongside provider — intentional colocation for lookup context.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useBookLookup(): BookLookupContextValue {
   const context = useContext(BookLookupContext);
   if (!context) {
