@@ -90,6 +90,8 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
 
     useEffect(() => { processingRef.current = processing; }, [processing]);
     useEffect(() => { showManualRef.current = showManual; }, [showManual]);
+    const debugLogsRef = useRef<string[]>([]);
+    useEffect(() => { debugLogsRef.current = debugLogs; }, [debugLogs]);
     const liveQualityHintRef = useRef(liveQualityHint);
     useEffect(() => { liveQualityHintRef.current = liveQualityHint; }, [liveQualityHint]);
 
@@ -292,13 +294,13 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                     ? 'Scanner busy — upload a photo or enter ISBN'
                     : 'Scan failed — try a photo upload or enter ISBN',
                 type: 'error',
-                details: buildErrorDiagnostics(msg, debugLogs),
+                details: buildErrorDiagnostics(msg, debugLogsRef.current),
             });
         } finally {
             processingRef.current = false;
             setProcessing(false);
         }
-    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, debugLogs, batchModeProp, captureAveragedFrame, autoScan, scanMode]);
+    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, batchModeProp, captureAveragedFrame, autoScan, scanMode]);
 
     const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -383,13 +385,13 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
                     ? 'Scanner busy — try another photo or enter ISBN'
                     : 'Scan failed — try another photo or enter ISBN',
                 type: 'error',
-                details: buildErrorDiagnostics(msg, debugLogs),
+                details: buildErrorDiagnostics(msg, debugLogsRef.current),
             });
         } finally {
             processingRef.current = false;
             setProcessing(false);
         }
-    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, debugLogs, scanMode]);
+    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, scanMode]);
 
     const handlePhotoOnlyFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -406,14 +408,14 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onPhotoCapture, isScanning, b
     }, [onPhotoCapture, isScanning, addLog, toast]);
 
     useEffect(() => {
-        if (!autoScan) return;
+        if (!autoScan || !cameraReady || !!cameraError) return;
         addLog('Auto-scan (OCR) started');
         setStatus('Auto-scanning... hold book steady');
         const interval = setInterval(() => {
             if (!isBusy() && autoScan && liveQualityHintRef.current !== 'blurry' && liveQualityHintRef.current !== 'blurry-dark') capture();
         }, 2000);
         return () => { clearInterval(interval); addLog('Auto-scan (OCR) stopped'); };
-    }, [autoScan, capture, addLog, isBusy]);
+    }, [autoScan, cameraReady, cameraError, capture, addLog, isBusy]);
 
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
