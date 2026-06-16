@@ -124,7 +124,7 @@ jobs:
   # "deployHooks only"). Only this workflow should produce production deploys.
   deploy-vercel:
     needs: verify
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && secrets.VERCEL_TOKEN != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
