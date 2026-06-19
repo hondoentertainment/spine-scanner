@@ -143,9 +143,11 @@ jobs:
         run: npm install --global vercel@latest
 
       - name: Pull Vercel project info
+        if: env.VERCEL_TOKEN != ''
         run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
 
       - name: Build for Vercel
+        if: env.VERCEL_TOKEN != ''
         env:
           VITE_SITE_URL: ${{ vars.VITE_SITE_URL != '' && vars.VITE_SITE_URL || 'https://spinescanner.app' }}
           VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH_VERCEL != '' && vars.VITE_BASE_PATH_VERCEL || '/' }}
@@ -157,4 +159,5 @@ jobs:
         run: vercel build --prod --token=$VERCEL_TOKEN
 
       - name: Deploy to Vercel
+        if: env.VERCEL_TOKEN != ''
         run: vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
