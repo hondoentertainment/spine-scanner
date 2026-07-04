@@ -326,9 +326,13 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
   useEffect(() => {
     if (!initialOpenIsbn) return;
     const book = books.find((entry) => entry.isbn === initialOpenIsbn);
-    if (book) setSelectedBook(book);
+    if (book) {
+      setSelectedBook(book);
+    } else {
+      toast(`No book with ISBN ${initialOpenIsbn} in your library`, 'info');
+    }
     onOpenComplete?.();
-  }, [initialOpenIsbn, books, onOpenComplete]);
+  }, [initialOpenIsbn, books, onOpenComplete, toast]);
 
   useEffect(() => {
     if (initialSeriesFilter) setSeriesFilter(initialSeriesFilter);
