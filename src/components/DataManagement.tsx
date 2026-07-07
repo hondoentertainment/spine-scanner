@@ -154,7 +154,6 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
             }
             const msg = `Imported ${imported.length} book${imported.length !== 1 ? 's' : ''} (${skipped} duplicate${skipped !== 1 ? 's' : ''} skipped)`;
             setGoodreadsMsg(msg);
-            toast(msg, 'success');
         };
         reader.readAsText(file);
         // reset input so same file can be re-imported
