@@ -1,14 +1,18 @@
 [
   {
     "version": "Unreleased",
-    "date": "2026-05-13",
+    "date": "2026-08-04",
     "items": [
+      "Missing-cover recovery: one tap re-fetches covers for books without one (Phase 26)",
       "Reading session log with start/stop timer (Phase 27)",
       "Sync resilience: exponential backoff, snapshot restore, conflict detection (Phase 30)",
+      "High-contrast theme and full reduced-motion support (Phase 32)",
       "StoryGraph CSV import (Phase 33)",
-      "ICS calendar export for finished books (Phase 33)",
-      "Feature flag scaffolding for in-progress phases (Phase 34)",
-      "Support diagnostics download bundle (Phase 34)"
+      "ICS calendar export and Notion CSV export (Phase 33)",
+      "Welcome tour for new users (Phase 34)",
+      "Privacy controls: analytics opt-in and delete-all-data (Phase 34)",
+      "Support diagnostics download bundle (Phase 34)",
+      "Clearer Goodreads import feedback and unknown-ISBN deep links"
     ]
   },
   {
