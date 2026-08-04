@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### UX refinements (Aug 2026)
+
+- **Swipe-down to dismiss BookDetail:** new `useSwipeToDismiss` hook (threshold + horizontal-drift rejection + at-top arming) applied to the BookDetail modal so touch users can flick it closed like a sheet. 6 hook tests + 2 component tests.
+- **Batch-scan session summary with undo (roadmap B5):** batch adds now toast a running count ("Added — 3 books this session") with an **Undo** action that removes that book and decrements the counter; navigating away from the scanner shows "Batch complete — you added N books this session." Copy helpers in `src/utils/batchSession.ts` with tests.
+- Mobile UX audit checklist synced with reality (bottom nav, skeletons, `touch-action` were shipped but unchecked); pull-to-refresh is the only remaining item.
+
 ### Phase 26 close-out + coverage repair (Aug 2026)
 
 - **Missing-cover recovery (Phase 26 final slice):** `findBooksMissingCovers` / `extractCoverUpdate` in `src/utils/missingCovers.ts` — targets books without a real cover (including those stuck on the fallback placeholder), skipping photo-only books and user-edited covers. "Recover missing covers (N)" button in Data → Refresh Metadata re-queries only those books and applies **only** the cover field, sharing the existing progress/cancel UI. 11 utility tests + 4 component tests.

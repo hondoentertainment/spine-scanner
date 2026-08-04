@@ -4,6 +4,8 @@
     "date": "2026-08-04",
     "items": [
       "Missing-cover recovery: one tap re-fetches covers for books without one (Phase 26)",
+      "Swipe down to close book details on touch devices",
+      "Batch scanning: running session count, undo, and end-of-session summary",
       "Reading session log with start/stop timer (Phase 27)",
       "Sync resilience: exponential backoff, snapshot restore, conflict detection (Phase 30)",
       "High-contrast theme and full reduced-motion support (Phase 32)",

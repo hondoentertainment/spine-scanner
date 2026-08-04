@@ -3,6 +3,7 @@ import { useBookStore } from '../store/useBookStore.ts';
 import { useReadingSessionStore } from '../store/useReadingSessionStore.ts';
 import { useToast } from './Toast.tsx';
 import { useFocusTrap } from '../hooks/useFocusTrap.ts';
+import { useSwipeToDismiss } from '../hooks/useSwipeToDismiss.ts';
 import { useBookLookup } from '../hooks/useBookLookup.ts';
 import type { BookEntry, UserEditedFields } from '../types.ts';
 import { METADATA_SOURCE_LABEL } from '../types.ts';
@@ -59,6 +60,10 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
   const { lookupByIsbn, loading: lookupLoading } = useBookLookup();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
   const shelfAnchorRef = useRef<HTMLDivElement>(null);
+  const scrollBodyRef = useRef<HTMLDivElement>(null);
+  const swipeHandlers = useSwipeToDismiss(onClose, {
+    isAtTop: () => (scrollBodyRef.current?.scrollTop ?? 0) === 0,
+  });
   const [editing, setEditing] = useState(false);
   const [showShelfPicker, setShowShelfPicker] = useState(false);
   const [draft, setDraft] = useState({
@@ -229,12 +234,12 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
 
   return (
     <div className={styles.overlay} onClick={onClose} role="dialog" aria-modal="true" aria-label={`Details for ${book.title}`}>
-      <div ref={focusTrapRef} className={styles.modal} onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
+      <div ref={focusTrapRef} className={styles.modal} onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown} {...swipeHandlers}>
         <button onClick={onClose} className={styles.closeBtn} aria-label="Close detail view">
           <X size={20} />
         </button>
 
-        <div className={styles.scrollBody}>
+        <div ref={scrollBodyRef} className={styles.scrollBody}>
           {editing ? (
             <div className={styles.editTop}>
               <img

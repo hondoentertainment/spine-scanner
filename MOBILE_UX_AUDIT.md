@@ -36,10 +36,10 @@ SpineScanner is a PWA with solid mobile foundations: responsive layout, safe-are
 
 | Area | Finding | Recommendation |
 |------|---------|----------------|
-| Loading | Lazy views show "Loading scanner..." text only | Add skeleton placeholders for Scanner, Library, Profile |
+| Loading | ~~Lazy views show "Loading scanner..." text only~~ | ~~Add skeleton placeholders~~ ✅ Fixed — skeleton block + grid fallbacks on all lazy routes in `App.tsx` |
 | Pull-to-refresh | Library list has no pull-to-refresh | Add pull-to-refresh for library sync on mobile |
-| Swipe gestures | No swipe-to-dismiss on modals | Consider swipe-down to close BookDetail modal |
-| `touch-manipulation` | Not applied to buttons | Add `touch-action: manipulation` to interactive elements to remove 300ms delay |
+| Swipe gestures | ~~No swipe-to-dismiss on modals~~ | ~~Swipe-down to close BookDetail modal~~ ✅ Fixed — `useSwipeToDismiss` hook; only arms when the scroll body is at the top |
+| `touch-manipulation` | ~~Not applied to buttons~~ | ~~Add `touch-action: manipulation`~~ ✅ Fixed globally in `index.css` |
 
 ## Implementation Checklist
 
@@ -48,6 +48,8 @@ SpineScanner is a PWA with solid mobile foundations: responsive layout, safe-are
 - [x] Use PNG apple-touch-icon (`/icon-192.png`)
 - [x] Ensure nav buttons meet 44×44px minimum on 320px viewport (`min-height: 44px; min-width: 44px` in `App.module.css`)
 - [x] Add `touch-action: manipulation` to buttons/links (applied globally in `index.css` and to `.navBtn` in `App.module.css`)
-- [ ] Consider bottom nav for mobile (optional)
-- [ ] Add skeleton loaders for lazy views (optional)
-- [ ] Add pull-to-refresh for library (optional)
+- [x] Consider bottom nav for mobile — shipped: nav is fixed to the bottom with safe-area padding under 640px (`App.module.css`)
+- [x] Add skeleton loaders for lazy views — shipped in `App.tsx` Suspense fallbacks
+- [x] Swipe-down to dismiss BookDetail (`useSwipeToDismiss`)
+- [x] Batch-scan session summary with per-add undo (roadmap B5)
+- [ ] Add pull-to-refresh for library (optional — last open item)

@@ -38,6 +38,26 @@ Phases 26–28 are essentially shipped (see below), so the roadmap cursor sits a
 
 ---
 
+## Recommended Next Feature Set (2026-08-04): "Sync Trust & Sharing Foundations"
+
+With Phases 25–28 closed and much of 30–34 already landed piecemeal, the next coherent feature set should finish sync trust and lay the first sharing bricks — in this order:
+
+1. **Cloud Sync V2 completion (Phase 30 remainder).** The resilience layer shipped (retry backoff, pre-push snapshot, conflict *flag*), but conflicts still silently resolve local-wins. Build: a per-book conflict resolution UI (show both versions, pick or merge), a sync history panel (last N syncs with outcome), and an offline queue inspector surfaced from the existing Sync status panel.
+2. **Loan / borrow tracking (roadmap B4 — the gateway to Phase 29).** Table stakes for home-library apps and the smallest useful slice of "sharing": lend a book to a named person with an optional due date, a "Lent out" smart shelf, and a due-soon reminder card in HomeFeed. Models ownership cleanly before full household mode.
+3. **Library search polish (B1 remainder).** Recent-search recall exists; still missing are match highlighting in results and richer empty-state CTAs ("no matches — scan it now?").
+4. **Pull-to-refresh for the library (last open mobile-audit item).** Trigger a sync pull on signed-in accounts; simple spinner affordance otherwise.
+5. **Insights export (Phase 31 remainder).** Unread-backlog insights and a shareable "Year in Books" card image — turns existing stats into a growth loop.
+
+Skipped deliberately: full Phase 29 household mode (needs the conflict UI first) and native wrappers (D3 — PWA limits haven't bitten yet).
+
+### UX refinements shipped with this recommendation (2026-08-04)
+
+- **Swipe-down to dismiss BookDetail** on touch devices (`useSwipeToDismiss` hook) — only arms when the modal's scroll body is at the top, so scrolling content never accidentally closes it.
+- **Batch-scan session summary + undo (roadmap B5)** — each batch add now shows a running count with an **Undo** action, and leaving the scanner surfaces "Batch complete — you added N books this session."
+- Mobile UX audit refreshed: bottom nav, skeleton loaders, and `touch-action` were already shipped but unchecked; pull-to-refresh is the only remaining item.
+
+---
+
 ## Previous Immediate Actions (all complete)
 
 ### 1. ~~Fix remaining mobile touch target issues~~ ✅ Complete
