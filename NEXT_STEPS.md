@@ -20,13 +20,13 @@ The biggest drag on the repo right now. Open PRs date back to April and several 
 
 The app is feature-complete for v1, but launch configuration is not done: real `VITE_SITE_URL` / `VITE_BASE_PATH` / `VITE_SUPPORT_EMAIL`, production Sentry DSN, Supabase production keys/migrations, Vercel secrets (CI currently skips the Vercel deploy when the token is absent — see #81), and a real-device mobile validation pass. This is the actual blocker between "done" and "launched"; everything in `LAUNCH_CHECKLIST.md` should be walked once, end to end.
 
-### 3. Raise branch coverage from 54% toward 65% (Issue #41)
+### 3. Raise branch coverage from 49% toward 65% (Issue #41) — in progress
 
-Branch coverage is the weakest quality signal. Prioritize the error/fallback paths named in the issue: `useBookLookup` network failures, `syncBooks` conflict/partial-failure paths, `useScanPipeline` barcode→OCR fallback and timeout handling, `importLogic` malformed-CSV cases, and `useAuthStore` session-expiry paths. Then ratchet the thresholds in `vitest.config.ts`.
+Updated finding (2026-08-04): most files named in the issue are now well covered (`useBookLookup` 86% branches, `importLogic` 85%, `useScanPipeline` 75%, `useAuthStore` 72%). `syncBooks.ts` was the laggard at 50% branches / 33% statements — now 86% / 92% after `syncBooksRemote.test.ts` landed. The remaining lever is the **zero-coverage UI components**: `App.tsx` (~1,000 lines, no test file at all), `HomeFeed.tsx`, and most of `DataManagement.tsx`. Note: coverage totals had drifted below the configured thresholds without anyone noticing because CI doesn't run `test:coverage` — thresholds were reset to the measured baseline (58/47/47/60); ratchet them up as component tests land, and consider adding a coverage step to CI so this can't silently regress again.
 
-### 4. Finish the last slice of Phase 26: missing-cover recovery
+### 4. ~~Finish the last slice of Phase 26: missing-cover recovery~~ ✅ Complete
 
-The only Phase 26 item still open. Bulk metadata refresh exists in `DataManagement.tsx`, but there is no targeted flow to find books with a missing/broken cover and repair just those (with the existing `userEditedFields` protection). Small, well-scoped, and it closes out the phase.
+Shipped: `src/utils/missingCovers.ts` + a "Recover missing covers" action in Data → Refresh Metadata. It targets books without a real cover (including the fallback placeholder), skips photo-only books and user-edited covers, and applies only the `coverImg` field from the refreshed metadata. **Phase 26 is now fully closed.**
 
 ### 5. Keep an eye on OCR E2E stability in CI
 
@@ -66,7 +66,7 @@ The panel is hidden when `totalScans === 0` to avoid cluttering new installs. Re
 3. **OCR diagnostics panel** ✅ — `DebugPanel.tsx` exposes live telemetry and timestamped scan logs, toggled by the terminal icon in the scanner toolbar.
 4. **Device benchmark runner** ✅ — `scripts/benchmark-scan.test.ts` runs the pipeline against fixture scenarios with mocked OCR/barcode and emits `scan-benchmark.csv` (fixture, scenario, detection method, confidence band, latency, pass/fail). Run with `npm run bench:scan`. Replace the mocked stages with captured device frames + real Tesseract to produce on-device numbers.
 
-### 4. Phase 26 — Metadata Quality Layer (nearly complete)
+### 4. Phase 26 — Metadata Quality Layer ✅ Complete
 
 Foundation slice landed:
 
@@ -80,9 +80,9 @@ Since then, most of the remaining Phase 26 scope has also shipped:
 - **Edition-aware matching** ✅ — `editionDuplicates.ts` catches hardcover/paperback/unabridged duplicates of the same book.
 - **Bulk metadata refresh** ✅ — refresh-all flow with progress and cancel in `DataManagement.tsx`.
 
-Still pending in Phase 26:
+- **Missing-cover recovery** ✅ — `missingCovers.ts` + "Recover missing covers" action in `DataManagement.tsx`; cover-only updates, photo-only and user-edited covers excluded.
 
-- Missing-cover recovery flow (targeted repair of books with absent/broken covers — see Immediate Action 4).
+Phase 26 is fully closed.
 
 ### 5. Phases 27 & 28 — shipped
 
@@ -129,7 +129,7 @@ Both landed ahead of this doc:
 | # | Phase | Goal | Key deliverables |
 |---|-------|------|------------------|
 | 25 | Scan Accuracy Hardening ✅ | Reduce failed scans and shorten time-to-add on real devices | Device-based scanner benchmark set, confidence scoring in pipeline, low-light / glare presets, OCR diagnostics surfaced in UI, regression suite for difficult covers and barcodes |
-| 26 | Metadata Quality Layer (missing-cover recovery pending) | Make imported book data more trustworthy and editable in bulk | Metadata source attribution ✅, conflict resolution when Google/Open Library disagree ✅, edition-aware matching ✅, bulk metadata refresh ✅, missing-cover recovery flow |
+| 26 | Metadata Quality Layer ✅ | Make imported book data more trustworthy and editable in bulk | Metadata source attribution ✅, conflict resolution when Google/Open Library disagree ✅, edition-aware matching ✅, bulk metadata refresh ✅, missing-cover recovery flow ✅ |
 | 27 | Reading Workflow Expansion ✅ | Turn the library into an active reading tracker instead of just a catalog | Reading sessions, progress percent / pages finished, start-finish dates, quick status actions, reading streak / yearly goals, richer stats cards |
 | 28 | Collections and Smart Shelves ✅ | Help users organize large libraries without manual tagging overhead | Rule-based shelves, saved searches, shelf templates, sort presets, multi-select bulk actions, archive / hidden shelf support |
 | 29 | Social and Household Sharing | Support shared libraries across families, clubs, or small teams | Household mode, lend/borrow tracking, shared shelves, permissions for viewers vs editors, activity feed for collaborative changes |
