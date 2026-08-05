@@ -7,14 +7,17 @@ A progressive web app for digitizing and managing your personal book library. Sc
 - **OCR & Barcode Scanning** -- Point your camera at an ISBN barcode or spine text. Uses Tesseract.js for OCR and ZXing for barcode detection, with automatic rotation handling for vertical spines and a confidence-band signal (low / medium / high) per scan.
 - **Automatic Metadata Lookup** -- Fetches title, author, page count, and cover art from Google Books and Open Library in parallel. Source attribution per book and a warning when the two sources disagree on author / page count / title.
 - **Library Management** -- Search, sort (by title, author, date, pages), and filter by reading status, shelf, series, or page range. Bulk multi-select for status changes, shelf assignment, and deletion. Smart shelves and saved views for repeated filters.
-- **Reading Tracking** -- Per-book pages read, started/finished dates, current and longest reading streak, and a "{year} in Books" card with books finished, pages read, average pages/book, and busiest month.
-- **Import & Export** -- Goodreads CSV import (real export format, including ISBN wrappers and shelf mapping) plus full JSON backup/restore. Exports: Goodreads CSV, LibraryThing TSV, StoryGraph CSV, HTML print-friendly.
+- **Reading Tracking** -- Per-book pages read, started/finished dates, current and longest reading streak, and a "{year} in Books" card with books finished, pages read, average pages/book, and busiest month. A start/stop session timer on reading books logs a per-book session history with aggregate stats.
+- **Import & Export** -- Goodreads CSV import (real export format, including ISBN wrappers and shelf mapping), StoryGraph CSV import, plus full JSON backup/restore. Exports: Goodreads CSV, LibraryThing TSV, StoryGraph CSV, Notion CSV, ICS reading calendar, HTML print-friendly.
 - **Duplicate Handling** -- Exact-ISBN duplicate merge plus edition-level detection that catches hardcover / paperback / unabridged duplicates of the same book.
 - **Offline Support** -- Installable PWA with service worker caching for static assets and API responses.
 - **Persistent Storage** -- Library data is saved to localStorage and persists across sessions.
 - **Cloud Sync (Optional)** -- Sign in with Supabase to sync your library across devices. A Sync status panel in Profile shows last sync time, pending count, and any failures. Works without an account too.
 - **Bookshelves** -- Create custom shelves (Sci-Fi, Lent Out, Work Reading, etc.) and assign books to multiple shelves. Filter your library by shelf.
-- **Edit Book Metadata** -- Fix incorrect titles, authors, page counts, and cover images inline. The **Refresh metadata** action re-queries APIs but never overwrites fields you've manually edited.
+- **Edit Book Metadata** -- Fix incorrect titles, authors, page counts, and cover images inline. The **Refresh metadata** action re-queries APIs but never overwrites fields you've manually edited. **Recover missing covers** re-fetches artwork for books without a cover and updates only the cover field.
+- **Accessibility & Theming** -- Light, dark, system, and high-contrast (WCAG AAA) themes; full reduced-motion support; skip link, focus traps, and screen-reader announcements throughout.
+- **Onboarding & Support** -- A four-step welcome tour for new users, an in-app "What's new" changelog, and a one-click diagnostics bundle download for support requests.
+- **Privacy Controls** -- Client-side analytics are opt-in (off by default), and a "Delete all my data" action wipes cloud rows, local storage, and signs you out.
 
 ## Tech Stack
 

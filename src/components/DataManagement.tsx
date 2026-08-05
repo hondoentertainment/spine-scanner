@@ -10,6 +10,7 @@ import { exportToGoodreadsCSV } from '../utils/goodreadsExport.ts';
 import { exportToJSON, importFromJSON, exportToLibraryThingTSV, exportToStoryGraphCSV, exportToHTML, exportToICS, exportToNotionCSV } from '../utils/exportFormats.ts';
 import { findDuplicateIsbnGroups } from '../utils/libraryDuplicates.ts';
 import { findEditionDuplicateGroups } from '../utils/editionDuplicates.ts';
+import { findBooksMissingCovers, extractCoverUpdate } from '../utils/missingCovers.ts';
 import { Download, Upload, Trash2, Globe, CheckCircle, Loader2, X, GitMerge, RefreshCw, Layers } from 'lucide-react';
 import type { BookEntry } from '../types.ts';
 import s from './DataManagement.module.css';
@@ -188,10 +189,14 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
         toast('Notion CSV exported', 'success');
     };
 
-    const handleBulkRefresh = async () => {
-        const targets = books.filter((b) => b.metadataSource === undefined);
+    const runRefreshPass = async (
+        targets: BookEntry[],
+        emptyMsg: string,
+        applyFields: (refreshed: Partial<BookEntry> | null) => Partial<BookEntry> | null,
+        doneMsg: (updated: number) => string,
+    ) => {
         if (targets.length === 0) {
-            setRefreshResultMsg('No books without a metadata source found.');
+            setRefreshResultMsg(emptyMsg);
             return;
         }
         cancelRefreshRef.current = false;
@@ -209,7 +214,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
             }
             setRefreshProgress(i);
             const book = targets[i];
-            const updatedFields = await refreshMetadata(book);
+            const updatedFields = applyFields(await refreshMetadata(book));
             if (updatedFields) {
                 updateBook(book.id, updatedFields);
                 updatedCount++;
@@ -220,9 +225,25 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
         }
 
         setRefreshProgress(targets.length);
-        setRefreshResultMsg(`Done — updated ${updatedCount} book${updatedCount !== 1 ? 's' : ''}`);
+        setRefreshResultMsg(doneMsg(updatedCount));
         setRefreshRunning(false);
     };
+
+    const handleBulkRefresh = () => runRefreshPass(
+        books.filter((b) => b.metadataSource === undefined),
+        'No books without a metadata source found.',
+        (refreshed) => refreshed,
+        (updated) => `Done — updated ${updated} book${updated !== 1 ? 's' : ''}`,
+    );
+
+    const missingCoverCount = useMemo(() => findBooksMissingCovers(books).length, [books]);
+
+    const handleRecoverCovers = () => runRefreshPass(
+        findBooksMissingCovers(books),
+        'No books with missing covers found.',
+        extractCoverUpdate,
+        (updated) => `Done — recovered ${updated} cover${updated !== 1 ? 's' : ''}`,
+    );
 
     const handleCancelRefresh = () => {
         cancelRefreshRef.current = true;
@@ -514,6 +535,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                 </h3>
                 <p className={s.sectionDesc}>
                     Fetch updated metadata from APIs for books that have no metadata source recorded (added before Phase 26).
+                    Cover recovery re-queries only books missing a cover image and updates just the cover — manual edits are never overwritten.
                 </p>
                 {refreshRunning ? (
                     <div className={s.refreshProgress}>
@@ -521,9 +543,14 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                         <button onClick={handleCancelRefresh} className={`glass ${s.refreshCancelBtn}`}>Cancel</button>
                     </div>
                 ) : (
-                    <button onClick={handleBulkRefresh} className={`glass ${s.exportBtn}`}>
-                        Refresh all books without metadata source
-                    </button>
+                    <div className={s.refreshBtnStack}>
+                        <button onClick={handleBulkRefresh} className={`glass ${s.exportBtn}`}>
+                            Refresh all books without metadata source
+                        </button>
+                        <button onClick={handleRecoverCovers} className={`glass ${s.exportBtn}`}>
+                            Recover missing covers{missingCoverCount > 0 ? ` (${missingCoverCount})` : ''}
+                        </button>
+                    </div>
                 )}
                 {refreshResultMsg && !refreshRunning && (
                     <p className={s.refreshResult}>{refreshResultMsg}</p>

@@ -4,9 +4,61 @@ Status of recommended improvements. Items marked completed are implemented.
 
 ---
 
-## Recommended Immediate Actions
+## Recommended Immediate Actions (updated 2026-07-28)
 
-These are the highest-value, lowest-risk improvements based on the current codebase audit.
+Based on an audit of the codebase, CI history, and repository state at `c75e612` (main, CI green). The headline: **feature work is well ahead of this doc — the current bottlenecks are repo hygiene and launch operations, not new features.**
+
+### 1. Triage the open pull request backlog (10 open PRs)
+
+The biggest drag on the repo right now. Open PRs date back to April and several overlap or are already superseded by the `chore: sync outstanding local changes to production` commits that landed directly on main:
+
+- **#83 (Deploy hardening + a11y CI gate + Goodreads round-trip)** — the most recent substantive PR (July 4). Review and land this first: it adds the `@axe-core/playwright` accessibility gate from Phase 32 and Vercel deploy-secret verification.
+- **#79 / #80 (dependabot)** — rebase against main and merge; dependency updates only get riskier with age.
+- **#65, #66, #68, #70, #74, #75, #76** — diff each against main; most appear superseded by later direct-to-main sync commits (e.g. #76's E2E strict-mode fix looks equivalent to #77, already merged). Close what's redundant so the PR list reflects real pending work.
+
+### 2. Complete the production launch checklist (Issue #40)
+
+The app is feature-complete for v1, but launch configuration is not done: real `VITE_SITE_URL` / `VITE_BASE_PATH` / `VITE_SUPPORT_EMAIL`, production Sentry DSN, Supabase production keys/migrations, Vercel secrets (CI currently skips the Vercel deploy when the token is absent — see #81), and a real-device mobile validation pass. This is the actual blocker between "done" and "launched"; everything in `LAUNCH_CHECKLIST.md` should be walked once, end to end.
+
+### 3. Raise branch coverage from 49% toward 65% (Issue #41) — in progress
+
+Updated finding (2026-08-04): most files named in the issue are now well covered (`useBookLookup` 86% branches, `importLogic` 85%, `useScanPipeline` 75%, `useAuthStore` 72%). `syncBooks.ts` was the laggard at 50% branches / 33% statements — now 86% / 92% after `syncBooksRemote.test.ts` landed. The remaining lever is the **zero-coverage UI components**: `App.tsx` (~1,000 lines, no test file at all), `HomeFeed.tsx`, and most of `DataManagement.tsx`. Note: coverage totals had drifted below the configured thresholds without anyone noticing because CI doesn't run `test:coverage` — thresholds were reset to the measured baseline (58/47/47/60); ratchet them up as component tests land, and consider adding a coverage step to CI so this can't silently regress again.
+
+### 4. ~~Finish the last slice of Phase 26: missing-cover recovery~~ ✅ Complete
+
+Shipped: `src/utils/missingCovers.ts` + a "Recover missing covers" action in Data → Refresh Metadata. It targets books without a real cover (including the fallback placeholder), skips photo-only books and user-edited covers, and applies only the `coverImg` field from the refreshed metadata. **Phase 26 is now fully closed.**
+
+### 5. Keep an eye on OCR E2E stability in CI
+
+Main had four consecutive red runs in June from OCR E2E timeouts before #78/#81 fixed them (heavy OCR now runs integration-only). CI has been green since, but this suite has a flake history — if it reds again, prefer tightening fixtures/timeouts over re-widening what runs on every push.
+
+### After that: Phase 30 (Cloud Sync V2) before Phase 29 (Household Sharing)
+
+Phases 26–28 are essentially shipped (see below), so the roadmap cursor sits at Phase 29. Recommendation: **take Phase 30 first.** Household sharing builds directly on sync being trustworthy — conflict UI, offline queue visibility, and last-good-snapshot restore should exist before multiple people can write to the same library.
+
+---
+
+## Recommended Next Feature Set (2026-08-04): "Sync Trust & Sharing Foundations"
+
+With Phases 25–28 closed and much of 30–34 already landed piecemeal, the next coherent feature set should finish sync trust and lay the first sharing bricks — in this order:
+
+1. **Cloud Sync V2 completion (Phase 30 remainder).** The resilience layer shipped (retry backoff, pre-push snapshot, conflict *flag*), but conflicts still silently resolve local-wins. Build: a per-book conflict resolution UI (show both versions, pick or merge), a sync history panel (last N syncs with outcome), and an offline queue inspector surfaced from the existing Sync status panel.
+2. **Loan / borrow tracking (roadmap B4 — the gateway to Phase 29).** Table stakes for home-library apps and the smallest useful slice of "sharing": lend a book to a named person with an optional due date, a "Lent out" smart shelf, and a due-soon reminder card in HomeFeed. Models ownership cleanly before full household mode.
+3. **Library search polish (B1 remainder).** Recent-search recall exists; still missing are match highlighting in results and richer empty-state CTAs ("no matches — scan it now?").
+4. **Pull-to-refresh for the library (last open mobile-audit item).** Trigger a sync pull on signed-in accounts; simple spinner affordance otherwise.
+5. **Insights export (Phase 31 remainder).** Unread-backlog insights and a shareable "Year in Books" card image — turns existing stats into a growth loop.
+
+Skipped deliberately: full Phase 29 household mode (needs the conflict UI first) and native wrappers (D3 — PWA limits haven't bitten yet).
+
+### UX refinements shipped with this recommendation (2026-08-04)
+
+- **Swipe-down to dismiss BookDetail** on touch devices (`useSwipeToDismiss` hook) — only arms when the modal's scroll body is at the top, so scrolling content never accidentally closes it.
+- **Batch-scan session summary + undo (roadmap B5)** — each batch add now shows a running count with an **Undo** action, and leaving the scanner surfaces "Batch complete — you added N books this session."
+- Mobile UX audit refreshed: bottom nav, skeleton loaders, and `touch-action` were already shipped but unchecked; pull-to-refresh is the only remaining item.
+
+---
+
+## Previous Immediate Actions (all complete)
 
 ### 1. ~~Fix remaining mobile touch target issues~~ ✅ Complete
 
@@ -34,7 +86,7 @@ The panel is hidden when `totalScans === 0` to avoid cluttering new installs. Re
 3. **OCR diagnostics panel** ✅ — `DebugPanel.tsx` exposes live telemetry and timestamped scan logs, toggled by the terminal icon in the scanner toolbar.
 4. **Device benchmark runner** ✅ — `scripts/benchmark-scan.test.ts` runs the pipeline against fixture scenarios with mocked OCR/barcode and emits `scan-benchmark.csv` (fixture, scenario, detection method, confidence band, latency, pass/fail). Run with `npm run bench:scan`. Replace the mocked stages with captured device frames + real Tesseract to produce on-device numbers.
 
-### 4. Phase 26 — Metadata Quality Layer (in progress)
+### 4. Phase 26 — Metadata Quality Layer ✅ Complete
 
 Foundation slice landed:
 
@@ -42,12 +94,22 @@ Foundation slice landed:
 2. **Source badge in `BookDetail`** ✅ — read-only chip in the meta block showing where the data came from.
 3. **Refresh metadata action** ✅ — re-queries the APIs and merges results, but skips any field flagged in `userEditedFields`. `BookDetail.handleSave` now sets that flag for `title`, `author`, `pageCount`, and `coverImg` whenever the value changes.
 
-Still pending in Phase 26:
+Since then, most of the remaining Phase 26 scope has also shipped:
 
-- Conflict UI when Google Books and Open Library disagree on author or page count.
-- Edition-aware matching.
-- Bulk metadata refresh.
-- Missing-cover recovery flow.
+- **Conflict UI** ✅ — `MetadataConflictPanel.tsx` surfaces disagreements between Google Books and Open Library.
+- **Edition-aware matching** ✅ — `editionDuplicates.ts` catches hardcover/paperback/unabridged duplicates of the same book.
+- **Bulk metadata refresh** ✅ — refresh-all flow with progress and cancel in `DataManagement.tsx`.
+
+- **Missing-cover recovery** ✅ — `missingCovers.ts` + "Recover missing covers" action in `DataManagement.tsx`; cover-only updates, photo-only and user-edited covers excluded.
+
+Phase 26 is fully closed.
+
+### 5. Phases 27 & 28 — shipped
+
+Both landed ahead of this doc:
+
+- **Phase 27 (Reading Workflow)** ✅ — `useReadingSessionStore.ts`, per-book pages read, started/finished dates, current/longest streaks, and the "{year} in Books" card.
+- **Phase 28 (Collections & Smart Shelves)** ✅ — smart shelves, saved views, and bulk multi-select for status/shelf/delete (`LibraryList.tsx`, `types.ts`).
 
 ---
 
@@ -86,10 +148,10 @@ Still pending in Phase 26:
 
 | # | Phase | Goal | Key deliverables |
 |---|-------|------|------------------|
-| 25 | Scan Accuracy Hardening | Reduce failed scans and shorten time-to-add on real devices | Device-based scanner benchmark set, confidence scoring in pipeline, low-light / glare presets, OCR diagnostics surfaced in UI, regression suite for difficult covers and barcodes |
-| 26 | Metadata Quality Layer | Make imported book data more trustworthy and editable in bulk | Metadata source attribution, conflict resolution when Google/Open Library disagree, edition-aware matching, bulk metadata refresh, missing-cover recovery flow |
-| 27 | Reading Workflow Expansion | Turn the library into an active reading tracker instead of just a catalog | Reading sessions, progress percent / pages finished, start-finish dates, quick status actions, reading streak / yearly goals, richer stats cards |
-| 28 | Collections and Smart Shelves | Help users organize large libraries without manual tagging overhead | Rule-based shelves, saved searches, shelf templates, sort presets, multi-select bulk actions, archive / hidden shelf support |
+| 25 | Scan Accuracy Hardening ✅ | Reduce failed scans and shorten time-to-add on real devices | Device-based scanner benchmark set, confidence scoring in pipeline, low-light / glare presets, OCR diagnostics surfaced in UI, regression suite for difficult covers and barcodes |
+| 26 | Metadata Quality Layer ✅ | Make imported book data more trustworthy and editable in bulk | Metadata source attribution ✅, conflict resolution when Google/Open Library disagree ✅, edition-aware matching ✅, bulk metadata refresh ✅, missing-cover recovery flow ✅ |
+| 27 | Reading Workflow Expansion ✅ | Turn the library into an active reading tracker instead of just a catalog | Reading sessions, progress percent / pages finished, start-finish dates, quick status actions, reading streak / yearly goals, richer stats cards |
+| 28 | Collections and Smart Shelves ✅ | Help users organize large libraries without manual tagging overhead | Rule-based shelves, saved searches, shelf templates, sort presets, multi-select bulk actions, archive / hidden shelf support |
 | 29 | Social and Household Sharing | Support shared libraries across families, clubs, or small teams | Household mode, lend/borrow tracking, shared shelves, permissions for viewers vs editors, activity feed for collaborative changes |
 | 30 | Cloud Sync V2 | Make sync safer, clearer, and more resilient across devices | Sync history panel, conflict UI, offline queue inspector, background retry strategy, last-good snapshot restore, migration tooling for schema changes |
 | 31 | Insights and Recommendations | Surface useful patterns from the user's own library behavior | Personalized recommendations from owned books, unread backlog insights, duplicate / edition detection, series completion hints, exportable reading reports |

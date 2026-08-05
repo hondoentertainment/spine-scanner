@@ -1,8 +1,8 @@
 # SpineScanner — Feature roadmap
 
 **Product:** Personal book library with fast capture (barcode, OCR, manual), offline-first storage, optional cloud sync, and export-friendly data.  
-**Version:** 1.1.0 (see `package.json`)  
-**Last updated:** 2026-03-11  
+**Version:** 1.2.2 (see `package.json`)  
+**Last updated:** 2026-08-04  
 
 ---
 
@@ -48,6 +48,15 @@ Verified in codebase (routes, stores, components).
 | Error monitoring hook | `errorMonitoring.ts` (Sentry-capable) |
 | Share / deep link to book | `shareBook.ts` → `/library?isbn=` |
 | Tests (unit/component) | `**/__tests__/**`, hooks tests |
+| Reading sessions + streaks + Year in Books | `useReadingSessionStore.ts`, `bookPresentation.ts` |
+| Metadata quality: source badges, conflict panel, safe refresh, bulk refresh, missing-cover recovery | `MetadataConflictPanel.tsx`, `missingCovers.ts`, `DataManagement.tsx` |
+| Edition-level duplicate detection | `editionDuplicates.ts` |
+| Goodreads CSV + StoryGraph CSV import | `importLogic.ts` |
+| Notion CSV + ICS calendar export | `exportFormats.ts` |
+| High-contrast theme + reduced-motion audit | `useTheme.ts`, `index.css` |
+| Privacy controls (analytics opt-in, delete-all-data) | `useAnalyticsStore.ts`, `syncBooks.ts` |
+| Onboarding tour, in-app changelog, diagnostics bundle | `OnboardingModal.tsx`, `ChangelogModal.tsx`, `supportDiagnostics.ts` |
+| Sync resilience: retry backoff, snapshot restore, conflict flag | `syncRetry.ts`, `useSyncQueue.ts` |
 
 ---
 
@@ -56,12 +65,12 @@ Verified in codebase (routes, stores, components).
 | ID | Feature | Rationale | Complexity |
 |----|---------|-----------|------------|
 | B1 | **Global search polish** — recent queries, highlight matches, empty-state CTAs | Matches Libib/Bookshelf “find fast” expectation | Medium |
-| B2 | **Reading goals / streaks (light)** — yearly book count, optional goal | Common in top reading apps; keep opt-in | Medium |
+| B2 | ~~**Reading goals / streaks (light)**~~ ✅ Shipped — streaks, Year in Books card, session log | Common in top reading apps; keep opt-in | Medium |
 | B3 | **Cover art fallback grid** — placeholder illustration when no thumbnail | Visual parity with storefront UIs | Low |
 | B4 | **Loan / borrow tracking** | Table stakes for home-library apps (Libib) | Medium |
 | B5 | **Barcode bulk session summary** — “You added N books” with undo window | Reinforces batch workflow | Low |
 | B6 | **iOS/Android “Add to Home Screen” hints** — contextual banner once | PWA discoverability | Low |
-| B7 | **Export formats** — CSV + JSON already; add **Goodreads-compatible CSV** if feasible | Migration / trust | Medium |
+| B7 | ~~**Export formats**~~ ✅ Shipped — Goodreads CSV import/export, StoryGraph, LibraryThing, Notion, ICS | Migration / trust | Medium |
 | B8 | **Accessibility sweep** — WCAG 2.2 AA on Library + Scanner | Enterprise / education users | Medium |
 
 #### Recently shipped toward Tier B (implementation wave)

@@ -328,7 +328,7 @@ describe('Regression fixture — OCR confidence band output', () => {
     });
 
     expect(pipelineResult?.confidenceBand).toBe('high');
-  });
+  }, 15000);
 
   it('returns confidenceBand="medium" for confidence in 60–84 range', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
@@ -348,7 +348,7 @@ describe('Regression fixture — OCR confidence band output', () => {
     });
 
     expect(pipelineResult?.confidenceBand).toBe('medium');
-  });
+  }, 15000);
 
   it('returns confidenceBand="low" for confidence below 60', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);

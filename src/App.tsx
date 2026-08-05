@@ -19,6 +19,7 @@ import { BookOpen, Library, Scan, AlertCircle, Layers, User, Sparkles, Cloud, Bo
 import { generateAmazonLink } from './utils/amazonLink.ts';
 import { isValidIsbn, normalizeToIsbn13 } from './utils/isbnValidation.ts';
 import { isbnExistsInLibrary } from './utils/libraryUtils.ts';
+import { batchAddToastMessage, batchSummaryMessage } from './utils/batchSession.ts';
 import { useAnalyticsStore } from './store/useAnalyticsStore.ts';
 import { getLibraryInsights } from './utils/bookPresentation.ts';
 import PublicInfoPage, { type PublicPage } from './components/PublicInfoPage.tsx';
@@ -179,7 +180,7 @@ function App() {
   const showMarketingHero = location.pathname === '/scan' && !isMvpMode();
   const brandingSubtitle = getBrandingSubtitle(location.pathname, publicPage);
   const { lookupByIsbn, loading, error } = useBookLookup();
-  const { addBook, books, setBooks, shelves, setShelves } = useBookStore();
+  const { addBook, removeBook, books, setBooks, shelves, setShelves } = useBookStore();
   const { user, recoveryMode, initialize: initAuth } = useAuthStore();
   const { preferences, loadFromCloud, saveToCloud, updatePreferences } = useProfileStore();
   const { pendingChanges, markDirty, markSynced, markSyncFailed, flushing, setFlushing } = useSyncQueue();
@@ -469,13 +470,31 @@ function App() {
     if (!batchMode) batchBooksAddedRef.current = 0;
   }, [batchMode]);
 
+  // B5: when a batch-scan session ends (user leaves the scanner), surface a
+  // session summary so multi-book sessions get a clear closing confirmation.
+  const prevPathRef = useRef(location.pathname);
+  useEffect(() => {
+    const prevPath = prevPathRef.current;
+    prevPathRef.current = location.pathname;
+    if (prevPath === '/scan' && location.pathname !== '/scan' && batchBooksAddedRef.current > 0) {
+      toast(batchSummaryMessage(batchBooksAddedRef.current), 'success', 5000);
+      batchBooksAddedRef.current = 0;
+    }
+  }, [location.pathname, toast]);
+
   const addBookAndOpen = useCallback((newBook: BookEntry, successMessage: string, trackMethod: string, forceOpen = false) => {
     addBook(newBook);
     track('book_added', { method: trackMethod, isbn: newBook.isbn });
-    const viewLibrary = () => { navigate(`/library?isbn=${encodeURIComponent(newBook.isbn)}`); };
     if (batchMode && !forceOpen) {
-      toast('Added. Ready for the next book.', 'success', 4000, undefined, { label: 'View in Library', onClick: viewLibrary });
       batchBooksAddedRef.current += 1;
+      toast(batchAddToastMessage(batchBooksAddedRef.current), 'success', 4000, undefined, {
+        label: 'Undo',
+        onClick: () => {
+          removeBook(newBook.id);
+          batchBooksAddedRef.current = Math.max(0, batchBooksAddedRef.current - 1);
+          toast(`Removed "${newBook.title}"`, 'info');
+        },
+      });
       if (batchBooksAddedRef.current === 1) {
         toast("Batch mode: you'll stay on scanner. Tap Library when done.", 'info', 4500);
       }
@@ -487,7 +506,7 @@ function App() {
     if (user && online) {
       void pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
     }
-  }, [addBook, batchMode, books, navigate, online, toast, track, user]);
+  }, [addBook, batchMode, books, navigate, online, removeBook, toast, track, user]);
 
   const handleScan = async (isbn: string, options: ScanRequestOptions = {}) => {
     const normalizedInput = isbn.replace(/[^0-9Xx]/g, '').replace(/x$/i, 'X') || isbn;

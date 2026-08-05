@@ -45,6 +45,37 @@ describe('BookDetail', () => {
   });
 
   /* ── Display ─────────────────────────────────────────────── */
+  describe('swipe to dismiss', () => {
+    const swipeDown = (el: HTMLElement) => {
+      fireEvent.touchStart(el, { touches: [{ clientX: 100, clientY: 100 }] });
+      fireEvent.touchMove(el, { touches: [{ clientX: 100, clientY: 300 }] });
+      fireEvent.touchEnd(el);
+    };
+
+    it('closes the modal on a downward swipe', () => {
+      const book = makeBook();
+      const onClose = vi.fn();
+      useBookStore.setState({ books: [book] });
+      renderWithToast(<BookDetail book={book} onClose={onClose} />);
+
+      swipeDown(screen.getByRole('dialog').firstElementChild as HTMLElement);
+      expect(onClose).toHaveBeenCalledOnce();
+    });
+
+    it('does not close on a short swipe', () => {
+      const book = makeBook();
+      const onClose = vi.fn();
+      useBookStore.setState({ books: [book] });
+      renderWithToast(<BookDetail book={book} onClose={onClose} />);
+
+      const modal = screen.getByRole('dialog').firstElementChild as HTMLElement;
+      fireEvent.touchStart(modal, { touches: [{ clientX: 100, clientY: 100 }] });
+      fireEvent.touchMove(modal, { touches: [{ clientX: 100, clientY: 140 }] });
+      fireEvent.touchEnd(modal);
+      expect(onClose).not.toHaveBeenCalled();
+    });
+  });
+
   describe('display', () => {
     it('shows book title and author', () => {
       const book = makeBook();
