@@ -136,11 +136,13 @@ export default defineConfig({
   ],
   base,
   build: {
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          react: ['react', 'react-dom'],
-          scanner: ['tesseract.js', '@zxing/browser', '@zxing/library', 'react-webcam'],
+        codeSplitting: {
+          groups: [
+            { name: 'react', test: /node_modules\/(?:react|react-dom)\// },
+            { name: 'scanner', test: /node_modules\/(?:tesseract\.js|@zxing\/browser|@zxing\/library|react-webcam)\// },
+          ],
         },
       },
     },
