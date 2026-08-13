@@ -391,17 +391,20 @@ export async function mergeSync(
 
   const remoteShelves = await pullShelves(userId);
 
-  // Detect conflict: any book that exists both locally and remotely with differing content
+  // Detect conflict: any book that exists both locally and remotely with differing content.
+  // Collect the specific ids so the UI can surface which books were affected.
   const remoteMap = new Map(remoteBooks.map((b) => [b.id, b]));
-  const hadConflict = localBooks.some((local) => {
-    const remote = remoteMap.get(local.id);
-    if (!remote) return false;
-    return (
-      remote.title !== local.title ||
-      remote.author !== local.author ||
-      remote.notes !== local.notes
-    );
-  });
+  const conflictedBookIds = localBooks
+    .filter((local) => {
+      const remote = remoteMap.get(local.id);
+      if (!remote) return false;
+      return (
+        remote.title !== local.title ||
+        remote.author !== local.author ||
+        remote.notes !== local.notes
+      );
+    })
+    .map((b) => b.id);
 
   const mergedBooks = migrateBooks(mergeBooksLists(localBooks, remoteBooks));
   const mergedShelves = mergeShelvesLists(localShelves, remoteShelves || []);
@@ -414,8 +417,8 @@ export async function mergeSync(
 
   await pushShelves(userId, mergedShelves);
 
-  // Record conflict status
-  useSyncQueue.getState().markConflict(hadConflict);
+  // Record conflict status and the specific ids so the UI can list them.
+  useSyncQueue.getState().setConflictBookIds(conflictedBookIds);
 
   addBreadcrumb('sync', 'Merge sync completed', {
     mergedBooks: mergedBooks.length,

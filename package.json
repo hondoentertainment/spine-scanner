@@ -24,7 +24,7 @@
     "benchmark:scan": "tsx scripts/benchmark-scan.ts",
     "generate-ocr-fixture": "node scripts/generate-ocr-fixture.mjs",
     "test:e2e": "node scripts/generate-ocr-fixture.mjs && npm run build && playwright test --project=chromium --project=mobile-chrome-pixel-7 --project=mobile-safari-iphone-14 --project=mobile-chrome-galaxy-s9",
-    "test:e2e:release": "node scripts/generate-ocr-fixture.mjs && npm run build && playwright test e2e/app.spec.ts e2e/recent-features.spec.ts --project=chromium --workers=1",
+    "test:e2e:release": "node scripts/generate-ocr-fixture.mjs && npm run build && playwright test e2e/app.spec.ts e2e/recent-features.spec.ts e2e/a11y.spec.ts --project=chromium --workers=1",
     "test:e2e:mvp": "node scripts/generate-ocr-fixture.mjs && cross-env VITE_APP_MODE=mvp npm run build && cross-env VITE_APP_MODE=mvp playwright test e2e/mvp.spec.ts --project=chromium-mvp --workers=1",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:mobile": "playwright test --project=mobile-chrome-pixel-7 --project=mobile-safari-iphone-14 --project=mobile-chrome-galaxy-s9",
@@ -45,6 +45,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.61.0",
     "@testing-library/jest-dom": "^6.9.1",

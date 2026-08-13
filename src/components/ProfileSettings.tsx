@@ -78,8 +78,16 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
   const {
     pendingChanges, lastSyncedAt, lastSyncFailedAt, flushing,
     lastGoodSnapshot, lastGoodSnapshotAt, hadConflictLastSync,
+    lastConflictBookIds,
     clearSnapshot, markConflict,
   } = useSyncQueue();
+  const conflictedBooks = useMemo(
+    () =>
+      lastConflictBookIds
+        .map((id) => books.find((b) => b.id === id))
+        .filter((b): b is import('../types.ts').BookEntry => Boolean(b)),
+    [lastConflictBookIds, books],
+  );
   const displayName = profile?.username ?? profile?.displayName ?? user?.user_metadata?.full_name ?? user?.email ?? 'Local reader';
   const avatarUrl = profile?.avatarUrl ?? user?.user_metadata?.avatar_url ?? null;
   const joinedLabel = user?.created_at
@@ -386,11 +394,46 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           )}
           {hadConflictLastSync && (
             <div className={s.syncWarningRow}>
-              <span>Last sync detected conflicting edits on another device. Last write won.</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', flex: 1, minWidth: 0 }}>
+                <span>
+                  Last sync detected conflicting edits on another device
+                  {conflictedBooks.length > 0 ? ` for ${conflictedBooks.length} book${conflictedBooks.length === 1 ? '' : 's'}` : ''}
+                  . Last write won.
+                </span>
+                {conflictedBooks.length > 0 && (
+                  <details style={{ fontSize: '0.78rem' }}>
+                    <summary style={{ cursor: 'pointer', color: '#f59e0b' }}>
+                      Which books?
+                    </summary>
+                    <ul style={{ listStyle: 'none', padding: '0.4rem 0 0', margin: 0, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      {conflictedBooks.slice(0, 20).map((book) => (
+                        <li key={book.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', alignItems: 'center' }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {book.title} <span style={{ color: 'var(--text-muted)' }}>— {book.author}</span>
+                          </span>
+                          <button
+                            type="button"
+                            className={s.retryBtn}
+                            onClick={() => navigate(`/library?isbn=${encodeURIComponent(book.isbn)}`)}
+                          >
+                            Open
+                          </button>
+                        </li>
+                      ))}
+                      {conflictedBooks.length > 20 && (
+                        <li style={{ color: 'var(--text-muted)' }}>
+                          + {conflictedBooks.length - 20} more…
+                        </li>
+                      )}
+                    </ul>
+                  </details>
+                )}
+              </div>
               <button
                 type="button"
                 className={s.retryBtn}
                 onClick={() => markConflict(false)}
+                style={{ alignSelf: 'flex-start' }}
               >
                 Dismiss
               </button>

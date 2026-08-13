@@ -8,13 +8,11 @@ Status of recommended improvements. Items marked completed are implemented.
 
 Based on an audit of the codebase, CI history, and repository state at `c75e612` (main, CI green). The headline: **feature work is well ahead of this doc — the current bottlenecks are repo hygiene and launch operations, not new features.**
 
-### 1. Triage the open pull request backlog (10 open PRs)
+### 1. ~~Triage the open pull request backlog~~ ✅ In progress
 
-The biggest drag on the repo right now. Open PRs date back to April and several overlap or are already superseded by the `chore: sync outstanding local changes to production` commits that landed directly on main:
+April drafts (#48/#50/#61/#64/#65) and the superseded Copilot coverage PR (#60) are closed. Dependabot bumps (#79/#80 and related) were closed after landing. Remaining work from this list:
 
-- **#83 (Deploy hardening + a11y CI gate + Goodreads round-trip)** — the most recent substantive PR (July 4). Review and land this first: it adds the `@axe-core/playwright` accessibility gate from Phase 32 and Vercel deploy-secret verification.
-- **#79 / #80 (dependabot)** — rebase against main and merge; dependency updates only get riskier with age.
-- **#65, #66, #68, #70, #74, #75, #76** — diff each against main; most appear superseded by later direct-to-main sync commits (e.g. #76's E2E strict-mode fix looks equivalent to #77, already merged). Close what's redundant so the PR list reflects real pending work.
+- **#83 (Deploy hardening + a11y CI gate + Goodreads round-trip + sync conflict list)** — rebased onto current `main` and landing now. Does not replace this doc's Aug 2026 audit.
 
 ### 2. Complete the production launch checklist (Issue #40)
 

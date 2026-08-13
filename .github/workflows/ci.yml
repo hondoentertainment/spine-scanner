@@ -142,6 +142,22 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
+      # Report visibly when Vercel deploy is skipped due to missing secrets.
+      # The steps below use `if: env.VERCEL_TOKEN != ''` (silent skip) so this
+      # step surfaces "no deploy happened" in the Actions UI. Non-blocking.
+      - name: Verify Vercel deploy secrets
+        run: |
+          missing=()
+          [ -z "$VERCEL_TOKEN" ] && missing+=(VERCEL_TOKEN)
+          [ -z "$VERCEL_ORG_ID" ] && missing+=(VERCEL_ORG_ID)
+          [ -z "$VERCEL_PROJECT_ID" ] && missing+=(VERCEL_PROJECT_ID)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::warning::Vercel deploy is not configured; skipping. Missing secret(s): ${missing[*]}"
+            echo "::warning::Set them at Settings → Secrets and variables → Actions, then re-run this job."
+          else
+            echo "All Vercel deploy secrets present."
+          fi
+
       - name: Pull Vercel project info
         if: env.VERCEL_TOKEN != ''
         run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
@@ -161,3 +177,32 @@ jobs:
       - name: Deploy to Vercel
         if: env.VERCEL_TOKEN != ''
         run: vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
+
+  # Posts to DEPLOY_ALERT_WEBHOOK (Slack- or Discord-compatible incoming webhook)
+  # when either deploy job fails on main. Degrades silently when the secret is unset.
+  # Note: `deploy-vercel` skips its Vercel steps when secrets are missing rather
+  # than failing, so those "no-op" runs don't fire this alert; only real failures do.
+  notify-deploy-failure:
+    needs: [deploy-pages, deploy-vercel]
+    if: failure() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Post failure to alert webhook
+        env:
+          WEBHOOK: ${{ secrets.DEPLOY_ALERT_WEBHOOK }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "::warning::DEPLOY_ALERT_WEBHOOK not configured; skipping deploy-failure notification."
+            exit 0
+          fi
+          short_sha="${SHA:0:7}"
+          msg="SpineScanner production deploy failed on main — ${short_sha}
+          ${RUN_URL}"
+          # Slack uses {text}; Discord uses {content}. Sending both is harmless to either.
+          payload=$(jq -nc --arg t "$msg" '{text: $t, content: $t}')
+          if ! curl -fsSL -X POST -H 'Content-Type: application/json' -d "$payload" "$WEBHOOK"; then
+            echo "::warning::Failed to deliver deploy-failure notification to webhook."
+          fi

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Deploy hardening + data polish (from #83)
+
+- **Goodreads CSV export — round-trippable:** `exportToGoodreadsCSV` now emits Goodreads' native column set (`Number of Pages`, `Exclusive Shelf`, `Bookshelves`, `="ISBN"` wrappers) and maps `finishedAt` → `Date Read` and `pageCount` → `Number of Pages`, with RFC 4180 quoting and CRLF line endings. Full round-trip through `importFromGoodreadsCSV` preserves title / author / ISBN / status / pageCount / notes / dateAdded / finishedAt.
+- **Sync conflict visibility (Phase 30 continuation):** `useSyncQueue` stores `lastConflictBookIds` alongside `hadConflictLastSync`; `mergeSync` records the specific ids of books whose local and remote versions differed. Profile Settings expands the conflict warning into a list of affected titles with an Open deep-link per book. Dismiss clears both fields.
+- **Accessibility CI gate (Phase 32):** `e2e/a11y.spec.ts` runs `@axe-core/playwright` against home / library / data / profile (WCAG 2.0/2.1 A/AA). Fails on `critical` violations; logs `serious` as warnings. Wired into `test:e2e:release`.
+- **Vercel deploy visibility:** `Verify Vercel deploy secrets` step emits a `::warning::` when `VERCEL_TOKEN` / `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` are missing so the silent-skip no longer looks like a successful deploy.
+- **Deploy-failure alerting:** `notify-deploy-failure` job posts to optional `DEPLOY_ALERT_WEBHOOK` (Slack/Discord-compatible) when `deploy-pages` or `deploy-vercel` fails on `main`.
+
 ### UX refinements (Aug 2026)
 
 - **Swipe-down to dismiss BookDetail:** new `useSwipeToDismiss` hook (threshold + horizontal-drift rejection + at-top arming) applied to the BookDetail modal so touch users can flick it closed like a sheet. 6 hook tests + 2 component tests.

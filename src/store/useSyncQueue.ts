@@ -19,6 +19,8 @@ interface SyncQueueStore {
   lastGoodSnapshotAt: string | null;
   /** Whether a conflict was detected in the last sync (remote had newer data for ≥1 book) */
   hadConflictLastSync: boolean;
+  /** IDs of the specific books whose local and remote versions differed in the last sync. */
+  lastConflictBookIds: string[];
   /** Whether sync recently failed (within SYNC_FAILED_RECENT_MS) */
   syncFailedRecently: () => boolean;
   /** Mark that a local mutation happened (increment pending count) */
@@ -35,8 +37,10 @@ interface SyncQueueStore {
   saveSnapshot: (books: BookEntry[]) => void;
   /** Clear the snapshot (call after restore so the button disappears) */
   clearSnapshot: () => void;
-  /** Mark that a conflict was detected */
+  /** Mark that a conflict was detected (keeps the boolean flag in sync with the id list). */
   markConflict: (had: boolean) => void;
+  /** Record the specific book ids that conflicted in the last sync; also updates the flag. */
+  setConflictBookIds: (ids: string[]) => void;
 }
 
 export const useSyncQueue = create<SyncQueueStore>()(
@@ -49,6 +53,7 @@ export const useSyncQueue = create<SyncQueueStore>()(
       lastGoodSnapshot: null,
       lastGoodSnapshotAt: null,
       hadConflictLastSync: false,
+      lastConflictBookIds: [],
 
       syncFailedRecently: () => {
         const t = get().lastSyncFailedAt;
@@ -74,6 +79,7 @@ export const useSyncQueue = create<SyncQueueStore>()(
           lastGoodSnapshot: null,
           lastGoodSnapshotAt: null,
           hadConflictLastSync: false,
+          lastConflictBookIds: [],
         }),
 
       saveSnapshot: (books) =>
@@ -84,7 +90,11 @@ export const useSyncQueue = create<SyncQueueStore>()(
 
       clearSnapshot: () => set({ lastGoodSnapshot: null, lastGoodSnapshotAt: null }),
 
-      markConflict: (had) => set({ hadConflictLastSync: had }),
+      markConflict: (had) =>
+        set({ hadConflictLastSync: had, ...(had ? {} : { lastConflictBookIds: [] }) }),
+
+      setConflictBookIds: (ids) =>
+        set({ hadConflictLastSync: ids.length > 0, lastConflictBookIds: ids }),
     }),
     {
       name: 'spine-scanner-sync-queue',
@@ -95,6 +105,7 @@ export const useSyncQueue = create<SyncQueueStore>()(
         lastGoodSnapshot: state.lastGoodSnapshot,
         lastGoodSnapshotAt: state.lastGoodSnapshotAt,
         hadConflictLastSync: state.hadConflictLastSync,
+        lastConflictBookIds: state.lastConflictBookIds,
       }),
     }
   )
