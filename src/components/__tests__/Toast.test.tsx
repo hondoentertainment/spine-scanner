@@ -40,14 +40,10 @@ const ConfirmTrigger: React.FC<{
   return <button onClick={handleClick}>Open Confirm</button>;
 };
 
-/** Tries to use useToast outside provider — should throw */
+/** Calls useToast outside a provider so the hook throws during render. */
 const OutsideProvider: React.FC = () => {
-  try {
-    useToast();
-    return <div>No error thrown</div>;
-  } catch (e) {
-    return <div>Error: {(e as Error).message}</div>;
-  }
+  useToast();
+  return null;
 };
 
 /* ================================================================
@@ -66,8 +62,9 @@ describe('ToastProvider', () => {
   /* ── useToast hook ──────────────────────────────────────── */
   describe('useToast hook', () => {
     it('throws when used outside ToastProvider', () => {
-      render(<OutsideProvider />);
-      expect(screen.getByText(/useToast must be used within ToastProvider/)).toBeInTheDocument();
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      expect(() => render(<OutsideProvider />)).toThrow(/useToast must be used within ToastProvider/);
+      spy.mockRestore();
     });
   });
 
