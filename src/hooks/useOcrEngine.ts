@@ -135,6 +135,7 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const workerPromise = useRef<Promise<any> | null>(null);
     const workerRetries = useRef(0);
+    const getWorkerRef = useRef<(() => Promise<ReturnType<TessModule['createWorker']> | null>) | null>(null);
     const progressCallbackRef = useRef<((pct: number) => void) | null>(null);
     const prefetchControllerRef = useRef<AbortController | null>(null);
     const [ocrState, setOcrState] = useState<OcrEngineState>('idle');
@@ -209,7 +210,7 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
                 workerPromise.current = null;
                 if (workerRetries.current < MAX_WORKER_RETRIES) {
                     await new Promise(r => setTimeout(r, delay));
-                    return getWorker();
+                    return getWorkerRef.current?.() ?? null;
                 }
                 return null;
             }
@@ -217,6 +218,7 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
 
         return workerPromise.current;
     }, [loadTessModule, addLog, setStatus, onOcrReady]);
+    getWorkerRef.current = getWorker;
 
     /** Pre-warm the OCR engine when capture is ready (e.g. camera on mount / cameraReady). Creates and reuses worker across passes. Prefetches eng traineddata for offline. */
     const preWarm = useCallback(async () => {
