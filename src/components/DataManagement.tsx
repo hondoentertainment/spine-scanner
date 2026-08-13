@@ -114,12 +114,9 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                 } catch { /* fall through */ }
             }
 
-            let entries: Partial<BookEntry>[] = [];
-            if (file.name.endsWith('.csv') || text.includes(',')) entries = parseCSV(text);
-            else {
-                const isbns = extractISBNs(text);
-                entries = isbns.map((isbn: string) => ({ isbn }));
-            }
+            const entries: Partial<BookEntry>[] = (file.name.endsWith('.csv') || text.includes(','))
+                ? parseCSV(text)
+                : extractISBNs(text).map((isbn: string) => ({ isbn }));
             await processEntries(entries);
         };
         reader.readAsText(file);
