@@ -161,6 +161,8 @@ On push to `main`, the `Lint, Test, Build & Deploy` workflow (`.github/workflows
 
 **Vercel project setup**: After adding the secrets, **disconnect Vercel's GitHub auto-deploy** in the Vercel dashboard (Project → Settings → Git) so deploys flow only through this workflow — otherwise every push triggers two parallel Vercel builds.
 
+**Silent-skip behavior**: The `deploy-vercel` job's Vercel steps are individually guarded with `if: env.VERCEL_TOKEN != ''`. If any of the three Vercel secrets are missing, those steps skip and the workflow still reports success — Pages still deploys. To make that state visible instead of silent, the job runs a `Verify Vercel deploy secrets` step first that emits a `::warning::` in the Actions UI when secrets are missing. If you also set the optional `DEPLOY_ALERT_WEBHOOK` secret (Slack- or Discord-compatible incoming webhook), a `notify-deploy-failure` job posts to it whenever `deploy-pages` or `deploy-vercel` actually fails on `main`.
+
 ### Manual fallback
 
 `.github/workflows/deploy.yml` still exists as a `workflow_dispatch`-only Pages deploy for one-off rebuilds (e.g. redeploy without a code push, or deploy a non-main branch).

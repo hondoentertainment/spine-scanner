@@ -8,6 +8,42 @@ describe('useSyncQueue', () => {
       lastSyncedAt: null,
       lastSyncFailedAt: null,
       flushing: false,
+      hadConflictLastSync: false,
+      lastConflictBookIds: [],
+    });
+  });
+
+  describe('conflict tracking', () => {
+    it('starts with no conflicted book ids', () => {
+      expect(useSyncQueue.getState().lastConflictBookIds).toEqual([]);
+      expect(useSyncQueue.getState().hadConflictLastSync).toBe(false);
+    });
+
+    it('setConflictBookIds sets both the id list and the flag', () => {
+      useSyncQueue.getState().setConflictBookIds(['a', 'b', 'c']);
+      expect(useSyncQueue.getState().lastConflictBookIds).toEqual(['a', 'b', 'c']);
+      expect(useSyncQueue.getState().hadConflictLastSync).toBe(true);
+    });
+
+    it('setConflictBookIds with empty list clears the flag', () => {
+      useSyncQueue.setState({ hadConflictLastSync: true, lastConflictBookIds: ['x'] });
+      useSyncQueue.getState().setConflictBookIds([]);
+      expect(useSyncQueue.getState().lastConflictBookIds).toEqual([]);
+      expect(useSyncQueue.getState().hadConflictLastSync).toBe(false);
+    });
+
+    it('markConflict(false) clears the id list too so dismiss wipes both', () => {
+      useSyncQueue.getState().setConflictBookIds(['x', 'y']);
+      useSyncQueue.getState().markConflict(false);
+      expect(useSyncQueue.getState().hadConflictLastSync).toBe(false);
+      expect(useSyncQueue.getState().lastConflictBookIds).toEqual([]);
+    });
+
+    it('reset() clears conflict state', () => {
+      useSyncQueue.getState().setConflictBookIds(['x']);
+      useSyncQueue.getState().reset();
+      expect(useSyncQueue.getState().hadConflictLastSync).toBe(false);
+      expect(useSyncQueue.getState().lastConflictBookIds).toEqual([]);
     });
   });
 

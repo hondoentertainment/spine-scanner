@@ -64,9 +64,9 @@ vi.mock('../errorMonitoring', () => ({
 }));
 
 const saveSnapshot = vi.fn();
-const markConflict = vi.fn();
+const setConflictBookIds = vi.fn();
 vi.mock('../../store/useSyncQueue', () => ({
-  useSyncQueue: { getState: () => ({ saveSnapshot, markConflict }) },
+  useSyncQueue: { getState: () => ({ saveSnapshot, setConflictBookIds }) },
 }));
 
 // Import AFTER the mocks so the implementation picks them up.
@@ -114,7 +114,7 @@ beforeEach(() => {
   }
   vi.mocked(captureException).mockClear();
   saveSnapshot.mockClear();
-  markConflict.mockClear();
+  setConflictBookIds.mockClear();
 });
 
 describe('pullBooks', () => {
@@ -276,7 +276,7 @@ describe('mergeSync', () => {
     expect(result).not.toBeNull();
     expect(result!.books.map((b) => b.id).sort()).toEqual(['local-1', 'remote-1']);
     expect(saveSnapshot).toHaveBeenCalledWith(local);
-    expect(markConflict).toHaveBeenCalledWith(false);
+    expect(setConflictBookIds).toHaveBeenCalledWith([]);
   });
 
   it('flags a conflict when the same book differs locally and remotely', async () => {
@@ -293,7 +293,7 @@ describe('mergeSync', () => {
     expect(result).not.toBeNull();
     // Local wins the merge, but the conflict is recorded.
     expect(result!.books[0].title).toBe('Local Title');
-    expect(markConflict).toHaveBeenCalledWith(true);
+    expect(setConflictBookIds).toHaveBeenCalledWith(['b1']);
   });
 
   it('returns null when the push fails after a successful pull', async () => {
@@ -303,7 +303,7 @@ describe('mergeSync', () => {
     await expect(mergeSync('user-1', [makeBook({ id: 'b2' })])).resolves.toBeNull();
     // Snapshot is taken before the push attempt so recovery is possible.
     expect(saveSnapshot).toHaveBeenCalled();
-    expect(markConflict).not.toHaveBeenCalled();
+    expect(setConflictBookIds).not.toHaveBeenCalled();
   });
 
   it('merges shelves and still succeeds when there are no remote shelves', async () => {

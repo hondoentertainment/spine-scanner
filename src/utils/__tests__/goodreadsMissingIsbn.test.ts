@@ -89,15 +89,16 @@ describe('Goodreads Export — Missing ISBN Handling', () => {
     expect(csv).toContain('Conference Proceedings 2024');
   });
 
-  it('ISBN column is empty string (not "undefined" or "null") for missing ISBNs', () => {
+  it('ISBN column is empty (not "undefined" or "null") for missing ISBNs', () => {
     const csv = exportToGoodreadsCSV([makeBook({ isbn: '' })]);
     expect(csv).not.toContain('undefined');
     expect(csv).not.toContain('null');
 
-    // The ISBN field should be an empty quoted string
-    const lines = csv.split('\n');
-    const dataFields = lines[1]; // data row
-    expect(dataFields).toContain('""'); // empty ISBN field
+    // With RFC 4180 quoting, an empty ISBN field is just empty (no wrapping quotes needed).
+    // ISBN + ISBN13 sit at columns 6 and 7 of the row, so an empty ISBN produces ",,".
+    const dataFields = csv.split('\r\n')[1];
+    // Both ISBN and ISBN13 empty -> the pair contributes ",," adjacent commas somewhere in the row.
+    expect(dataFields).toMatch(/,,,/); // at minimum three consecutive commas from the empty ISBN pair
   });
 
   it('exports notes as "My Review" for manual-entry books', () => {
