@@ -31,18 +31,18 @@
     "test:e2e:desktop": "playwright test --project=chromium"
   },
   "dependencies": {
-    "@sentry/react": "^10.45.0",
-    "@supabase/supabase-js": "^2.99.3",
-    "@tanstack/react-virtual": "^3.13.23",
+    "@sentry/react": "^10.59.0",
+    "@supabase/supabase-js": "^2.108.2",
+    "@tanstack/react-virtual": "^3.14.3",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
     "lucide-react": "^0.577.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "react-router-dom": "^7.13.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^7.18.0",
     "react-webcam": "^7.2.0",
     "tesseract.js": "^7.0.0",
-    "zustand": "^5.0.12"
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -51,7 +51,7 @@
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "^24.10.1",
-    "@types/react": "^19.2.14",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.4",
     "@vitest/coverage-v8": "^4.1.0",
@@ -60,13 +60,13 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^16.5.0",
-    "jsdom": "^29.0.1",
+    "jsdom": "^29.1.1",
     "pngjs": "^7.0.0",
     "typescript": "~5.9.3",
-    "tsx": "^4.19.4",
+    "tsx": "^4.22.4",
     "typescript-eslint": "^8.57.0",
     "vite": "^7.2.4",
-    "vite-plugin-pwa": "^1.2.0",
+    "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.0.18"
   }
 }
