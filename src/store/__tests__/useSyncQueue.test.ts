@@ -150,4 +150,32 @@ describe('useSyncQueue', () => {
     useSyncQueue.getState().reset();
     expect(useSyncQueue.getState().lastSyncFailedAt).toBeNull();
   });
+
+  it('syncFailedRecently is false without a failure and after it expires', () => {
+    expect(useSyncQueue.getState().syncFailedRecently()).toBe(false);
+    useSyncQueue.setState({ lastSyncFailedAt: Date.now() - 120_000 });
+    expect(useSyncQueue.getState().syncFailedRecently()).toBe(false);
+  });
+
+  it('syncFailedRecently is true for a recent failure', () => {
+    useSyncQueue.setState({ lastSyncFailedAt: Date.now() - 1_000 });
+    expect(useSyncQueue.getState().syncFailedRecently()).toBe(true);
+  });
+
+  it('saves and clears a last-good snapshot', () => {
+    const books = [{ id: '1', title: 'Snap' }] as never;
+    useSyncQueue.getState().saveSnapshot(books);
+    expect(useSyncQueue.getState().lastGoodSnapshot).toContain('Snap');
+    expect(useSyncQueue.getState().lastGoodSnapshotAt).not.toBeNull();
+    useSyncQueue.getState().clearSnapshot();
+    expect(useSyncQueue.getState().lastGoodSnapshot).toBeNull();
+    expect(useSyncQueue.getState().lastGoodSnapshotAt).toBeNull();
+  });
+
+  it('markConflict(true) keeps existing conflict ids', () => {
+    useSyncQueue.getState().setConflictBookIds(['keep']);
+    useSyncQueue.getState().markConflict(true);
+    expect(useSyncQueue.getState().hadConflictLastSync).toBe(true);
+    expect(useSyncQueue.getState().lastConflictBookIds).toEqual(['keep']);
+  });
 });

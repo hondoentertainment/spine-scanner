@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import App from '../App';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { ToastProvider } from '../components/Toast';
 import { useBookStore } from '../store/useBookStore';
 import { useAuthStore } from '../store/useAuthStore';
@@ -459,6 +460,20 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: /Help for scanning/ })).toBeInTheDocument();
   });
 
+  it('copies and downloads support diagnostics from the support page', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    renderApp('/home');
+    fireEvent.click(screen.getByRole('button', { name: 'Support' }));
+    expect(await screen.findByRole('heading', { name: /Help for scanning/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Copy diagnostics/ }));
+    expect(await screen.findByText(/Diagnostics copied/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Download JSON/ }));
+    expect(await screen.findByText(/Diagnostics downloaded/)).toBeInTheDocument();
+    clickSpy.mockRestore();
+  });
+
   it('closes data management back to profile', async () => {
     renderApp('/data');
     expect(await screen.findByTestId('mock-data')).toBeInTheDocument();
@@ -660,6 +675,41 @@ describe('App', () => {
     await screen.findByTestId('mock-scanner');
     fireEvent.click(screen.getByRole('button', { name: 'scan-valid' }));
     expect(await screen.findByText('Cloud sync failed. Changes saved locally.')).toBeInTheDocument();
+  });
+
+  it('renders a custom ErrorBoundary fallback when a child throws', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const onError = vi.fn();
+    const Boom = () => {
+      throw new Error('render boom');
+    };
+    render(
+      <ErrorBoundary fallback={<div>custom fallback</div>} onError={onError}>
+        <Boom />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByText('custom fallback')).toBeInTheDocument();
+    expect(onError).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('shows the default ErrorBoundary UI and retries a non-chunk error', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let shouldThrow = true;
+    const Flaky = () => {
+      if (shouldThrow) throw new Error('transient');
+      return <div>recovered</div>;
+    };
+    render(
+      <ErrorBoundary>
+        <Flaky />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByText(/Something went wrong/)).toBeInTheDocument();
+    shouldThrow = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(screen.getByText('recovered')).toBeInTheDocument();
+    spy.mockRestore();
   });
 
   it('skips the duplicate warning when the preference is off', async () => {
