@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { useAnalyticsStore } from '../useAnalyticsStore';
 import { useProfileStore } from '../useProfileStore';
 import { DEFAULT_PREFERENCES } from '../../types';
+import type { ProfilePreferences } from '../../types';
 
 /**
  * Phase 34: analytics are now strictly opt-in. `track()` is a no-op until
@@ -51,5 +52,29 @@ describe('useAnalyticsStore — opt-in gate', () => {
     });
     useAnalyticsStore.getState().track('book_added');
     expect(useAnalyticsStore.getState().events).toHaveLength(1);
+  });
+});
+
+describe('useProfileStore helpers', () => {
+  beforeEach(() => {
+    useProfileStore.setState({ preferences: { ...DEFAULT_PREFERENCES } });
+  });
+
+  it('hydrateFromProfile ignores null and merges a partial profile', () => {
+    useProfileStore.getState().hydrateFromProfile(null);
+    expect(useProfileStore.getState().preferences.theme).toBe(DEFAULT_PREFERENCES.theme);
+
+    useProfileStore.getState().hydrateFromProfile({
+      theme: 'light',
+      batchModeDefault: true,
+    } as ProfilePreferences);
+    expect(useProfileStore.getState().preferences.theme).toBe('light');
+    expect(useProfileStore.getState().preferences.batchModeDefault).toBe(true);
+    expect(useProfileStore.getState().preferences.librarySortBy).toBe(DEFAULT_PREFERENCES.librarySortBy);
+  });
+
+  it('loadFromCloud and saveToCloud no-op when Supabase is not configured', async () => {
+    await expect(useProfileStore.getState().loadFromCloud('user-1')).resolves.toBeUndefined();
+    await expect(useProfileStore.getState().saveToCloud('user-1')).resolves.toBeUndefined();
   });
 });

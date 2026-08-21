@@ -284,6 +284,80 @@ describe('ToastProvider', () => {
     });
   });
 
+  describe('details, actions, and default confirm copy', () => {
+    it('auto-expands diagnostic details on error toasts and can toggle them', () => {
+      const DetailTrigger = () => {
+        const { toast, toastDetail } = useToast();
+        return (
+          <>
+            <button onClick={() => toast('Failed lookup', 'error', 3500, 'ISBN service 500')}>Error detail</button>
+            <button onClick={() => toastDetail({ message: 'OCR failed', details: 'low contrast' })}>Toast detail</button>
+          </>
+        );
+      };
+      render(
+        <ToastProvider>
+          <DetailTrigger />
+        </ToastProvider>
+      );
+      fireEvent.click(screen.getByText('Error detail'));
+      expect(screen.getByText('ISBN service 500')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /Hide diagnosis/ }));
+      expect(screen.getByRole('button', { name: /Show diagnosis/ })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /Show diagnosis/ }));
+      expect(screen.getByText('ISBN service 500')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('Toast detail'));
+      expect(screen.getByText('OCR failed')).toBeInTheDocument();
+      expect(screen.getByText('low contrast')).toBeInTheDocument();
+    });
+
+    it('runs a toast action and then dismisses the toast', () => {
+      const onClick = vi.fn();
+      const ActionTrigger = () => {
+        const { toast } = useToast();
+        return (
+          <button onClick={() => toast('Added book', 'success', 4000, undefined, { label: 'Undo', onClick })}>
+            With action
+          </button>
+        );
+      };
+      render(
+        <ToastProvider>
+          <ActionTrigger />
+        </ToastProvider>
+      );
+      fireEvent.click(screen.getByText('With action'));
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+      expect(onClick).toHaveBeenCalledOnce();
+      expect(screen.queryByText('Added book')).not.toBeInTheDocument();
+    });
+
+    it('uses default confirm labels and the danger style', async () => {
+      const Defaults = () => {
+        const { confirm } = useToast();
+        return (
+          <button onClick={() => { void confirm({ title: 'Delete?', message: 'Really?', danger: true }); }}>
+            Open defaults
+          </button>
+        );
+      };
+      render(
+        <ToastProvider>
+          <Defaults />
+        </ToastProvider>
+      );
+      await act(async () => {
+        fireEvent.click(screen.getByText('Open defaults'));
+      });
+      expect(screen.getByText('Confirm')).toBeInTheDocument();
+      expect(screen.getByText('Cancel')).toBeInTheDocument();
+      await act(async () => {
+        fireEvent.click(screen.getByText('Confirm'));
+      });
+    });
+  });
+
   /* ── Accessibility ───────────────────────────────────────── */
   describe('accessibility', () => {
     it('toast container has role=status and aria-live=polite', () => {
