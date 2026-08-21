@@ -26,9 +26,12 @@ export default defineConfig({
       // Updated 2026-04-22: raised after targeted branch coverage additions
       // Reset 2026-08-04: actuals were stmts 60.1%, branch 49.1%, funcs 49.2%,
       // lines 61.9% — untested UI surface (App.tsx, HomeFeed.tsx) grew faster
-      // than tests and the old thresholds silently went red. Ratchet upward as
-      // issue #41 work lands; the large zero-coverage components are the lever.
-      thresholds: { statements: 58, branches: 47, functions: 47, lines: 60 },
+      // than tests and the old thresholds silently went red.
+      // Updated 2026-08-21 (issue #41): measured stmts 75.6%, branch 65.3%,
+      // funcs 71.7%, lines 77.6% after App/HomeFeed/DataManagement/Profile tests.
+      // Branch lock is the acceptance floor (65%) with a little headroom on the
+      // other metrics so CI does not flake on v8 jitter.
+      thresholds: { statements: 72, branches: 65, functions: 68, lines: 74 },
     },
   },
 })

@@ -274,6 +274,8 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: /A faster way to catalog real books/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Back to app/ }));
     expect(await screen.findByTestId('mock-home')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Terms' }));
+    expect(await screen.findByRole('heading', { name: /Simple rules for using the site/ })).toBeInTheDocument();
   });
 
   it('migrates hash public URLs and book deep links', async () => {

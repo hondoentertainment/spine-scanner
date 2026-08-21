@@ -73,6 +73,18 @@ describe('shareBook helpers', () => {
     expect(onCopy).not.toHaveBeenCalled();
   });
 
+  it('falls back to copy after a non-abort share failure', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      share: vi.fn().mockRejectedValue(new Error('not allowed')),
+      canShare: () => true,
+      clipboard: { writeText },
+    });
+    const onCopy = vi.fn();
+    await expect(shareBook('9780141036144', '1984', 'Orwell', onCopy)).resolves.toBe(true);
+    expect(onCopy).toHaveBeenCalledOnce();
+  });
+
   it('falls back to copy when share is unavailable', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { share: undefined, clipboard: { writeText } });
