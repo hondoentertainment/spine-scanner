@@ -31,15 +31,15 @@
     "test:e2e:desktop": "playwright test --project=chromium"
   },
   "dependencies": {
-    "@sentry/react": "^10.74.0",
+    "@sentry/react": "^10.75.0",
     "@supabase/supabase-js": "^2.116.0",
-    "@tanstack/react-virtual": "^3.14.11",
+    "@tanstack/react-virtual": "^3.14.13",
     "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.23.0",
-    "lucide-react": "^1.44.0",
+    "lucide-react": "^1.47.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "react-router-dom": "^7.18.3",
+    "react-router-dom": "^7.18.4",
     "react-webcam": "^7.2.0",
     "tesseract.js": "^7.0.0",
     "zustand": "^5.0.15"
