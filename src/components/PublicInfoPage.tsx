@@ -93,14 +93,18 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
   const handleDownloadDiagnostics = () => {
     if (!diagnosticsText || typeof document === 'undefined') return;
 
-    const blob = new Blob([diagnosticsText], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `spine-scanner-diagnostics-${diagnostics?.generatedAt?.slice(0, 10) ?? 'snapshot'}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    setCopyStatus('Diagnostics downloaded.');
+    try {
+      const blob = new Blob([diagnosticsText], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `spine-scanner-diagnostics-${diagnostics?.generatedAt?.slice(0, 10) ?? 'snapshot'}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setCopyStatus('Diagnostics downloaded.');
+    } catch {
+      setCopyStatus('Could not download diagnostics in this browser.');
+    }
   };
 
   return (
