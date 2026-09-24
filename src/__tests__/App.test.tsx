@@ -466,6 +466,8 @@ describe('App', () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-diagnostics');
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     renderApp('/home');
     fireEvent.click(screen.getByRole('button', { name: 'Support' }));
     expect(await screen.findByRole('heading', { name: /Help for scanning/ })).toBeInTheDocument();
@@ -473,7 +475,10 @@ describe('App', () => {
     expect(await screen.findByText(/Diagnostics copied/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Download JSON/ }));
     expect(await screen.findByText(/Diagnostics downloaded/)).toBeInTheDocument();
+    expect(createObjectURL).toHaveBeenCalled();
     clickSpy.mockRestore();
+    createObjectURL.mockRestore();
+    revokeObjectURL.mockRestore();
   });
 
   it('closes data management back to profile', async () => {
