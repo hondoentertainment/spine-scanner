@@ -165,7 +165,11 @@ jobs:
       - name: Build for Vercel
         if: env.VERCEL_TOKEN != ''
         env:
-          VITE_SITE_URL: ${{ vars.VITE_SITE_URL != '' && vars.VITE_SITE_URL || 'https://spinescanner.app' }}
+          # Fallback is the attached production alias. spinescanner.app is not a project domain,
+          # so using it here baked the wrong canonical URL into Vercel builds when the
+          # repository variable was unset. Vercel project env still wins when this step
+          # does not override it; this value is the override used by `vercel build`.
+          VITE_SITE_URL: ${{ vars.VITE_SITE_URL != '' && vars.VITE_SITE_URL || 'https://spine-scanner.vercel.app' }}
           VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH_VERCEL != '' && vars.VITE_BASE_PATH_VERCEL || '/' }}
           VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL != '' && vars.VITE_SUPPORT_EMAIL || 'noreply@example.com' }}
           VITE_ENABLE_SCANNER_DEBUG: 'false'

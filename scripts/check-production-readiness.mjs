@@ -55,6 +55,13 @@ function validateBasePath(rawValue) {
   }
 }
 
+function isPlaceholderSupportEmail(rawValue) {
+  const normalized = rawValue.trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized === 'noreply@example.com' || normalized === 'support@example.com') return true;
+  return normalized.endsWith('@example.com') || normalized.endsWith('@example.org') || normalized.endsWith('@example.net');
+}
+
 function validateSupportEmail(rawValue) {
   if (!rawValue) {
     addWarning('VITE_SUPPORT_EMAIL is not set. Public support links will be incomplete.');
@@ -64,6 +71,11 @@ function validateSupportEmail(rawValue) {
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailPattern.test(rawValue)) {
     addError(`VITE_SUPPORT_EMAIL must be a valid email address. Received "${rawValue}".`);
+    return;
+  }
+
+  if (isPlaceholderSupportEmail(rawValue)) {
+    addWarning('VITE_SUPPORT_EMAIL is a placeholder. Set a monitored inbox before public launch.');
   }
 }
 
