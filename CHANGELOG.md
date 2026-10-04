@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Launch metadata
+
+- **Share preview and structured data are in the static homepage.** Production builds with `VITE_SITE_URL` set write an absolute `og:image` / `twitter:image` and a schema.org `SoftwareApplication` JSON-LD block, so link unfurls no longer depend on client JavaScript. The Vercel CI site-url fallback is `https://spine-scanner.vercel.app` (the attached production alias). `check:production` warns when `VITE_SUPPORT_EMAIL` is still an `example.com` placeholder.
+
 ### Deploy hardening + data polish (from #83)
 
 - **Goodreads CSV export — round-trippable:** `exportToGoodreadsCSV` now emits Goodreads' native column set (`Number of Pages`, `Exclusive Shelf`, `Bookshelves`, `="ISBN"` wrappers) and maps `finishedAt` → `Date Read` and `pageCount` → `Number of Pages`, with RFC 4180 quoting and CRLF line endings. Full round-trip through `importFromGoodreadsCSV` preserves title / author / ISBN / status / pageCount / notes / dateAdded / finishedAt.
