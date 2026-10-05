@@ -29,6 +29,7 @@ import { DEFAULT_ONBOARDING_STEPS } from './components/onboardingContent.tsx';
 import { addBreadcrumb, captureException, isEnabled as isMonitoringEnabled, setTag, setUser as setMonitoringUser } from './lib/errorMonitoring.ts';
 import { isSupabaseConfigured } from './lib/supabase.ts';
 import { isMvpMode } from './lib/appMode.ts';
+import { APP_DESCRIPTION, APP_TITLE } from './lib/productionMetadata.ts';
 import { buildSupportDiagnostics } from './utils/supportDiagnostics.ts';
 import styles from './components/App.module.css';
 import { uiContracts } from './testing/uiContracts.ts';
@@ -54,8 +55,6 @@ type AppView = 'home' | 'scan' | 'library' | 'profile';
 
 const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL as string | undefined;
 const SITE_URL = (import.meta.env.VITE_SITE_URL as string | undefined)?.replace(/\/$/, '');
-const APP_DESCRIPTION = 'Digitize and manage your personal book library with barcode scanning, OCR fallback, optional cloud sync, and export-friendly ownership.';
-const APP_TITLE = 'SpineScanner';
 const APP_RELEASE = import.meta.env.VITE_APP_RELEASE || 'dev-local';
 const APP_ENV = import.meta.env.VITE_APP_ENV || import.meta.env.MODE;
 

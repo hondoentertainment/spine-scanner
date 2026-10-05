@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { applyBuildTimeSocialMetadata } from './src/lib/productionMetadata.ts';
 
 function normalizeBasePath(value?: string): string {
   if (!value) return '/';
@@ -12,7 +13,7 @@ function createSiteAssetsPlugin(base: string, siteUrl?: string): Plugin {
   return {
     name: 'spine-scanner-site-assets',
     transformIndexHtml(html) {
-      return html.replaceAll('__SITE_URL__', siteUrl ?? '');
+      return applyBuildTimeSocialMetadata(html, siteUrl, base);
     },
     apply: 'build',
     generateBundle() {
