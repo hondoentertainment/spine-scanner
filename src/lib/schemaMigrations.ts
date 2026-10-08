@@ -1,13 +1,13 @@
 import type { BookEntry } from '../types.ts';
 
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 type Migration = (book: BookEntry) => BookEntry;
 
 /** Map of fromVersion → migration that produces the next-version shape. */
 const MIGRATIONS: Record<number, Migration> = {
-  // Future example:
-  // 1: (b) => ({ ...b, newField: defaultValue, schemaVersion: 2 }),
+  // Loan tracking lives on the book. Older rows simply have no loan.
+  1: (book) => ({ ...book, schemaVersion: 2 }),
 };
 
 /**
