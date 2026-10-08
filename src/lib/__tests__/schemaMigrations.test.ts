@@ -78,13 +78,21 @@ describe('migrateBooks', () => {
 
 describe('migration chain (simulated)', () => {
   // Verifies the runner pattern: a chain of migrations applied in order.
-  // We simulate this by running migrateBook on a placeholder book whose
-  // version is well below current. Since the real MIGRATIONS map is empty,
-  // the runner should stamp the current version without crashing.
+  // Version 0 has no registered step, so the runner stamps the current version.
   it('stamps current version when no migration is registered for an old version', () => {
     const book = makeBook({ schemaVersion: 0 });
     const migrated = migrateBook(book);
     expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+  });
+
+  it('migrates a v1 book to the loan schema and keeps an existing loan', () => {
+    const book = makeBook({
+      schemaVersion: 1,
+      loan: { borrowerName: 'Ada', lentAt: '2026-10-01T00:00:00.000Z', dueAt: null },
+    });
+    const migrated = migrateBook(book);
+    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.loan?.borrowerName).toBe('Ada');
   });
 
   it('runs migrations in order via a local simulated runner', () => {

@@ -46,7 +46,8 @@ jobs:
 
       - name: Test
         timeout-minutes: 18
-        run: npm test
+        # Coverage runs the same unit suite and fails the job if thresholds slip.
+        run: npm run test:coverage
 
       - name: Build
         env:

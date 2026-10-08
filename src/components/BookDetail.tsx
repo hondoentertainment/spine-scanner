@@ -12,6 +12,7 @@ import { getBookCoverSrc } from '../utils/bookPresentation.ts';
 import { shareBook } from '../utils/shareBook.ts';
 import { isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
+import { isOnLoan, lendBook, returnBook } from '../utils/loans.ts';
 import {
   X, ExternalLink, BookOpen, CheckCircle, Clock, XCircle,
   Pencil, Save, Tag, Trash2, Share2, RefreshCw, AlertTriangle
@@ -95,10 +96,29 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
     return `${yyyy}-${mm}-${dd}`;
   })();
 
+  const [borrowerName, setBorrowerName] = useState('');
+  const [loanDue, setLoanDue] = useState('');
   const [showLogForm, setShowLogForm] = useState(false);
   const [logDate, setLogDate] = useState(todayKey);
   const [logDuration, setLogDuration] = useState(30);
   const [logPages, setLogPages] = useState(0);
+
+  const handleLend = () => {
+    const name = borrowerName.trim();
+    if (!name) {
+      toast('Enter who has this book', 'error');
+      return;
+    }
+    updateBook(book.id, { loan: lendBook(book, { borrowerName: name, dueAt: loanDue || null }).loan });
+    setBorrowerName('');
+    setLoanDue('');
+    toast(`Lent to ${name}`, 'success');
+  };
+
+  const handleReturn = () => {
+    updateBook(book.id, { loan: returnBook(book).loan });
+    toast('Marked as returned', 'success');
+  };
 
   const handleAddSession = () => {
     if (!logDate) {
@@ -444,6 +464,42 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
               ))}
             </div>
           </div>
+
+        <div className={styles.progressSection}>
+          <div className={styles.progressHeader}>
+            <strong>Loan</strong>
+            {isOnLoan(book) && book.loan?.dueAt && <span>Due {book.loan.dueAt}</span>}
+          </div>
+          {isOnLoan(book) ? (
+            <div className={styles.progressActions}>
+              <span>Lent to {book.loan?.borrowerName}</span>
+              <button type="button" className={styles.quickBtn} onClick={handleReturn}>
+                Mark returned
+              </button>
+            </div>
+          ) : (
+            <div className={styles.progressActions}>
+              <input
+                type="text"
+                value={borrowerName}
+                onChange={(event) => setBorrowerName(event.target.value)}
+                placeholder="Who has it?"
+                aria-label="Borrower name"
+                className={styles.quickBtn}
+              />
+              <input
+                type="date"
+                value={loanDue}
+                onChange={(event) => setLoanDue(event.target.value)}
+                aria-label="Loan due date"
+                className={styles.quickBtn}
+              />
+              <button type="button" className={styles.quickBtn} onClick={handleLend}>
+                Lend book
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className={styles.progressSection}>
           <div className={styles.progressHeader}>

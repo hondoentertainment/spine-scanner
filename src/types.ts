@@ -39,6 +39,14 @@ export interface BookEntry {
   metadataPeers?: BookMetadataPeers;
   /** Schema version of this book entry; bumped when migrations are added. */
   schemaVersion?: number;
+  /** Present while this copy is lent to someone. Null after it is returned. */
+  loan?: BookLoan | null;
+}
+
+export interface BookLoan {
+  borrowerName: string;
+  lentAt: string;
+  dueAt?: string | null;
 }
 
 export interface MetadataPeerSnapshot {

@@ -285,6 +285,24 @@ describe('HomeFeed', () => {
     expect(navigate).toHaveBeenCalledWith(`/library?isbn=${encodeURIComponent('9780000000004')}`);
   });
 
+  it('shows loans that are due soon and opens the lent-out library', () => {
+    useBookStore.setState({
+      books: [
+        makeBook({
+          id: 'lent',
+          title: 'Borrowed Copy',
+          isbn: '9780000000099',
+          loan: { borrowerName: 'Ada', lentAt: '2026-10-01T00:00:00.000Z', dueAt: isoDaysAgo(-2).slice(0, 10) },
+        }),
+      ],
+    });
+    renderFeed();
+    expect(screen.getByLabelText('Lent out')).toBeInTheDocument();
+    expect(screen.getByText(/Ada/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'View lent books' }));
+    expect(navigate).toHaveBeenCalledWith('/library?lent=1');
+  });
+
   it('does not show goals, streak, series, or year stats when those conditions are empty', () => {
     renderFeed();
     expect(screen.queryByLabelText('Reading goals this year')).not.toBeInTheDocument();
