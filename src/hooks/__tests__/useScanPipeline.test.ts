@@ -579,7 +579,7 @@ describe('useScanPipeline — runPipeline', () => {
 
     expect(hasLowOcrResolution(400, 150, CROP_MEDIUM)).toBe(true);
     expect(pipelineResult?.diagnostics?.lowResolution).toBe(true);
-  }, 15000);
+  }, 45000);
 
   it('invokes onProgress with barcode and ocr phases', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
@@ -611,7 +611,7 @@ describe('useScanPipeline — runPipeline', () => {
     expect(progressCalls[0].phase).toBe('barcode');
     expect(progressCalls.some((p) => p.phase === 'ocr')).toBe(true);
     expect(progressCalls.some((p) => p.phase === 'suggestions' || p.phase === 'done')).toBe(true);
-  }, 15000);
+  }, 45000);
 
   it('onProgress includes currentPass and totalPasses during OCR', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
@@ -647,7 +647,7 @@ describe('useScanPipeline — runPipeline', () => {
     const withPass = ocrProgress.find((p) => p.currentPass != null && p.totalPasses != null);
     expect(withPass).toBeDefined();
     expect(withPass?.totalPasses).toBeGreaterThan(0);
-  }, 15000);
+  }, 45000);
 
   it('exits early on first OCR pass when high confidence ISBN found', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
@@ -712,7 +712,7 @@ describe('useScanPipeline — runPipeline', () => {
       expect.any(Function),
       expect.any(Function),
     );
-  }, 15000);
+  }, 45000);
 
   it('low-confidence ISBN does NOT cause early exit; returns high-confidence ISBN from later pass', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
@@ -850,7 +850,7 @@ describe('useScanPipeline — runPipeline', () => {
     });
 
     expect(pipelineResult?.isbn).toBe('9780141036144');
-  }, 15000);
+  }, 45000);
 
   it('handles zero-dimension image with null ISBN and diagnostics', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
@@ -913,10 +913,15 @@ describe('useScanPipeline — runPipeline', () => {
   });
 
   it('suppresses concurrent pipeline call with diagnostics', async () => {
-    const tryBarcodeDecode = vi.fn().mockImplementation(
-      () => new Promise(resolve => setTimeout(() => resolve(null), 50))
-    );
-    const runOcr = vi.fn().mockResolvedValue({ isbn: null, allCandidates: [] });
+    // Block on the barcode await so the second call overlaps a busy pipeline
+    // without entering the OCR pass matrix. That matrix is what pushed this
+    // test to ~14s under coverage and into the explicit 15s timeout.
+    let releaseBarcode: () => void = () => {};
+    const barcodeGate = new Promise<null>((resolve) => {
+      releaseBarcode = () => resolve(null);
+    });
+    const tryBarcodeDecode = vi.fn().mockImplementation(() => barcodeGate);
+    const runOcr = vi.fn();
 
     const addLog = vi.fn();
     const { result } = renderHook(() =>
@@ -925,6 +930,7 @@ describe('useScanPipeline — runPipeline', () => {
         setStatus: vi.fn(),
         runOcr,
         tryBarcodeDecode,
+        scanMode: 'barcode',
       }),
     );
 
@@ -939,6 +945,7 @@ describe('useScanPipeline — runPipeline', () => {
     await act(async () => {
       const p1 = result.current.runPipeline(img, canvas, 'test1');
       const p2 = result.current.runPipeline(img, canvas, 'test2');
+      releaseBarcode();
       [result1, result2] = await Promise.all([p1, p2]);
     });
 
@@ -946,7 +953,8 @@ describe('useScanPipeline — runPipeline', () => {
     const suppressed = [result1, result2].find(r => r?.diagnostics?.lastError?.includes('Concurrent'));
     expect(suppressed).toBeDefined();
     expect(addLog).toHaveBeenCalledWith(expect.stringContaining('Pipeline already running'));
-  }, 15000);
+    expect(runOcr).not.toHaveBeenCalled();
+  });
 
   it('includes triple-repair suggestions when double-repair fails', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);

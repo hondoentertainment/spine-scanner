@@ -180,7 +180,7 @@ describe('Regression fixture — glossy cover (over-exposed)', () => {
     expect(runOcr).toHaveBeenCalled();
     // Result can be null or a suggestion depending on checksum
     expect(pipelineResult).not.toBeNull();
-  }, 15000);
+  }, 45000);
 });
 
 // ── Fixture: partial / truncated barcode ──────────────────────────────────────
@@ -203,7 +203,7 @@ describe('Regression fixture — partial barcode (barcode fails, OCR attempted)'
 
     expect(tryBarcodeDecode).toHaveBeenCalled();
     expect(runOcr).toHaveBeenCalled();
-  }, 15000);
+  }, 45000);
 
   it('pipeline returns repaired ISBN when single-digit OCR error produces invalid checksum', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
@@ -227,7 +227,7 @@ describe('Regression fixture — partial barcode (barcode fails, OCR attempted)'
 
     // Pipeline should offer the repaired ISBN as a suggestion
     expect(pipelineResult?.suggestions).toContain('9780141036144');
-  }, 15000);
+  }, 45000);
 });
 
 // ── Fixture: rotated spine ─────────────────────────────────────────────────────
@@ -300,7 +300,7 @@ describe('Regression fixture — low-resolution capture (too far from book)', ()
     });
 
     expect(pipelineResult?.diagnostics?.lowResolution).toBe(true);
-  }, 15000);
+  }, 45000);
 
   it('hasLowOcrResolution returns false for full HD camera (1920×1080)', () => {
     expect(hasLowOcrResolution(1920, 1080, CROP_MEDIUM)).toBe(false);
@@ -328,7 +328,7 @@ describe('Regression fixture — OCR confidence band output', () => {
     });
 
     expect(pipelineResult?.confidenceBand).toBe('high');
-  }, 15000);
+  }, 45000);
 
   it('returns confidenceBand="medium" for confidence in 60–84 range', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
@@ -348,7 +348,7 @@ describe('Regression fixture — OCR confidence band output', () => {
     });
 
     expect(pipelineResult?.confidenceBand).toBe('medium');
-  }, 15000);
+  }, 45000);
 
   it('returns confidenceBand="low" for confidence below 60', async () => {
     const tryBarcodeDecode = vi.fn().mockResolvedValue(null);
@@ -372,5 +372,5 @@ describe('Regression fixture — OCR confidence band output', () => {
 
     // Low confidence: pipeline continues but ultimately returns best candidate
     expect(pipelineResult?.confidenceBand).toBe('low');
-  }, 15000);
+  }, 45000);
 });
