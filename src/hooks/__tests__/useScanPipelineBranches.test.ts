@@ -184,37 +184,43 @@ describe('useScanPipeline — zero-dimension image guard', () => {
 
 describe('useScanPipeline — concurrent scan suppression', () => {
   it('returns early with suppressed error when pipeline is already busy', async () => {
-    const tryBarcodeDecode = vi.fn();
-    let resolveScan: (() => void) | null = null;
-    const runOcr = vi.fn().mockReturnValue(
-      new Promise<{ isbn: null; allCandidates: never[] }>((resolve) => {
-        resolveScan = () => resolve({ isbn: null, allCandidates: [] });
-      }),
-    );
+    // Hold the in-flight scan on the first barcode await. That sets the busy
+    // flag before any OCR preprocessing, so the overlapping call is rejected
+    // without running the pass matrix (which blows the 15s test budget under
+    // coverage on a slow CI runner).
+    let releaseBarcode: () => void = () => {};
+    const barcodeGate = new Promise<null>((resolve) => {
+      releaseBarcode = () => resolve(null);
+    });
+    const tryBarcodeDecode = vi.fn().mockImplementation(() => barcodeGate);
+    const runOcr = vi.fn();
 
     const { result } = renderHook(() =>
-      useScanPipeline({ addLog: vi.fn(), setStatus: vi.fn(), runOcr, tryBarcodeDecode }),
+      useScanPipeline({
+        addLog: vi.fn(),
+        setStatus: vi.fn(),
+        runOcr,
+        tryBarcodeDecode,
+        scanMode: 'barcode',
+      }),
     );
 
     const canvas = document.createElement('canvas');
     const img = makeImg(640, 480);
 
-    // Start first scan (will block at OCR)
-    const firstScan = result.current.runPipeline(img, canvas, 'scan-1');
-
-    // Immediately try a second concurrent scan
     let secondResult: { isbn: string | null; diagnostics?: { lastError?: string } } | null = null;
     await act(async () => {
-      secondResult = await result.current.runPipeline(img, canvas, 'scan-2');
+      const firstScan = result.current.runPipeline(img, canvas, 'scan-1');
+      const secondScan = result.current.runPipeline(img, canvas, 'scan-2');
+      releaseBarcode();
+      secondResult = await secondScan;
+      await firstScan;
     });
 
     expect(secondResult?.isbn).toBeNull();
     expect(secondResult?.diagnostics?.lastError).toMatch(/concurrent/i);
-
-    // Let first scan complete
-    resolveScan!();
-    await act(async () => { await firstScan; });
-  }, 15000);
+    expect(runOcr).not.toHaveBeenCalled();
+  });
 });
 
 // ── AbortSignal support ───────────────────────────────────────────────────────
