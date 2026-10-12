@@ -101,6 +101,13 @@ describe('migration chain (simulated)', () => {
     expect(migrated.title).toBe('Dune');
     expect(migrated.notes).toBe('desert');
     expect(migrated.loan?.borrowerName).toBe('Ada');
+    expect(migrated.lentTo).toBe('Ada');
+    expect(migrated.lentAt).toBe('2026-10-01T00:00:00.000Z');
+    expect(migrated.dueAt).toBe('');
+    expect(migrated.returnedAt).toBe('');
+    expect(migrated.loanLedger).toEqual([
+      { lentTo: 'Ada', lentAt: '2026-10-01T00:00:00.000Z', dueAt: '', returnedAt: '' },
+    ]);
     expect(migrated.locationRoom).toBe('');
     expect(migrated.locationCase).toBe('');
     expect(migrated.locationShelf).toBe('');
@@ -114,12 +121,34 @@ describe('migration chain (simulated)', () => {
       notes: 'keep',
     });
     const migrated = migrateBook(book);
-    expect(migrated.schemaVersion).toBe(3);
+    expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(migrated.notes).toBe('keep');
     expect(migrated.locationRoom).toBe('Study');
     expect(migrated.locationCase).toBe('Oak');
     expect(migrated.locationShelf).toBe('');
+    expect(migrated.lentTo).toBe('');
+    expect(migrated.loanLedger).toEqual([]);
+    expect(migrated.loan ?? null).toBeNull();
     expect(migrated).not.toBe(book);
+  });
+
+  it('adds an empty lending ledger without dropping an existing library book', () => {
+    const book = makeBook({
+      schemaVersion: 3,
+      title: 'Keep',
+      notes: 'mine',
+      locationRoom: 'Study',
+    });
+    const migrated = migrateBook(book);
+    expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(migrated.title).toBe('Keep');
+    expect(migrated.notes).toBe('mine');
+    expect(migrated.locationRoom).toBe('Study');
+    expect(migrated.lentTo).toBe('');
+    expect(migrated.lentAt).toBe('');
+    expect(migrated.dueAt).toBe('');
+    expect(migrated.returnedAt).toBe('');
+    expect(migrated.loanLedger).toEqual([]);
   });
 
   it('runs migrations in order via a local simulated runner', () => {

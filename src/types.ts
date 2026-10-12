@@ -39,8 +39,21 @@ export interface BookEntry {
   metadataPeers?: BookMetadataPeers;
   /** Schema version of this book entry; bumped when migrations are added. */
   schemaVersion?: number;
-  /** Present while this copy is lent to someone. Null after it is returned. */
+  /**
+   * Current loan snapshot, kept in sync with the open ledger row.
+   * Null when this copy is not out. Older libraries simply omit it.
+   */
   loan?: BookLoan | null;
+  /** Who has this copy now, or who had it last. Empty when it has never been lent. */
+  lentTo?: string;
+  /** ISO time the current or most recent loan started. Empty when never lent. */
+  lentAt?: string;
+  /** Due date (YYYY-MM-DD) for the current or most recent loan. Empty when unset. */
+  dueAt?: string;
+  /** ISO time the most recent loan was returned. Empty while it is still out, or never lent. */
+  returnedAt?: string;
+  /** Lending history, oldest first. Empty when the book has never been lent. */
+  loanLedger?: LoanLedgerEntry[];
   /** Physical room where this copy lives. Empty when unassigned. */
   locationRoom?: string;
   /** Physical bookcase within the room. Empty when unassigned. */
@@ -53,6 +66,14 @@ export interface BookLoan {
   borrowerName: string;
   lentAt: string;
   dueAt?: string | null;
+}
+
+/** One lending-ledger row. Empty strings mean "not set". */
+export interface LoanLedgerEntry {
+  lentTo: string;
+  lentAt: string;
+  dueAt: string;
+  returnedAt: string;
 }
 
 export interface MetadataPeerSnapshot {

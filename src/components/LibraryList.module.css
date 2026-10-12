@@ -600,6 +600,11 @@
   color: #f59e0b;
 }
 
+.loanBadgeInline {
+  color: #f87171;
+  font-weight: 700;
+}
+
 .bulkBar {
   padding: 0.9rem 1rem;
   margin-bottom: 1rem;

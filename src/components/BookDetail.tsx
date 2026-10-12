@@ -12,7 +12,7 @@ import { getBookCoverSrc } from '../utils/bookPresentation.ts';
 import { shareBook } from '../utils/shareBook.ts';
 import { isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
-import { isOnLoan, lendBook, returnBook } from '../utils/loans.ts';
+import { formatLentSince, formatLoanDue, isLoanOverdue, isOnLoan, returnedLoans } from '../utils/loans.ts';
 import { formatPhysicalLocation } from '../utils/physicalLocation.ts';
 import {
   X, ExternalLink, BookOpen, CheckCircle, Clock, XCircle,
@@ -56,6 +56,8 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
     shelves,
     assignShelf,
     unassignShelf,
+    lendBook,
+    markBookReturned,
   } = useBookStore();
   const { sessions: allSessions, addSession, removeSession, sessionsForBook, stats } = useReadingSessionStore();
   const { toast, confirm } = useToast();
@@ -113,16 +115,18 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
       toast('Enter who has this book', 'error');
       return;
     }
-    updateBook(book.id, { loan: lendBook(book, { borrowerName: name, dueAt: loanDue || null }).loan });
+    lendBook(book.id, { lentTo: name, dueAt: loanDue || null });
     setBorrowerName('');
     setLoanDue('');
     toast(`Lent to ${name}`, 'success');
   };
 
   const handleReturn = () => {
-    updateBook(book.id, { loan: returnBook(book).loan });
+    markBookReturned(book.id);
     toast('Marked as returned', 'success');
   };
+
+  const pastLoans = returnedLoans(book);
 
   const handleAddSession = () => {
     if (!logDate) {
@@ -519,11 +523,12 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
         <div className={styles.progressSection}>
           <div className={styles.progressHeader}>
             <strong>Loan</strong>
-            {isOnLoan(book) && book.loan?.dueAt && <span>Due {book.loan.dueAt}</span>}
+            {isOnLoan(book) && isLoanOverdue(book) && <span className={styles.overdueBadge}>Overdue</span>}
+            {isOnLoan(book) && !isLoanOverdue(book) && (book.dueAt || book.loan?.dueAt) && <span>{formatLoanDue(book)}</span>}
           </div>
           {isOnLoan(book) ? (
             <div className={styles.progressActions}>
-              <span>Lent to {book.loan?.borrowerName}</span>
+              <span>{formatLentSince(book)}</span>
               <button type="button" className={styles.quickBtn} onClick={handleReturn}>
                 Mark returned
               </button>
@@ -549,6 +554,15 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                 Lend book
               </button>
             </div>
+          )}
+          {pastLoans.length > 0 && (
+            <ul className={styles.loanHistory}>
+              {pastLoans.map((entry) => (
+                <li key={`${entry.lentAt}-${entry.returnedAt}-${entry.lentTo}`}>
+                  Returned from {entry.lentTo} on {entry.returnedAt.slice(0, 10) || 'an unknown date'}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 

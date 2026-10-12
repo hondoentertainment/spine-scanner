@@ -84,7 +84,26 @@ describe('LibraryList', () => {
     );
     expect(screen.getByText('With Ada')).toBeInTheDocument();
     expect(screen.queryByText('On shelf')).not.toBeInTheDocument();
-    expect(screen.getByText('Lent out')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove filter: Lent out' })).toBeInTheDocument();
+  });
+
+  it('filters to lent-out books and shows an overdue badge', () => {
+    useBookStore.setState({
+      books: [
+        makeBook({ id: 'home', title: 'On shelf' }),
+        makeBook({
+          id: 'out',
+          title: 'With Ada',
+          loan: { borrowerName: 'Ada', lentAt: '2026-10-01T00:00:00.000Z', dueAt: '2020-01-01' },
+        }),
+      ],
+    });
+    renderLibraryList(<LibraryList />);
+    expect(screen.getAllByText('On shelf').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Lent out' }));
+    expect(screen.getByText('With Ada')).toBeInTheDocument();
+    expect(screen.queryByText('On shelf')).not.toBeInTheDocument();
+    expect(screen.getByText('Overdue')).toBeInTheDocument();
   });
 
   it('shows the new browsing-focused hero copy', () => {

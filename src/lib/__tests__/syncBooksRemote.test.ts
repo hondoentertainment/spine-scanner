@@ -226,6 +226,39 @@ describe('pushBooks', () => {
     expect(second.location_case).toBeUndefined();
     expect(second.location_shelf).toBeUndefined();
     expect(second.title).toBe('Test Book');
+    expect(second.loan_ledger).toEqual([]);
+    expect(captureException).not.toHaveBeenCalled();
+  });
+
+  it('retries the upsert without the lending ledger when that column is missing', async () => {
+    tables.books.upsert
+      .mockResolvedValueOnce({
+        error: {
+          code: 'PGRST204',
+          message: "Could not find the 'loan_ledger' column of 'books' in the schema cache",
+        },
+      })
+      .mockResolvedValueOnce({ error: null });
+    tables.books.select.mockResolvedValueOnce({ data: [{ id: 'b1' }], error: null });
+
+    const ok = await pushBooks('user-1', [makeBook({
+      id: 'b1',
+      locationRoom: 'Study',
+      loan: { borrowerName: 'Ada', lentAt: '2026-10-01T00:00:00.000Z', dueAt: null },
+    })]);
+
+    expect(ok).toBe(true);
+    expect(tables.books.upsert).toHaveBeenCalledTimes(2);
+    const first = (tables.books.upsert.mock.calls[0] as [Array<Record<string, unknown>>])[0][0];
+    const second = (tables.books.upsert.mock.calls[1] as [Array<Record<string, unknown>>])[0][0];
+    expect(first.loan_ledger).toEqual([
+      { lentTo: 'Ada', lentAt: '2026-10-01T00:00:00.000Z', dueAt: '', returnedAt: '' },
+    ]);
+    expect(first.location_room).toBe('Study');
+    expect(second.loan_ledger).toBeUndefined();
+    expect(second.loan?.borrowerName).toBe('Ada');
+    expect(second.location_room).toBe('Study');
+    expect(second.title).toBe('Test Book');
     expect(captureException).not.toHaveBeenCalled();
   });
 

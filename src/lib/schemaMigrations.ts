@@ -1,7 +1,17 @@
 import type { BookEntry } from '../types.ts';
+import { lendingFields } from '../utils/loans.ts';
 import { normalizePhysicalLocation } from '../utils/physicalLocation.ts';
 
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
+
+function stampCurrent(book: BookEntry): BookEntry {
+  return {
+    ...book,
+    ...normalizePhysicalLocation(book),
+    ...lendingFields(book),
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+  };
+}
 
 type Migration = (book: BookEntry) => BookEntry;
 
@@ -14,6 +24,12 @@ const MIGRATIONS: Record<number, Migration> = {
     ...book,
     ...normalizePhysicalLocation(book),
     schemaVersion: 3,
+  }),
+  // Lending ledger. Missing fields become empty strings; an existing loan is kept.
+  3: (book) => ({
+    ...book,
+    ...lendingFields(book),
+    schemaVersion: 4,
   }),
 };
 
@@ -28,8 +44,8 @@ export function migrateBook(book: BookEntry): BookEntry {
     const migration = MIGRATIONS[current];
     if (!migration) {
       // Unknown version — stamp current to avoid infinite loop, log a breadcrumb.
-      // Still fill location fields so a jump from v0 does not drop the new shape.
-      result = { ...result, ...normalizePhysicalLocation(result), schemaVersion: CURRENT_SCHEMA_VERSION };
+      // Still fill location and lending fields so a jump from v0 does not drop the new shape.
+      result = stampCurrent(result);
       break;
     }
     result = migration(result);
@@ -37,7 +53,7 @@ export function migrateBook(book: BookEntry): BookEntry {
   }
   // Always stamp the current version on the result
   if ((result.schemaVersion ?? 0) < CURRENT_SCHEMA_VERSION) {
-    result = { ...result, ...normalizePhysicalLocation(result), schemaVersion: CURRENT_SCHEMA_VERSION };
+    result = stampCurrent(result);
   }
   return result;
 }

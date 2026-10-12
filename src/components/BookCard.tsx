@@ -9,6 +9,7 @@ import { shareBook } from '../utils/shareBook.ts';
 import { getBookCoverSrc } from '../utils/bookPresentation.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
 import { formatPhysicalLocation } from '../utils/physicalLocation.ts';
+import { formatLentSince, isOnLoan, loanBadgeText } from '../utils/loans.ts';
 import s from './BookCard.module.css';
 
 export interface BookCardProps {
@@ -35,6 +36,13 @@ function bookVisualEqual(a: BookEntry, b: BookEntry): boolean {
         && (a.locationRoom ?? '') === (b.locationRoom ?? '')
         && (a.locationCase ?? '') === (b.locationCase ?? '')
         && (a.locationShelf ?? '') === (b.locationShelf ?? '')
+        && (a.lentTo ?? '') === (b.lentTo ?? '')
+        && (a.lentAt ?? '') === (b.lentAt ?? '')
+        && (a.dueAt ?? '') === (b.dueAt ?? '')
+        && (a.returnedAt ?? '') === (b.returnedAt ?? '')
+        && (a.loan?.borrowerName ?? '') === (b.loan?.borrowerName ?? '')
+        && (a.loan?.dueAt ?? '') === (b.loan?.dueAt ?? '')
+        && (a.loan?.lentAt ?? '') === (b.loan?.lentAt ?? '')
     );
 }
 
@@ -49,6 +57,8 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
         shelves,
         assignShelf,
         unassignShelf,
+        lendBook,
+        markBookReturned,
     } = useBookStore();
     const { activeBookId, startSession, stopSession, cancelSession } = useReadingSessionStore();
     const { toast, confirm } = useToast();
@@ -57,6 +67,9 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
     const [editing, setEditing] = useState(false);
     const [showShelfPicker, setShowShelfPicker] = useState(false);
     const [showStopForm, setShowStopForm] = useState(false);
+    const [showLendForm, setShowLendForm] = useState(false);
+    const [borrowerName, setBorrowerName] = useState('');
+    const [loanDue, setLoanDue] = useState('');
     const [stopPages, setStopPages] = useState(0);
     const [elapsedLabel, setElapsedLabel] = useState('');
 
@@ -108,6 +121,22 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
     const availableShelves = shelves.filter((sh) => !bookShelfIds.includes(sh.id));
     const progressPercent = getReadingProgressPercent(book);
     const progressValue = Math.min(book.pageCount || 0, book.pagesFinished || 0);
+    const onLoan = isOnLoan(book);
+    const loanBadge = loanBadgeText(book);
+    const lentSince = formatLentSince(book);
+
+    const confirmLend = () => {
+        const name = borrowerName.trim();
+        if (!name) {
+            toast('Enter who has this book', 'error');
+            return;
+        }
+        lendBook(book.id, { lentTo: name, dueAt: loanDue || null });
+        setBorrowerName('');
+        setLoanDue('');
+        setShowLendForm(false);
+        toast(`Lent to ${name}`, 'success');
+    };
 
     const openCard = () => {
         if (onActivateBookId) onActivateBookId(book.id);
@@ -275,6 +304,16 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                             <span>{formatPhysicalLocation(book)}</span>
                         </p>
                     )}
+                    {(onLoan || loanBadge) && (
+                        <p className={s.loanLine}>
+                            <span>{lentSince}</span>
+                            {loanBadge && (
+                                <span className={`${s.loanBadge} ${loanBadge === 'Overdue' ? s.loanBadgeOverdue : ''}`}>
+                                    {loanBadge}
+                                </span>
+                            )}
+                        </p>
+                    )}
                     <div className={s.links}>
                         {generateAmazonLink(book.isbn) && (
                             <a href={generateAmazonLink(book.isbn)} target="_blank" rel="noopener noreferrer"
@@ -377,6 +416,50 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                         </button>
                     )}
                 </div>
+            </div>
+
+            <div className={s.loanRow} onClick={(e) => e.stopPropagation()}>
+                {onLoan ? (
+                    <button
+                        type="button"
+                        className={s.quickBtn}
+                        aria-label={`Mark ${book.title} returned`}
+                        onClick={() => {
+                            markBookReturned(book.id);
+                            toast('Marked as returned', 'success');
+                        }}
+                    >
+                        Mark returned
+                    </button>
+                ) : showLendForm ? (
+                    <>
+                        <input
+                            type="text"
+                            value={borrowerName}
+                            onChange={(event) => setBorrowerName(event.target.value)}
+                            placeholder="Who has it?"
+                            aria-label={`Borrower for ${book.title}`}
+                            className={s.loanInput}
+                        />
+                        <input
+                            type="date"
+                            value={loanDue}
+                            onChange={(event) => setLoanDue(event.target.value)}
+                            aria-label={`Due date for ${book.title}`}
+                            className={s.loanInput}
+                        />
+                        <button type="button" className={s.quickBtn} aria-label={`Confirm lend ${book.title}`} onClick={confirmLend}>
+                            Lend book
+                        </button>
+                        <button type="button" className={s.quickBtn} onClick={() => setShowLendForm(false)}>
+                            Cancel
+                        </button>
+                    </>
+                ) : (
+                    <button type="button" className={s.quickBtn} aria-label={`Lend ${book.title}`} onClick={() => setShowLendForm(true)}>
+                        Lend
+                    </button>
+                )}
             </div>
 
             {(book.status === 'reading' || activeBookId === book.id) && (

@@ -414,6 +414,22 @@
   color: var(--text-main);
 }
 
+.overdueBadge {
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.loanHistory {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
 /* ---- Shelves ---- */
 .shelves {
   display: flex;
