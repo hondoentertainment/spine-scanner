@@ -734,4 +734,16 @@ describe('Scanner', () => {
       expect(statusText).toBeInTheDocument();
     });
   });
+
+  describe('shelf photo mode', () => {
+    it('explains that each detected book is reviewed before import', async () => {
+      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
+      const shelf = await screen.findByRole('radio', { name: 'Shelf' });
+      fireEvent.click(shelf);
+      expect(shelf).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByRole('heading', { name: 'Scan a shelf' })).toBeInTheDocument();
+      expect(screen.getByText(/review each book before it is added/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Scan shelf' })).toBeInTheDocument();
+    });
+  });
 });

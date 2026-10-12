@@ -5,6 +5,7 @@ A progressive web app for digitizing and managing your personal book library. Sc
 ## Features
 
 - **OCR & Barcode Scanning** -- Point your camera at an ISBN barcode or spine text. Uses Tesseract.js for OCR and ZXing for barcode detection, with automatic rotation handling for vertical spines and a confidence-band signal (low / medium / high) per scan.
+- **Shelf photo scan** -- Photograph or upload a whole shelf. On-device detection finds multiple spines, proposes title / author / ISBN candidates (barcode, Tesseract, then Google Books and Open Library), and shows a review list. Accepted books are added to the library; rejected ones are not. The single-spine barcode and OCR modes are unchanged.
 - **Automatic Metadata Lookup** -- Fetches title, author, page count, and cover art from Google Books and Open Library in parallel. Source attribution per book and a warning when the two sources disagree on author / page count / title.
 - **Library Management** -- Search, sort (by title, author, date, pages), and filter by reading status, shelf, series, or page range. Bulk multi-select for status changes, shelf assignment, and deletion. Smart shelves and saved views for repeated filters.
 - **Reading Tracking** -- Per-book pages read, started/finished dates, current and longest reading streak, and a "{year} in Books" card with books finished, pages read, average pages/book, and busiest month. A start/stop session timer on reading books logs a per-book session history with aggregate stats.
@@ -38,6 +39,28 @@ npm run dev
 ```
 
 Open [http://localhost:5173/spine-scanner/](http://localhost:5173/spine-scanner/) in your browser.
+
+### Shelf photo scan
+
+Use this when you want to capture a row of books in one photo instead of scanning each barcode.
+
+1. Open **Scan** and choose **Shelf**.
+2. Take a photo of the shelf, or upload one. Hold the camera so the spines are upright and the gaps between books are visible.
+3. Review the list. Each row can be accepted, rejected, or edited (title, author, ISBN). Nothing is written to your library until you confirm.
+4. Choose **Add N books**. Accepted rows with a valid ISBN are looked up and saved. Rows without an ISBN are saved as photo-only books so you can fill them in later. ISBNs already in the library are skipped.
+
+Detection runs on the device (color changes between spines, then the existing Tesseract and ZXing pipelines). Metadata lookup needs a network connection. If you are offline, the review list still shows the on-device title and author text.
+
+An optional vision service can fill in spines the on-device pass misses (similar colors, white spines, heavy perspective). It is off unless both variables are set at build time:
+
+```
+VITE_SHELF_VISION_API=true
+VITE_SHELF_VISION_ENDPOINT=https://your-vision-endpoint.example/shelf
+```
+
+The app POSTs `{ "image": "<data-url>" }` and expects `{ "books": [{ "title": "", "author": "", "isbn": "" }] }`. If the flag is unset or the request fails, the free on-device result is used. Single-book barcode and OCR scanning never calls this endpoint.
+
+A Gemini or Firebase vision model is a good fit for that endpoint later. The app does not bundle a paid vision API.
 
 ### Cloud Sync Setup (Optional)
 

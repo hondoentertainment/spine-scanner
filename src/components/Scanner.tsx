@@ -2,7 +2,10 @@ import React, { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import { Camera, Loader2, Edit3, Check, ImagePlus, Zap, Image as ImageIcon, X, Flashlight, Maximize2, HelpCircle, Settings, SwitchCamera, ZoomIn, ZoomOut, Layers, Library } from 'lucide-react';
 import { isValidIsbn, formatIsbnForDisplay } from '../utils/isbnValidation.ts';
-import { getNearMissCandidates } from '../utils/ocr.ts';
+import { extractIsbnCandidates, getNearMissCandidates } from '../utils/ocr.ts';
+import { runBrowserShelfScan } from '../shelf/runBrowserShelfScan.ts';
+import type { ShelfReviewItem } from '../shelf/types.ts';
+import ShelfScanReview from './ShelfScanReview.tsx';
 import { useToast } from './Toast.tsx';
 import { useOcrEngine } from '../hooks/useOcrEngine.ts';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner.ts';
@@ -19,7 +22,7 @@ import { uiContracts } from '../testing/uiContracts.ts';
  *  Types & Constants
  * ================================================================ */
 
-export type ScanMode = 'auto' | 'barcode' | 'ocr';
+export type ScanMode = 'auto' | 'barcode' | 'ocr' | 'shelf';
 
 type ScanResultMeta = {
     detectionMethod?: ScanDetectionMethod;
@@ -53,6 +56,8 @@ interface ScannerProps {
     onOpenSupport?: () => void;
     onOpenPrivacy?: () => void;
     onViewLibrary?: (isbn?: string) => void;
+    /** Accepted shelf-photo rows. Return false to keep the review list open. */
+    onShelfImport?: (items: ShelfReviewItem[]) => boolean | void;
 }
 
 const EMPTY_TELEMETRY: LiveScanTelemetry = {
@@ -82,6 +87,7 @@ const Scanner: React.FC<ScannerProps> = ({
     onOpenSupport,
     onOpenPrivacy,
     onViewLibrary,
+    onShelfImport,
 }) => {
     const webcamRef = useRef<Webcam>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -119,6 +125,7 @@ const Scanner: React.FC<ScannerProps> = ({
     const [lastScanMeta, setLastScanMeta] = useState<ScanResultMeta | null>(null);
     const [ocrElapsedSec, setOcrElapsedSec] = useState(0);
     const [lastBatchAddIsbn, setLastBatchAddIsbn] = useState<string | null>(null);
+    const [shelfItems, setShelfItems] = useState<ShelfReviewItem[] | null>(null);
 
     const abortControllerRef = useRef<AbortController | null>(null);
     useEffect(() => {
@@ -141,7 +148,8 @@ const Scanner: React.FC<ScannerProps> = ({
     useEffect(() => { liveQualityHintRef.current = liveQualityHint; }, [liveQualityHint]);
 
     const autoScan = scanMode === 'auto';
-    const liveBarcodeEnabled = scanMode !== 'ocr';
+    const shelfMode = scanMode === 'shelf';
+    const liveBarcodeEnabled = scanMode !== 'ocr' && scanMode !== 'shelf';
 
     const submitScan = useCallback(async (
         isbn: string,
@@ -202,7 +210,7 @@ const Scanner: React.FC<ScannerProps> = ({
         addLog, setStatus, runOcr, runOcrWithLang, tryBarcodeDecode,
         onProgress: useCallback((p: ScanProgress) => setScanProgress(p), []),
         ocrLanguage,
-        scanMode,
+        scanMode: scanMode === 'shelf' ? 'auto' : scanMode,
     });
 
     useEffect(() => {
@@ -249,6 +257,55 @@ const Scanner: React.FC<ScannerProps> = ({
         return () => clearInterval(interval);
     }, [cameraReady, cameraError, processing, isScanning]);
 
+    const processShelf = useCallback(async (imageSrc: string) => {
+        if (!imageSrc || processingRef.current || isScanning) return;
+        const signal = abortControllerRef.current?.signal;
+        processingRef.current = true;
+        setProcessing(true);
+        setScanProgress(null);
+        setStatus('Finding spines on the shelf...');
+        setIsbnSuggestions([]);
+        setRepairedMap({});
+        setLastScanMeta(null);
+        try {
+            const items = await runBrowserShelfScan(imageSrc, {
+                signal,
+                onProgress: setStatus,
+                recognizeText: async (crop, regionId) => {
+                    if (!crop) return { text: '', confidence: 0 };
+                    const ocr = await runOcr(crop, `shelf-${regionId}`, extractIsbnCandidates, isValidIsbn);
+                    return { text: ocr.text ?? '', confidence: ocr.confidence };
+                },
+            });
+            if (signal?.aborted) {
+                setStatus('Shelf scan cancelled');
+                return;
+            }
+            if (items.length === 0) {
+                hapticFailure();
+                setStatus('No spines found. Try a clearer shelf photo, or scan one book.');
+                toast('No books detected in that photo.', 'warning');
+                return;
+            }
+            hapticSuccess();
+            setShelfItems(items);
+            setStatus(`Found ${items.length} books. Review them before adding.`);
+        } catch (err: unknown) {
+            if (signal?.aborted) {
+                setStatus('Shelf scan cancelled');
+                return;
+            }
+            hapticFailure();
+            const msg = err instanceof Error ? err.message : String(err);
+            addLog(`SHELF SCAN ERROR: ${msg}`);
+            setStatus('Shelf scan failed. Try another photo or scan one book.');
+            toast('Shelf scan failed. Try another photo.', 'error');
+        } finally {
+            processingRef.current = false;
+            setProcessing(false);
+        }
+    }, [addLog, isScanning, runOcr, toast]);
+
     const capture = useCallback(async () => {
         if (!webcamRef.current || processingRef.current || isScanning) return;
 
@@ -276,6 +333,11 @@ const Scanner: React.FC<ScannerProps> = ({
             addLog('Used manual canvas capture fallback');
         }
         if (!imageSrc) { addLog('Error: Failed to capture frame'); return; }
+
+        if (scanMode === 'shelf') {
+            await processShelf(imageSrc);
+            return;
+        }
 
         processingRef.current = true;
         setProcessing(true);
@@ -371,7 +433,7 @@ const Scanner: React.FC<ScannerProps> = ({
             processingRef.current = false;
             setProcessing(false);
         }
-    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, batchModeProp, captureAveragedFrame, autoScan, scanMode]);
+    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, batchModeProp, captureAveragedFrame, autoScan, scanMode, processShelf]);
 
     const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -379,6 +441,25 @@ const Scanner: React.FC<ScannerProps> = ({
         e.target.value = '';
 
         addLog(`Photo upload: ${file.name} (${(file.size / 1024).toFixed(0)} KB)`);
+
+        let imageSrc: string;
+        try {
+            imageSrc = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.readAsDataURL(file);
+            });
+        } catch {
+            toast('Failed to read image.', 'error');
+            return;
+        }
+
+        if (scanMode === 'shelf') {
+            await processShelf(imageSrc);
+            return;
+        }
+
         processingRef.current = true;
         setProcessing(true);
         setScanProgress(null);
@@ -388,13 +469,6 @@ const Scanner: React.FC<ScannerProps> = ({
         setLastScanMeta(null);
 
         try {
-            const imageSrc = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result as string);
-                reader.onerror = () => reject(new Error('Failed to read file'));
-                reader.readAsDataURL(file);
-            });
-
             const img = new Image();
             await new Promise<void>((resolve, reject) => {
                 const timer = setTimeout(() => reject(new Error('Image load timed out after 10s')), 10000);
@@ -477,7 +551,7 @@ const Scanner: React.FC<ScannerProps> = ({
             processingRef.current = false;
             setProcessing(false);
         }
-    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, scanMode, batchModeProp]);
+    }, [submitScan, isScanning, runPipeline, addLog, toastDetail, toast, scanMode, batchModeProp, processShelf]);
 
     const handlePhotoOnlyFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -542,13 +616,14 @@ const Scanner: React.FC<ScannerProps> = ({
             if (active?.closest('button') && active !== containerRef.current) return;
             if (!containerRef.current?.contains(active)) return;
             e.preventDefault();
-            if (!processingRef.current && !isScanning && cameraReady && liveQualityHint !== 'blurry' && liveQualityHint !== 'blurry-dark') {
+            const qualityBlocked = scanMode !== 'shelf' && (liveQualityHint === 'blurry' || liveQualityHint === 'blurry-dark');
+            if (!processingRef.current && !isScanning && cameraReady && !qualityBlocked) {
                 capture();
             }
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [capture, cameraReady, liveQualityHint, isScanning]);
+    }, [capture, cameraReady, liveQualityHint, isScanning, scanMode]);
 
 
     const cancelScan = useCallback(() => {
@@ -622,6 +697,26 @@ const Scanner: React.FC<ScannerProps> = ({
 
     const systemStatusLabel = cameraError ? 'Camera Unavailable' : !cameraReady ? 'Initializing' : 'System Ready';
     const systemDotClass = cameraError ? s.systemDotError : !cameraReady ? s.systemDotWarning : '';
+    const qualityBlocked = !shelfMode && (liveQualityHint === 'blurry' || liveQualityHint === 'blurry-dark');
+    const photoCaptureLabel = shelfMode ? 'Take shelf photo' : 'Take photo of ISBN';
+    const galleryLabel = shelfMode ? 'Upload shelf photo' : 'Choose from gallery';
+
+    if (shelfItems && shelfItems.length > 0) {
+        return (
+            <ShelfScanReview
+                items={shelfItems}
+                onChange={setShelfItems}
+                onCancel={() => {
+                    setShelfItems(null);
+                    setStatus('Point the camera at a bookshelf');
+                }}
+                onConfirm={(items) => {
+                    const accepted = onShelfImport?.(items);
+                    if (accepted !== false) setShelfItems(null);
+                }}
+            />
+        );
+    }
 
     return (
         <div ref={containerRef} className={s.scannerLayout} tabIndex={0} aria-label="Book scanner: press Space or Enter to capture" aria-busy={processing || isScanning}>
@@ -634,14 +729,16 @@ const Scanner: React.FC<ScannerProps> = ({
                     {(isScanning || processing || submitting) && <Loader2 size={12} className="animate-spin" />}
                 </div>
 
-                <h2 className={s.panelTitle}>Scan Barcode</h2>
+                <h2 className={s.panelTitle}>{shelfMode ? 'Scan a shelf' : 'Scan Barcode'}</h2>
                 <p className={s.panelDescription}>
-                    Position the barcode within the frame. The system will automatically detect and capture the details.
+                    {shelfMode
+                        ? "Photograph the whole shelf. We'll detect each spine and let you review each book before it is added."
+                        : 'Position the barcode within the frame. The system will automatically detect and capture the details.'}
                 </p>
 
                 {/* Scan mode selector */}
                 <div className={s.scanModeSelector} role="radiogroup" aria-label="Scan mode">
-                    {([['auto', 'Auto'], ['barcode', 'Barcode'], ['ocr', 'OCR']] as const).map(([mode, label]) => (
+                    {([['auto', 'Auto'], ['barcode', 'Barcode'], ['ocr', 'OCR'], ['shelf', 'Shelf']] as const).map(([mode, label]) => (
                         <button key={mode} type="button"
                             role="radio" aria-checked={scanMode === mode}
                             className={`${s.scanModeBtn} ${scanMode === mode ? s.scanModeBtnActive : ''}`}
@@ -693,7 +790,7 @@ const Scanner: React.FC<ScannerProps> = ({
                     </div>
                 )}
 
-                {processing && scanProgress && (scanProgress.phase === 'ocr' || scanProgress.phase === 'ocr-multilang') && (
+                {processing && (shelfMode || (scanProgress && (scanProgress.phase === 'ocr' || scanProgress.phase === 'ocr-multilang'))) && (
                     <button type="button" onClick={cancelScan} className={s.cancelScanBtn} aria-label="Cancel scan">
                         <X size={16} /> Cancel
                     </button>
@@ -715,19 +812,19 @@ const Scanner: React.FC<ScannerProps> = ({
                     <div className={s.fallbackActions}>
                         <button onClick={() => takePhotoInputRef.current?.click()} disabled={processing || isScanning}
                             className={s.primaryBtn}
-                            title="Open camera to take a photo of the ISBN or barcode">
+                            title={shelfMode ? 'Open camera to photograph a bookshelf' : 'Open camera to take a photo of the ISBN or barcode'}>
                             {processing ? <Loader2 className="animate-spin" size={24} /> : (
                                 <span className={s.ctaIcon}><Camera size={22} /></span>
                             )}
-                            {processing ? 'Scanning...' : 'Take photo of ISBN'}
+                            {processing ? 'Scanning...' : photoCaptureLabel}
                         </button>
                         <button onClick={() => fileInputRef.current?.click()} disabled={processing || isScanning}
                             className={s.secondaryBtn}
-                            title="Choose an existing photo from your device">
+                            title={shelfMode ? 'Choose a bookshelf photo from your device' : 'Choose an existing photo from your device'}>
                             <span className={s.secondaryBtnIcon}><ImagePlus size={16} /></span>
-                            Choose from gallery
+                            {galleryLabel}
                         </button>
-                        {onPhotoCapture && (
+                        {onPhotoCapture && !shelfMode && (
                             <button onClick={() => photoOnlyInputRef.current?.click()} disabled={processing || isScanning}
                                 className={s.secondaryBtn}>
                                 <span className={s.secondaryBtnIcon}><ImageIcon size={16} /></span>
@@ -767,30 +864,30 @@ const Scanner: React.FC<ScannerProps> = ({
                     </div>
                 ) : (
                     <>
-                        <button onClick={capture} disabled={processing || submitting || isScanning || !cameraReady || liveQualityHint === 'blurry' || liveQualityHint === 'blurry-dark'}
-                            aria-label={processing ? 'Scanning in progress' : (liveQualityHint === 'blurry' || liveQualityHint === 'blurry-dark') ? 'Hold steady to scan' : 'Scan book'}
+                        <button onClick={capture} disabled={processing || submitting || isScanning || !cameraReady || qualityBlocked}
+                            aria-label={processing ? 'Scanning in progress' : qualityBlocked ? 'Hold steady to scan' : shelfMode ? 'Scan shelf' : 'Scan book'}
                             aria-describedby="status-text"
                             data-testid={uiContracts.scannerCaptureTestId}
                             className={s.primaryBtn}>
                             {processing ? <Loader2 className="animate-spin" size={24} /> : (
                                 <span className={s.ctaIcon}><Camera size={24} /></span>
                             )}
-                            {processing ? 'Scanning...' : 'Capture Scan'}
-                            {!processing && <span className={s.ctaSubtext}>Tap to freeze</span>}
+                            {processing ? 'Scanning...' : shelfMode ? 'Scan shelf' : 'Capture Scan'}
+                            {!processing && <span className={s.ctaSubtext}>{shelfMode ? 'Photograph the shelf' : 'Tap to freeze'}</span>}
                         </button>
 
                         <div className={s.secondaryRow}>
                             <button onClick={() => { hapticHoldSteady(); takePhotoInputRef.current?.click(); }} disabled={processing || isScanning}
                                 className={s.secondaryBtn}
-                                title="Open camera to take a photo of the ISBN or barcode">
+                                title={shelfMode ? 'Open camera to photograph a bookshelf' : 'Open camera to take a photo of the ISBN or barcode'}>
                                 <span className={s.secondaryBtnIcon}><Camera size={16} /></span>
-                                Take photo of ISBN
+                                {photoCaptureLabel}
                             </button>
                             <button onClick={() => { hapticHoldSteady(); fileInputRef.current?.click(); }} disabled={processing || isScanning}
                                 className={s.secondaryBtn}
-                                title="Choose an existing photo from your device">
+                                title={shelfMode ? 'Choose a bookshelf photo from your device' : 'Choose an existing photo from your device'}>
                                 <span className={s.secondaryBtnIcon}><ImagePlus size={16} /></span>
-                                Choose from gallery
+                                {galleryLabel}
                             </button>
                             <button onClick={() => { hapticHoldSteady(); setShowManual(true); }}
                                 data-testid={uiContracts.scannerTypeIsbnTestId}
