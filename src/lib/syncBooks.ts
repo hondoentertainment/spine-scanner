@@ -5,6 +5,7 @@ import { migrateBooks } from './schemaMigrations.ts';
 import { findBookConflicts } from './bookConflicts.ts';
 import { withRetry } from './syncRetry.ts';
 import { useSyncQueue } from '../store/useSyncQueue.ts';
+import { cleanLocation } from '../utils/physicalLocation.ts';
 
 /** Row shape in the Supabase `books` table */
 interface BookRow {
@@ -30,7 +31,37 @@ interface BookRow {
   metadata_source?: MetadataSource | null;
   user_edited_fields?: UserEditedFields | null;
   loan?: BookEntry['loan'];
+  location_room?: string | null;
+  location_case?: string | null;
+  location_shelf?: string | null;
   updated_at: string;
+}
+
+const LOCATION_COLUMNS = ['location_room', 'location_case', 'location_shelf'] as const;
+
+/** True when PostgREST or Postgres rejected the write because location columns are not migrated yet. */
+export function isMissingLocationColumnError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const record = error as { message?: unknown; code?: unknown };
+  const message = typeof record.message === 'string' ? record.message.toLowerCase() : '';
+  const code = typeof record.code === 'string' ? record.code : '';
+  const mentionsLocation = LOCATION_COLUMNS.some((column) => message.includes(column));
+  if (!mentionsLocation) return false;
+  return (
+    code === 'PGRST204'
+    || code === '42703'
+    || message.includes('schema cache')
+    || message.includes('does not exist')
+    || message.includes('could not find')
+  );
+}
+
+function withoutLocationColumns<T extends object>(row: T): Omit<T, (typeof LOCATION_COLUMNS)[number]> {
+  const next: Record<string, unknown> = { ...(row as Record<string, unknown>) };
+  for (const key of LOCATION_COLUMNS) {
+    delete next[key];
+  }
+  return next as Omit<T, (typeof LOCATION_COLUMNS)[number]>;
 }
 
 /** Row shape in the Supabase `shelves` table */
@@ -68,6 +99,9 @@ export function toBookEntry(row: BookRow): BookEntry {
       ? { userEditedFields: row.user_edited_fields }
       : {}),
     ...(row.loan ? { loan: row.loan } : {}),
+    locationRoom: cleanLocation(row.location_room),
+    locationCase: cleanLocation(row.location_case),
+    locationShelf: cleanLocation(row.location_shelf),
   };
 }
 
@@ -95,6 +129,9 @@ export function toBookRow(book: BookEntry, userId: string): Omit<BookRow, 'updat
     metadata_source: book.metadataSource ?? null,
     user_edited_fields: book.userEditedFields ?? {},
     loan: book.loan ?? null,
+    location_room: cleanLocation(book.locationRoom),
+    location_case: cleanLocation(book.locationCase),
+    location_shelf: cleanLocation(book.locationShelf),
   };
 }
 
@@ -169,7 +206,19 @@ export async function pushBooks(userId: string, books: BookEntry[]): Promise<boo
         const { error } = await supabase!
           .from('books')
           .upsert(rows, { onConflict: 'id' });
-        if (error) throw error;
+        if (!error) return;
+        if (isMissingLocationColumnError(error)) {
+          const stripped = rows.map((row) => withoutLocationColumns(row));
+          const retry = await supabase!
+            .from('books')
+            .upsert(stripped, { onConflict: 'id' });
+          if (retry.error) throw retry.error;
+          console.warn(
+            '[sync] books.location_room/location_case/location_shelf are missing. Synced without physical location. Run supabase/migrations/007_books_physical_location.sql.',
+          );
+          return;
+        }
+        throw error;
       });
     } catch (err) {
       const error = err as Error;

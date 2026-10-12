@@ -41,6 +41,12 @@ export interface BookEntry {
   schemaVersion?: number;
   /** Present while this copy is lent to someone. Null after it is returned. */
   loan?: BookLoan | null;
+  /** Physical room where this copy lives. Empty when unassigned. */
+  locationRoom?: string;
+  /** Physical bookcase within the room. Empty when unassigned. */
+  locationCase?: string;
+  /** Shelf number or label within the case. Empty when unassigned. */
+  locationShelf?: string;
 }
 
 export interface BookLoan {
@@ -137,6 +143,9 @@ export interface SmartShelf {
   minPageCount?: number | null;
   maxPageCount?: number | null;
   reviewOnly?: boolean;
+  locationRoom?: string | null;
+  locationCase?: string | null;
+  locationShelf?: string | null;
 }
 
 export interface SavedView {
@@ -151,6 +160,9 @@ export interface SavedView {
   reviewOnly?: boolean;
   minPageCount?: number | null;
   maxPageCount?: number | null;
+  locationRoom?: string | null;
+  locationCase?: string | null;
+  locationShelf?: string | null;
 }
 
 export interface ReadingSession {

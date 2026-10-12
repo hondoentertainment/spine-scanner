@@ -52,6 +52,19 @@ describe('exportToJSON / importFromJSON', () => {
         expect(imported.books[0].status).toBe('reading');
         expect(imported.books[0].pageCount).toBe(180);
     });
+
+    it('keeps a physical location through JSON backup and restore', () => {
+        const book = makeBook({
+            locationRoom: 'Study',
+            locationCase: 'Oak',
+            locationShelf: '2',
+        });
+        const imported = importFromJSON(exportToJSON([book]));
+        expect(imported.books[0].locationRoom).toBe('Study');
+        expect(imported.books[0].locationCase).toBe('Oak');
+        expect(imported.books[0].locationShelf).toBe('2');
+        expect(imported.books[0].title).toBe(book.title);
+    });
 });
 
 describe('exportToLibraryThingTSV', () => {

@@ -3,6 +3,7 @@
     "version": "Unreleased",
     "date": "2026-08-04",
     "items": [
+      "Physical shelf map: assign a room, case, and shelf, then filter the library by where a book lives",
       "Missing-cover recovery: one tap re-fetches covers for books without one (Phase 26)",
       "Swipe down to close book details on touch devices",
       "Batch scanning: running session count, undo, and end-of-session summary",

@@ -80,19 +80,46 @@ describe('migration chain (simulated)', () => {
   // Verifies the runner pattern: a chain of migrations applied in order.
   // Version 0 has no registered step, so the runner stamps the current version.
   it('stamps current version when no migration is registered for an old version', () => {
-    const book = makeBook({ schemaVersion: 0 });
+    const book = makeBook({ schemaVersion: 0, title: 'Keep me' });
     const migrated = migrateBook(book);
     expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(migrated.title).toBe('Keep me');
+    expect(migrated.locationRoom).toBe('');
+    expect(migrated.locationCase).toBe('');
+    expect(migrated.locationShelf).toBe('');
   });
 
-  it('migrates a v1 book to the loan schema and keeps an existing loan', () => {
+  it('migrates a v1 book through loans and physical location without dropping fields', () => {
     const book = makeBook({
       schemaVersion: 1,
+      title: 'Dune',
+      notes: 'desert',
       loan: { borrowerName: 'Ada', lentAt: '2026-10-01T00:00:00.000Z', dueAt: null },
     });
     const migrated = migrateBook(book);
-    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(migrated.title).toBe('Dune');
+    expect(migrated.notes).toBe('desert');
     expect(migrated.loan?.borrowerName).toBe('Ada');
+    expect(migrated.locationRoom).toBe('');
+    expect(migrated.locationCase).toBe('');
+    expect(migrated.locationShelf).toBe('');
+  });
+
+  it('keeps an existing physical location when moving a v2 book forward', () => {
+    const book = makeBook({
+      schemaVersion: 2,
+      locationRoom: ' Study ',
+      locationCase: 'Oak',
+      notes: 'keep',
+    });
+    const migrated = migrateBook(book);
+    expect(migrated.schemaVersion).toBe(3);
+    expect(migrated.notes).toBe('keep');
+    expect(migrated.locationRoom).toBe('Study');
+    expect(migrated.locationCase).toBe('Oak');
+    expect(migrated.locationShelf).toBe('');
+    expect(migrated).not.toBe(book);
   });
 
   it('runs migrations in order via a local simulated runner', () => {

@@ -170,6 +170,26 @@ describe('LibraryList', () => {
     expect(screen.queryByText('Gatsby')).not.toBeInTheDocument();
   });
 
+  it('filters the library by physical room, case, and shelf', () => {
+    useBookStore.setState({
+      books: [
+        makeBook({ id: 'study', title: 'Dune', locationRoom: 'Study', locationCase: 'Oak', locationShelf: '2' }),
+        makeBook({ id: 'hall', isbn: '0743273567', title: 'Neuromancer', locationRoom: 'Hall', locationCase: 'Pine', locationShelf: '1' }),
+      ],
+    });
+
+    renderLibraryList(<LibraryList />);
+
+    fireEvent.change(screen.getByLabelText('Filter by room'), { target: { value: 'Study' } });
+    expect(screen.getByText('Room: Study')).toBeInTheDocument();
+    expect(screen.getAllByText('Dune').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Neuromancer')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Filter by shelf label'), { target: { value: '2' } });
+    expect(screen.getByText('Shelf: 2')).toBeInTheDocument();
+    expect(screen.getAllByText('Dune').length).toBeGreaterThan(0);
+  });
+
   it('shows shelf filter buttons when shelves exist', () => {
     useBookStore.setState({
       shelves: [makeShelf({ id: 's1', name: 'Fiction' })],

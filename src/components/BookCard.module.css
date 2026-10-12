@@ -39,6 +39,15 @@
   color: var(--text-muted);
 }
 
+.locationLine {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0.2rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 .links {
   margin-top: 0.5rem;
   display: flex;
