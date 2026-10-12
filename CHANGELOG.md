@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Shelf photo scan
+
+- **Multi-book shelf photos.** Scan → Shelf accepts a camera photo or upload, finds multiple spines on device, and proposes title, author, and ISBN candidates from ZXing, Tesseract, and the existing Google Books / Open Library lookup. A review list is required before import: accept, reject, or edit each book. Accepted books join the local library; the single-spine barcode and OCR paths are unchanged.
+- **Optional vision assist.** Set `VITE_SHELF_VISION_API=true` and `VITE_SHELF_VISION_ENDPOINT` to POST the photo to your own vision service. The call is skipped when the flag is off, and failures fall back to the on-device scan.
+
 ### Sync trust and loans
 
 - **Conflict choice, sync history, and offline queue.** A sync that finds differing copies keeps both. Profile → Sync status can keep this device or apply the other device’s copy, and it lists recent sync attempts plus the local edits still waiting to upload.

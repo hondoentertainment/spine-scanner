@@ -114,6 +114,8 @@ export interface OcrResult {
     confidence?: number;
     /** Per-symbol confidence values from Tesseract, for targeted checksum repair. */
     symbolConfidences?: Array<{text: string, confidence: number}>;
+    /** Full recognized text. Shelf scan uses this for title and author candidates. */
+    text?: string;
 }
 
 interface UseOcrEngineOptions {
@@ -390,7 +392,7 @@ export function useOcrEngine({ addLog, setStatus, onOcrReady }: UseOcrEngineOpti
                 }
             }
         }
-        const ocrResult: OcrResult = { isbn: validIsbn, allCandidates: candidates, confidence, symbolConfidences };
+        const ocrResult: OcrResult = { isbn: validIsbn, allCandidates: candidates, confidence, symbolConfidences, text: trimmed };
 
         // Store in cache; evict oldest if over limit
         ocrCacheRef.current.set(cacheKey, ocrResult);

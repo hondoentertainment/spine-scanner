@@ -15,6 +15,8 @@ import { useToast } from './components/Toast.tsx';
 import { mergeSync, pushBooks } from './lib/syncBooks.ts';
 import { formatRelativeTime } from './utils/formatRelativeTime.ts';
 import type { BookEntry } from './types.ts';
+import type { ShelfReviewItem } from './shelf/types.ts';
+import { importShelfBooks } from './shelf/reviewImport.ts';
 import { BookOpen, Library, Scan, AlertCircle, Layers, User, Sparkles, Cloud, BookMarked, ChevronRight, Home } from 'lucide-react';
 import { generateAmazonLink } from './utils/amazonLink.ts';
 import { isValidIsbn, normalizeToIsbn13 } from './utils/isbnValidation.ts';
@@ -450,6 +452,26 @@ function App() {
     }
     navigate(`/library?isbn=${encodeURIComponent(photoIsbn)}`);
   }, [addBook, books, user, online, toast, track, navigate]);
+
+  const handleShelfImport = useCallback((items: ShelfReviewItem[]) => {
+    const current = useBookStore.getState().books;
+    const { added, skippedDuplicates } = importShelfBooks(items, current, addBook);
+    if (added.length === 0) {
+      toast(skippedDuplicates > 0
+        ? 'Those books are already in your library.'
+        : 'Select at least one book to add.', 'info');
+      return false;
+    }
+    added.forEach((book) => track('book_added', { method: 'shelf_scan', isbn: book.isbn }));
+    const skippedNote = skippedDuplicates > 0 ? ` Skipped ${skippedDuplicates} already in your library.` : '';
+    toast(`Added ${added.length} ${added.length === 1 ? 'book' : 'books'} from your shelf photo.${skippedNote}`, 'success');
+    if (user && online) {
+      const next = useBookStore.getState().books;
+      void pushBooks(user.id, next).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
+    }
+    navigate('/library');
+    return true;
+  }, [addBook, navigate, online, toast, track, user]);
 
   useEffect(() => {
     if (isMvpMode()) {
@@ -981,6 +1003,10 @@ function App() {
                         <strong>Best for hard covers</strong>
                         <span>Use photo upload when the spine text is small or reflective.</span>
                       </div>
+                      <div className={`glass ${styles.tipCard}`}>
+                        <strong>Best for a whole shelf</strong>
+                        <span>Choose Shelf, photograph the row, then accept, edit, or reject each book.</span>
+                      </div>
                       <button type="button" className={`glass ${styles.tipCard} ${styles.tipCardButton}`} onClick={() => goToMain('/library', 'Library view')}>
                         <strong>Already scanned enough?</strong>
                         <span>Jump to your library <ChevronRight size={14} /></span>
@@ -997,6 +1023,7 @@ function App() {
                       onViewLibrary={(isbn) => {
                         navigate(isbn ? `/library?isbn=${encodeURIComponent(isbn)}` : '/library');
                       }}
+                      onShelfImport={handleShelfImport}
                     />
 
                     {error && (
