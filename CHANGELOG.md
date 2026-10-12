@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Shelf recommendations
+
+- **Books you don't own yet.** Home → See suggestions opens a list built from the authors, subjects, and series already on your shelves. Google Books and Open Library supply the metadata. Each card says why in plain language, for example "Because you own Dune and Hyperion".
+- **Add to wishlist.** One tap saves the suggestion as To Read. Books already in the library are left out, including the same ISBN in 10- or 13-digit form and other editions of a title you own.
+- **Offline and failed lookups.** Suggestions are cached in the browser. If you are offline or a metadata call fails, saved suggestions still show and the library itself keeps loading.
+- **Optional endpoint.** Set `VITE_RECOMMENDATIONS_LLM=true` and `VITE_RECOMMENDATIONS_LLM_ENDPOINT` to ask your own service for suggestions. The free path stays the default, and a failed call falls back to it.
+
 ### Lending ledger
 
 - **Who has the book, and since when.** Each copy can record `lentTo`, `lentAt`, an optional `dueAt`, and `returnedAt`. Those fields start empty, so existing libraries are kept. Returning a book keeps the row in `loanLedger` instead of erasing who had it. Lend it again and the earlier return stays.

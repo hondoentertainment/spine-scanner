@@ -248,6 +248,13 @@ describe('HomeFeed', () => {
     expect(screen.getByText('2 books need a quick metadata check.')).toBeInTheDocument();
   });
 
+  it('opens shelf recommendations from home', () => {
+    useBookStore.setState({ books: [makeBook({ title: 'Dune' })] });
+    renderFeed();
+    fireEvent.click(screen.getByRole('button', { name: 'See suggestions' }));
+    expect(navigate).toHaveBeenCalledWith('/recommendations');
+  });
+
   it('lists suggestions and opens the chosen book', () => {
     useBookStore.setState({
       books: [

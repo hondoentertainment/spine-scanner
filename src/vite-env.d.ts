@@ -21,6 +21,13 @@ interface ImportMetaEnv {
   readonly VITE_SHELF_VISION_API?: string;
   /** HTTP(S) endpoint for optional shelf vision. POST `{ image }` expects `{ books: [{ title, author, isbn }] }`. */
   readonly VITE_SHELF_VISION_ENDPOINT?: string;
+  /**
+   * Set to `true` to ask an optional endpoint for shelf suggestions.
+   * Google Books and Open Library stay the default when this is unset or the call fails.
+   */
+  readonly VITE_RECOMMENDATIONS_LLM?: string;
+  /** HTTPS endpoint (http allowed only for localhost) for optional shelf suggestions. */
+  readonly VITE_RECOMMENDATIONS_LLM_ENDPOINT?: string;
 }
 
 interface ImportMeta {

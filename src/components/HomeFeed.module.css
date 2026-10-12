@@ -73,6 +73,42 @@
   border: 1px solid var(--glass-border);
 }
 
+.discover {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+
+.discoverBody {
+  flex: 1 1 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.discoverBody strong {
+  color: var(--text-main);
+  font-size: 0.95rem;
+}
+
+.discoverBtn {
+  min-height: 44px;
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius-md);
+  border: none;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: white;
+  background: linear-gradient(135deg, var(--accent-blue), var(--primary));
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
 .stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

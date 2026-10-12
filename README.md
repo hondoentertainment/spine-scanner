@@ -17,6 +17,7 @@ A progressive web app for digitizing and managing your personal book library. Sc
 - **Bookshelves** -- Create custom shelves (Sci-Fi, Lent Out, Work Reading, etc.) and assign books to multiple shelves. Filter your library by shelf.
 - **Physical shelf map** -- Record where a copy lives: room, bookcase, and shelf number or label. Edit it on the book card or in book details, assign it to a multi-select, and browse the library by those fields. Show shelves to see the room / case / shelf map.
 - **Lending ledger** -- Mark a copy as lent to someone, with an optional due date, and mark it returned. The library can filter to books that are lent out, and overdue copies show a badge. Home reminds you in the app. Nothing is sent by text or email. Older libraries keep their books; the new fields start empty.
+- **Shelf recommendations** -- Suggests books you don't own yet, using the authors, subjects, and series already on your shelves (Google Books and Open Library). Each suggestion says why, for example "Because you own Dune and Hyperion". One tap adds it to your to-read list. Results are cached and still show if you are offline or a lookup fails. The library does not wait on them.
 - **Edit Book Metadata** -- Fix incorrect titles, authors, page counts, and cover images inline. The **Refresh metadata** action re-queries APIs but never overwrites fields you've manually edited. **Recover missing covers** re-fetches artwork for books without a cover and updates only the cover field.
 - **Accessibility & Theming** -- Light, dark, system, and high-contrast (WCAG AAA) themes; full reduced-motion support; skip link, focus traps, and screen-reader announcements throughout.
 - **Onboarding & Support** -- A four-step welcome tour for new users, an in-app "What's new" changelog, and a one-click diagnostics bundle download for support requests.
@@ -63,6 +64,23 @@ VITE_SHELF_VISION_ENDPOINT=https://your-vision-endpoint.example/shelf
 The app POSTs `{ "image": "<data-url>" }` and expects `{ "books": [{ "title": "", "author": "", "isbn": "" }] }`. If the flag is unset or the request fails, the free on-device result is used. Single-book barcode and OCR scanning never calls this endpoint.
 
 A Gemini or Firebase vision model is a good fit for that endpoint later. The app does not bundle a paid vision API.
+
+### Shelf recommendations
+
+Open **Home** and choose **See suggestions**, or go to `/recommendations`.
+
+Each card is a book that is not already in your library. The same ISBN (ISBN-10 or ISBN-13) and other editions of a title you own are left out. The reason names the shelf titles that prompted it, for example `Because you own Dune and Hyperion`. **Add to wishlist** saves that book as To Read.
+
+Suggestions use Google Books and Open Library (authors, subjects, and series from your shelves). They load only after you open the suggestions view, so a slow lookup does not block the library. Results are cached on this device. Offline, or if those services fail, saved suggestions still show.
+
+An optional endpoint can replace that free lookup. It is off unless both variables are set at build time:
+
+```
+VITE_RECOMMENDATIONS_LLM=true
+VITE_RECOMMENDATIONS_LLM_ENDPOINT=https://your-suggestions-endpoint.example/recommendations
+```
+
+The app POSTs `{ "owned": [{ "title": "", "author": "", "subjects": [], "series": "" }], "limit": 12 }` and expects `{ "recommendations": [{ "title": "", "author": "", "isbn": "", "reason": "Because you own ..." }] }`. A reason is kept only when it starts with `Because you own` and the titles it names are on the shelf. If the flag is unset, the endpoint is not https (localhost http is allowed), or the request fails, the free path is used. The app does not bundle a paid model.
 
 ### Cloud Sync Setup (Optional)
 
