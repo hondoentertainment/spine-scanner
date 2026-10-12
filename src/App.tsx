@@ -39,6 +39,7 @@ import { uiContracts } from './testing/uiContracts.ts';
 const Scanner = lazy(() => import('./components/Scanner.tsx'));
 const LibraryList = lazy(() => import('./components/LibraryList.tsx'));
 const HomeFeed = lazy(() => import('./components/HomeFeed.tsx'));
+const RecommendationsView = lazy(() => import('./components/RecommendationsView.tsx'));
 const DataManagement = lazy(() => import('./components/DataManagement.tsx'));
 const ProfileSettings = lazy(() => import('./components/ProfileSettings.tsx'));
 const PasswordReset = lazy(() => import('./components/PasswordReset.tsx'));
@@ -105,6 +106,7 @@ const ROUTE_BRANDING_SUBTITLE: Record<string, string> = {
   '/home': 'Your reading feed, library snapshot, and quick paths to scan.',
   '/scan': 'A friendlier home for scanning, organizing, and finding books fast.',
   '/library': 'Browse, search, and organize your saved books.',
+  '/recommendations': 'Books you don\'t own yet, based on the ones already on your shelves.',
   '/data': 'Import, export, and back up your library.',
   '/profile': 'Account, cloud sync, import/export, and app preferences.',
 };
@@ -122,6 +124,7 @@ function getDocumentTitle(pathname: string, publicPage: PublicPage | null): stri
     '/home': `Home · ${APP_TITLE}`,
     '/scan': APP_TITLE,
     '/library': `Library · ${APP_TITLE}`,
+    '/recommendations': `Suggestions · ${APP_TITLE}`,
     '/data': `Data · ${APP_TITLE}`,
     '/profile': `Profile · ${APP_TITLE}`,
   };
@@ -1033,6 +1036,16 @@ function App() {
                       </div>
                     )}
                   </div>
+                </Suspense>
+              </ErrorBoundary>
+            )}
+          />
+          <Route
+            path="/recommendations"
+            element={(
+              <ErrorBoundary>
+                <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
+                  <RecommendationsView />
                 </Suspense>
               </ErrorBoundary>
             )}

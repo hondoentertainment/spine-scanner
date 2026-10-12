@@ -116,6 +116,23 @@ export default defineConfig({
             },
           },
           {
+            urlPattern: /^https:\/\/openlibrary\.org\/search\.json/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'openlibrary-search',
+              expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/covers\.openlibrary\.org\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'openlibrary-covers',
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
             urlPattern: /^https:\/\/openlibrary\.org\/api\//,
             handler: 'StaleWhileRevalidate',
             options: {

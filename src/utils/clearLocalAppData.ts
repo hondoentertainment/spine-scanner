@@ -3,6 +3,7 @@ import { useProfileStore } from '../store/useProfileStore.ts';
 import { useSyncQueue } from '../store/useSyncQueue.ts';
 import { useAnalyticsStore } from '../store/useAnalyticsStore.ts';
 import { DEFAULT_PREFERENCES } from '../types.ts';
+import { clearRecommendationCache } from '../recommendations/cache.ts';
 
 /** localStorage keys used by zustand persist (reference for support / diagnostics). */
 export const SPINE_LOCAL_STORAGE_KEYS = [
@@ -17,6 +18,7 @@ export const SPINE_LOCAL_STORAGE_KEYS = [
  * Does not sign the user out or delete cloud data.
  */
 export function clearLocalAppData(): void {
+  clearRecommendationCache();
   useBookStore.setState({ books: [], shelves: [] });
   useProfileStore.setState({ preferences: { ...DEFAULT_PREFERENCES } });
   useSyncQueue.getState().reset();

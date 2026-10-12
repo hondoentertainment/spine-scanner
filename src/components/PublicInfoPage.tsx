@@ -159,7 +159,7 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
           </article>
           <article className={styles.card}>
             <h3>Third-party requests</h3>
-            <p>ISBN lookups can call Google Books and Open Library. Those services may receive the ISBN you search for and standard web request metadata.</p>
+            <p>ISBN lookups can call Google Books and Open Library. Those services may receive the ISBN you search for and standard web request metadata. Suggestions can also send titles, authors, and subjects from your library to those same services. An optional suggestions endpoint runs only if the site operator turns it on, and then it receives that same shelf summary.</p>
           </article>
           <article className={styles.card}>
             <h3>Monitoring</h3>

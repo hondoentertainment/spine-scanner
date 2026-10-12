@@ -173,6 +173,18 @@ export default function HomeFeed() {
         </div>
       </header>
 
+      {books.length > 0 && (
+        <section className={`glass ${s.discover}`} aria-label="Shelf recommendations">
+          <div className={s.discoverBody}>
+            <strong>Books you don&apos;t own yet</strong>
+            <span>Suggestions from your shelves, each with a reason tied to books you already own.</span>
+          </div>
+          <button type="button" className={s.discoverBtn} onClick={() => navigate('/recommendations')}>
+            See suggestions
+          </button>
+        </section>
+      )}
+
       <section className={`glass ${s.stats}`} aria-label="Library snapshot">
         <div className={s.stat}>
           <span className={s.statValue}>{insights.totalBooks}</span>
