@@ -36,6 +36,7 @@ import ShelfManager from './ShelfManager.tsx';
 import { useToast } from './Toast.tsx';
 import { isMvpMode } from '../lib/appMode.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
+import { isOnLoan } from '../utils/loans.ts';
 import { getBookCoverSrc, getLibraryInsights } from '../utils/bookPresentation.ts';
 import s from './LibraryList.module.css';
 
@@ -106,6 +107,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
   const [shelfFilter, setShelfFilter] = useState<string | null>(null);
   const [reviewOnly, setReviewOnly] = useState(false);
   const [seriesFilter, setSeriesFilter] = useState<string | null>(initialSeriesFilter ?? null);
+  const [lentOnly, setLentOnly] = useState(false);
   const [minPages, setMinPages] = useState('');
   const [maxPages, setMaxPages] = useState('');
   const [selectedBook, setSelectedBook] = useState<BookEntry | null>(null);
@@ -152,10 +154,12 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
   }, []);
 
   useEffect(() => {
-    if (searchParams.get('review') !== '1') return;
-    setReviewOnly(true);
+    if (searchParams.get('review') !== '1' && searchParams.get('lent') !== '1') return;
+    if (searchParams.get('review') === '1') setReviewOnly(true);
+    if (searchParams.get('lent') === '1') setLentOnly(true);
     const next = new URLSearchParams(searchParams);
     next.delete('review');
+    next.delete('lent');
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
@@ -175,6 +179,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     setShelfFilter(null);
     setReviewOnly(false);
     setSeriesFilter(null);
+    setLentOnly(false);
     setMinPages('');
     setMaxPages('');
     setStatusFilter('all');
@@ -216,7 +221,8 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
         const matchesMin = minPageValue == null || (book.pageCount || 0) >= minPageValue;
         const matchesMax = maxPageValue == null || (book.pageCount || 0) <= maxPageValue;
         const matchesSeries = !seriesFilter || (book.seriesName?.trim() === seriesFilter);
-        return matchesSearch && matchesStatus && matchesShelf && matchesReview && matchesMin && matchesMax && matchesSeries;
+        const matchesLoan = !lentOnly || isOnLoan(book);
+        return matchesSearch && matchesStatus && matchesShelf && matchesReview && matchesMin && matchesMax && matchesSeries && matchesLoan;
       })
       .sort((a, b) => {
         let cmp = 0;
@@ -236,7 +242,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
         }
         return effectiveSortAsc ? cmp : -cmp;
       });
-  }, [books, searchTerm, statusFilter, shelfFilter, reviewOnly, seriesFilter, minPages, maxPages, sortBy, sortAsc, librarySegment]);
+  }, [books, searchTerm, statusFilter, shelfFilter, reviewOnly, seriesFilter, lentOnly, minPages, maxPages, sortBy, sortAsc, librarySegment]);
 
   const selectedShelf = shelves.find((shelf) => shelf.id === shelfFilter) ?? null;
   const filterChips = useMemo(() => {
@@ -269,6 +275,9 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
         onRemove: () => setSeriesFilter(null),
       });
     }
+    if (lentOnly) {
+      chips.push({ id: 'lent', label: 'Lent out', onRemove: () => setLentOnly(false) });
+    }
     if (minPages.trim()) {
       chips.push({
         id: 'minPages',
@@ -284,7 +293,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
       });
     }
     return chips;
-  }, [searchTerm, statusFilter, selectedShelf, reviewOnly, seriesFilter, minPages, maxPages, setStatusFilter]);
+  }, [searchTerm, statusFilter, selectedShelf, reviewOnly, seriesFilter, lentOnly, minPages, maxPages, setStatusFilter]);
 
   const listParentRef = useRef<HTMLDivElement>(null);
   const gridParentRef = useRef<HTMLDivElement>(null);

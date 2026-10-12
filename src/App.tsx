@@ -341,7 +341,8 @@ function App() {
   useEffect(() => {
     if (!user || !initialSyncDone.current) return;
     if (books !== prevBooksRef.current || shelves !== prevShelvesRef.current) {
-      markDirty();
+      const libraryChanged = books !== prevBooksRef.current;
+      markDirty(libraryChanged ? 'Library edited on this device' : 'Shelves edited on this device');
     }
     prevBooksRef.current = books;
     prevShelvesRef.current = shelves;

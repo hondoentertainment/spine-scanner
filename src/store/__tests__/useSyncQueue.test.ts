@@ -10,6 +10,9 @@ describe('useSyncQueue', () => {
       flushing: false,
       hadConflictLastSync: false,
       lastConflictBookIds: [],
+      bookConflicts: [],
+      syncHistory: [],
+      pendingMutations: [],
     });
   });
 
@@ -177,5 +180,32 @@ describe('useSyncQueue', () => {
     useSyncQueue.getState().markConflict(true);
     expect(useSyncQueue.getState().hadConflictLastSync).toBe(true);
     expect(useSyncQueue.getState().lastConflictBookIds).toEqual(['keep']);
+  });
+
+  it('records a labeled offline queue and clears it after a successful sync', () => {
+    useSyncQueue.getState().markDirty('Library edited on this device');
+    expect(useSyncQueue.getState().pendingMutations).toHaveLength(1);
+    expect(useSyncQueue.getState().pendingMutations[0].label).toBe('Library edited on this device');
+    useSyncQueue.getState().markSynced();
+    expect(useSyncQueue.getState().pendingMutations).toEqual([]);
+    expect(useSyncQueue.getState().syncHistory[0].outcome).toBe('synced');
+    expect(useSyncQueue.getState().syncHistory[0].pendingChanges).toBe(1);
+  });
+
+  it('records a failed sync without dropping the offline queue', () => {
+    useSyncQueue.getState().markDirty('Shelves edited on this device');
+    useSyncQueue.getState().markSyncFailed();
+    expect(useSyncQueue.getState().pendingMutations).toHaveLength(1);
+    expect(useSyncQueue.getState().syncHistory[0].outcome).toBe('failed');
+  });
+
+  it('keeps both conflict copies and resolves one book at a time', () => {
+    const local = { id: 'b1', title: 'Local' } as never;
+    const remote = { id: 'b1', title: 'Remote' } as never;
+    useSyncQueue.getState().setBookConflicts([{ bookId: 'b1', local, remote }]);
+    expect(useSyncQueue.getState().bookConflicts[0].remote.title).toBe('Remote');
+    useSyncQueue.getState().resolveBookConflict('b1');
+    expect(useSyncQueue.getState().hadConflictLastSync).toBe(false);
+    expect(useSyncQueue.getState().bookConflicts).toEqual([]);
   });
 });

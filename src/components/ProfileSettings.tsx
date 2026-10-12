@@ -69,7 +69,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
   const navigate = useNavigate();
   const { toast, confirm } = useToast();
   const { user, profile } = useAuthStore();
-  const { books, shelves } = useBookStore();
+  const { books, shelves, updateBook } = useBookStore();
   const { preferences, updatePreferences } = useProfileStore();
   const { setTheme } = useTheme();
   const focusTrapRef = useFocusTrap<HTMLDivElement>();
@@ -78,8 +78,8 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
   const {
     pendingChanges, lastSyncedAt, lastSyncFailedAt, flushing,
     lastGoodSnapshot, lastGoodSnapshotAt, hadConflictLastSync,
-    lastConflictBookIds,
-    clearSnapshot, markConflict,
+    lastConflictBookIds, bookConflicts, syncHistory, pendingMutations,
+    clearSnapshot, markConflict, resolveBookConflict,
   } = useSyncQueue();
   const conflictedBooks = useMemo(
     () =>
@@ -380,6 +380,32 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
               <span className={s.syncMuted}>{pendingChanges} change{pendingChanges !== 1 ? 's' : ''} pending</span>
             </div>
           ) : null}
+          {pendingMutations.length > 0 && (
+            <details style={{ fontSize: '0.78rem' }}>
+              <summary style={{ cursor: 'pointer' }}>Offline queue ({pendingMutations.length})</summary>
+              <ul style={{ listStyle: 'none', padding: '0.4rem 0 0', margin: 0 }}>
+                {pendingMutations.slice(-8).map((mutation) => (
+                  <li key={mutation.id} style={{ color: 'var(--text-muted)' }}>{mutation.label}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {syncHistory.length > 0 && (
+            <details style={{ fontSize: '0.78rem' }}>
+              <summary style={{ cursor: 'pointer' }}>Sync history</summary>
+              <ul style={{ listStyle: 'none', padding: '0.4rem 0 0', margin: 0 }}>
+                {syncHistory.slice(0, 8).map((entry) => (
+                  <li key={entry.id} style={{ color: 'var(--text-muted)' }}>
+                    {entry.outcome === 'synced' ? 'Synced' : 'Failed'}
+                    {' · '}
+                    {new Date(entry.at).toLocaleString()}
+                    {entry.pendingChanges > 0 ? ` · ${entry.pendingChanges} pending` : ''}
+                    {entry.conflictCount > 0 ? ` · ${entry.conflictCount} conflict${entry.conflictCount === 1 ? '' : 's'}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
           {lastSyncFailedAt !== null && (
             <div className={s.syncWarningRow}>
               <span>Sync failed — check your connection</span>
@@ -406,20 +432,48 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
                       Which books?
                     </summary>
                     <ul style={{ listStyle: 'none', padding: '0.4rem 0 0', margin: 0, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                      {conflictedBooks.slice(0, 20).map((book) => (
-                        <li key={book.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', alignItems: 'center' }}>
+                      {conflictedBooks.slice(0, 20).map((book) => {
+                        const snapshot = bookConflicts.find((conflict) => conflict.bookId === book.id);
+                        return (
+                        <li key={book.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {book.title} <span style={{ color: 'var(--text-muted)' }}>— {book.author}</span>
                           </span>
-                          <button
-                            type="button"
-                            className={s.retryBtn}
-                            onClick={() => navigate(`/library?isbn=${encodeURIComponent(book.isbn)}`)}
-                          >
-                            Open
-                          </button>
+                          <span style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                            {snapshot && (
+                              <>
+                                <button
+                                  type="button"
+                                  className={s.retryBtn}
+                                  onClick={() => resolveBookConflict(book.id)}
+                                >
+                                  Keep this device
+                                </button>
+                                <button
+                                  type="button"
+                                  className={s.retryBtn}
+                                  onClick={() => {
+                                    const { id, ...remote } = snapshot.remote;
+                                    updateBook(id, remote);
+                                    resolveBookConflict(book.id);
+                                    toast('Kept the other device copy', 'success');
+                                  }}
+                                >
+                                  Use other device
+                                </button>
+                              </>
+                            )}
+                            <button
+                              type="button"
+                              className={s.retryBtn}
+                              onClick={() => navigate(`/library?isbn=${encodeURIComponent(book.isbn)}`)}
+                            >
+                              Open
+                            </button>
+                          </span>
                         </li>
-                      ))}
+                        );
+                      })}
                       {conflictedBooks.length > 20 && (
                         <li style={{ color: 'var(--text-muted)' }}>
                           + {conflictedBooks.length - 20} more…

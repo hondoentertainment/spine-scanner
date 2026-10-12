@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Sync trust and loans
+
+- **Conflict choice, sync history, and offline queue.** A sync that finds differing copies keeps both. Profile → Sync status can keep this device or apply the other device’s copy, and it lists recent sync attempts plus the local edits still waiting to upload.
+- **Loan tracking.** A book can be lent to a named person with an optional due date. Home shows loans that are due soon, and Library can filter to books that are lent out (`?lent=1`).
+- **CI coverage gate.** The main verify job runs `npm run test:coverage`, so a drop below the configured thresholds fails the build.
+
 ### Launch metadata
 
 - **Share preview and structured data are in the static homepage.** Production builds with `VITE_SITE_URL` set write an absolute `og:image` / `twitter:image` and a schema.org `SoftwareApplication` JSON-LD block, so link unfurls no longer depend on client JavaScript. The Vercel CI site-url fallback is `https://spine-scanner.vercel.app` (the attached production alias). `check:production` warns when `VITE_SUPPORT_EMAIL` is still an `example.com` placeholder.
