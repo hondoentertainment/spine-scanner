@@ -186,6 +186,62 @@ describe('useBookStore', () => {
     expect(useBookStore.getState().books[0].shelfIds).toEqual(['s1']);
   });
 
+  it('records a loan and the return without dropping the rest of the library', () => {
+    useBookStore.getState().addBook(makeBook({ id: 'b1', title: 'Dune', notes: 'desert' }));
+    useBookStore.getState().addBook(makeBook({ id: 'b2', title: 'Stay' }));
+    useBookStore.getState().lendBook('b1', {
+      lentTo: ' Ada ',
+      dueAt: '2026-12-01',
+      lentAt: '2026-10-01T00:00:00.000Z',
+    });
+    let lent = useBookStore.getState().books.find((book) => book.id === 'b1');
+    expect(lent?.title).toBe('Dune');
+    expect(lent?.notes).toBe('desert');
+    expect(lent?.lentTo).toBe('Ada');
+    expect(lent?.lentAt).toBe('2026-10-01T00:00:00.000Z');
+    expect(lent?.dueAt).toBe('2026-12-01');
+    expect(lent?.returnedAt).toBe('');
+    expect(lent?.loan?.borrowerName).toBe('Ada');
+    expect(useBookStore.getState().books.find((book) => book.id === 'b2')?.lentTo).toBe('');
+
+    useBookStore.getState().markBookReturned('b1', '2026-10-20T00:00:00.000Z');
+    lent = useBookStore.getState().books.find((book) => book.id === 'b1');
+    expect(lent?.loan).toBeNull();
+    expect(lent?.returnedAt).toBe('2026-10-20T00:00:00.000Z');
+    expect(lent?.loanLedger).toHaveLength(1);
+
+    useBookStore.getState().lendBook('b1', { lentTo: 'Grace', lentAt: '2026-11-01T00:00:00.000Z' });
+    lent = useBookStore.getState().books.find((book) => book.id === 'b1');
+    expect(lent?.lentTo).toBe('Grace');
+    expect(lent?.returnedAt).toBe('');
+    expect(lent?.loanLedger).toHaveLength(2);
+    expect(lent?.loanLedger?.[0].lentTo).toBe('Ada');
+    expect(useBookStore.getState().books).toHaveLength(2);
+  });
+
+  it('does not lend a book when the borrower name is blank', () => {
+    useBookStore.getState().addBook(makeBook({ id: 'b1', notes: 'keep' }));
+    useBookStore.getState().lendBook('b1', { lentTo: '   ' });
+    const book = useBookStore.getState().books[0];
+    expect(book.notes).toBe('keep');
+    expect(book.lentTo).toBe('');
+    expect(book.loan ?? null).toBeNull();
+    expect(useBookStore.getState().books).toHaveLength(1);
+  });
+
+  it('keeps an open loan when merging a lent duplicate into a shelf copy', () => {
+    useBookStore.getState().addBook(makeBook({ id: 'keep', title: 'Dune', notes: 'shelf' }));
+    useBookStore.getState().addBook(makeBook({ id: 'drop', title: 'Dune' }));
+    useBookStore.getState().lendBook('drop', { lentTo: 'Ada', lentAt: '2026-10-01T00:00:00.000Z' });
+    useBookStore.getState().mergeBooks('keep', ['drop']);
+    const books = useBookStore.getState().books;
+    expect(books).toHaveLength(1);
+    expect(books[0].id).toBe('keep');
+    expect(books[0].notes).toContain('shelf');
+    expect(books[0].lentTo).toBe('Ada');
+    expect(books[0].loan?.borrowerName).toBe('Ada');
+  });
+
   it('defaults physical location to empty strings when a book is added', () => {
     useBookStore.getState().addBook(makeBook({ id: 'b1' }));
     const book = useBookStore.getState().books[0];

@@ -39,6 +39,7 @@ import { isMvpMode } from '../lib/appMode.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
 import { getBookCoverSrc, getLibraryInsights } from '../utils/bookPresentation.ts';
 import { filterLibraryBooks } from '../utils/libraryFilter.ts';
+import { isLoanOverdue, isOnLoan } from '../utils/loans.ts';
 import { choiceStillValid, formatPhysicalLocation, hasPhysicalLocation, locationFilterChoices, matchesPhysicalLocation } from '../utils/physicalLocation.ts';
 import PhysicalShelfMap from './PhysicalShelfMap.tsx';
 import s from './LibraryList.module.css';
@@ -1053,7 +1054,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
                   setSearchTerm(event.target.value);
                   resetActivePresets();
                 }}
-                placeholder="Search title, author, ISBN, or location"
+                placeholder="Search title, author, ISBN, location, or borrower"
               />
             </label>
             <button type="button" className={`glass ${s.clearBtn}`} onClick={clearFilters}>
@@ -1105,6 +1106,18 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
             >
               <Inbox size={14} />
               Needs review
+            </button>
+            <button
+              type="button"
+              className={`glass ${s.filterBtn} ${lentOnly ? s.viewBtnActive : ''}`}
+              aria-pressed={lentOnly}
+              onClick={() => {
+                setLentOnly(!lentOnly);
+                resetActivePresets();
+              }}
+            >
+              <BookmarkPlus size={14} />
+              Lent out
             </button>
             {seriesNames.length > 0 && (
               <label className={`glass ${s.filterBtn}`} style={{ padding: '0.35rem 0.65rem', gap: '0.35rem' }}>
@@ -1496,6 +1509,11 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
                       <span>{progress}% read</span>
                       {formatPhysicalLocation(book) && <span>{formatPhysicalLocation(book)}</span>}
                       {book.needsReview && <span className={s.reviewBadgeInline}>Needs review</span>}
+                      {isOnLoan(book) && (
+                        <span className={isLoanOverdue(book) ? s.loanBadgeInline : s.reviewBadgeInline}>
+                          {isLoanOverdue(book) ? `Overdue · ${book.loan?.borrowerName || book.lentTo}` : `Lent to ${book.loan?.borrowerName || book.lentTo}`}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <span className={`status-badge status-${book.status} ${s.listStatus}`}>{book.status}</span>

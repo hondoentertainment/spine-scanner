@@ -28,11 +28,17 @@ export function filterLibraryBooks(books: BookEntry[], filter: LibraryBookFilter
   return books.filter((book) => {
     const location = normalizePhysicalLocation(book);
     const locationText = `${location.locationRoom} ${location.locationCase} ${location.locationShelf} ${formatPhysicalLocation(book)}`.toLowerCase();
+    const borrower = [
+      book.lentTo ?? '',
+      book.loan?.borrowerName ?? '',
+      ...(book.loanLedger ?? []).map((entry) => entry.lentTo),
+    ].join(' ').toLowerCase();
     const matchesSearch = !loweredSearch
       || book.title.toLowerCase().includes(loweredSearch)
       || book.author.toLowerCase().includes(loweredSearch)
       || book.isbn.includes(loweredSearch)
-      || locationText.includes(loweredSearch);
+      || locationText.includes(loweredSearch)
+      || borrower.includes(loweredSearch);
     const matchesStatus = status === 'all' || book.status === status;
     const matchesShelf = !shelfId || (book.shelfIds || []).includes(shelfId);
     const matchesReview = !filter.reviewOnly || book.needsReview === true;

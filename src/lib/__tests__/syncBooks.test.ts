@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isMissingLocationColumnError, mergeBooksLists, mergeShelvesLists, toBookEntry, toBookRow } from '../syncBooks';
+import { isMissingLocationColumnError, mergeBooksLists, mergeShelvesLists, missingOptionalBookColumns, toBookEntry, toBookRow } from '../syncBooks';
 import type { BookEntry, Shelf } from '../../types';
 
 const makeBook = (overrides: Partial<BookEntry> = {}): BookEntry => ({
@@ -188,6 +188,37 @@ describe('toBookEntry / toBookRow', () => {
     expect(legacy.locationRoom).toBe('');
     expect(legacy.locationCase).toBe('');
     expect(legacy.locationShelf).toBe('');
+    expect(legacy.lentTo).toBe('');
+    expect(legacy.loanLedger).toEqual([]);
+    expect(legacy.loan ?? null).toBeNull();
+  });
+
+  it('round-trips lending history and closes an open ledger row when the loan column was cleared', () => {
+    const book = makeBook({
+      lentTo: 'Ada',
+      lentAt: '2026-10-01T00:00:00.000Z',
+      dueAt: '2026-10-10',
+      returnedAt: '',
+      loan: { borrowerName: 'Ada', lentAt: '2026-10-01T00:00:00.000Z', dueAt: '2026-10-10' },
+      loanLedger: [{ lentTo: 'Ada', lentAt: '2026-10-01T00:00:00.000Z', dueAt: '2026-10-10', returnedAt: '' }],
+    });
+    const row = { ...toBookRow(book, 'user-123'), updated_at: '2026-10-01T00:00:00.000Z' };
+    expect(row.loan_ledger).toEqual(book.loanLedger);
+    expect(row.loan?.borrowerName).toBe('Ada');
+
+    const restored = toBookEntry(row);
+    expect(restored.lentTo).toBe('Ada');
+    expect(restored.loan?.borrowerName).toBe('Ada');
+    expect(restored.title).toBe('Test Book');
+
+    const returned = toBookEntry({
+      ...row,
+      loan: null,
+      updated_at: '2026-10-20T00:00:00.000Z',
+    });
+    expect(returned.loan).toBeNull();
+    expect(returned.returnedAt).toBe('2026-10-20T00:00:00.000Z');
+    expect(returned.lentTo).toBe('Ada');
   });
 
   it('toBookRow includes user_id', () => {
@@ -205,6 +236,11 @@ describe('toBookEntry / toBookRow', () => {
       message: 'column "location_case" of relation "books" does not exist',
     })).toBe(true);
     expect(isMissingLocationColumnError(new Error('upsert boom'))).toBe(false);
+    expect(missingOptionalBookColumns({
+      code: 'PGRST204',
+      message: "Could not find the 'loan_ledger' column of 'books' in the schema cache",
+    })).toEqual(['loan_ledger']);
+    expect(missingOptionalBookColumns(new Error('upsert boom'))).toEqual([]);
   });
 
   it('toBookEntry defaults shelfIds to empty array when null', () => {

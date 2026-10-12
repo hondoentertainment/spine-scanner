@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Lending ledger
+
+- **Who has the book, and since when.** Each copy can record `lentTo`, `lentAt`, an optional `dueAt`, and `returnedAt`. Those fields start empty, so existing libraries are kept. Returning a book keeps the row in `loanLedger` instead of erasing who had it. Lend it again and the earlier return stays.
+- **In the library.** Book cards and book details can mark a copy lent or returned. Library has a Lent out filter (`?lent=1` still works). Overdue copies show a badge. Home lists loans that are due soon or overdue. Reminders stay in the app.
+- **Cloud sync.** `supabase/migrations/008_books_loan_ledger.sql` adds `loan_ledger`. If that column is not in the database yet, sync still uploads the rest of the book, including the current `loan`.
+
 ### Physical shelf map
 
 - **Room, case, and shelf.** Each book can store where the copy lives (`locationRoom`, `locationCase`, `locationShelf`). Empty strings mean unassigned, and older libraries keep their books when the fields are added. Edit the location on a book card or in book details, or apply it to a multi-select. Library filters and the shelf map browse by those fields alongside status and virtual shelves.

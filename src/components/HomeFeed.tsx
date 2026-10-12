@@ -7,7 +7,7 @@ import { useAuthStore } from '../store/useAuthStore.ts';
 import { useSyncQueue } from '../store/useSyncQueue.ts';
 import { getBookCoverSrc, getLibraryInsights } from '../utils/bookPresentation.ts';
 import { formatRelativeTime } from '../utils/formatRelativeTime.ts';
-import { formatLoanDue, isLoanDueSoon, isOnLoan } from '../utils/loans.ts';
+import { formatLoanDue, isLoanDueSoon, isLoanOverdue, isOnLoan } from '../utils/loans.ts';
 import type { BookEntry } from '../types.ts';
 import s from './HomeFeed.module.css';
 
@@ -128,6 +128,7 @@ export default function HomeFeed() {
     [books],
   );
   const lentCount = useMemo(() => books.filter(isOnLoan).length, [books]);
+  const overdueCount = useMemo(() => books.filter((book) => isLoanOverdue(book)).length, [books]);
 
   const suggestions = useMemo(() => {
     const out: { book: BookEntry; reason: string }[] = [];
@@ -321,7 +322,11 @@ export default function HomeFeed() {
           </div>
           <p className={s.lede}>
             {lentCount} book{lentCount === 1 ? '' : 's'} with someone else
-            {dueLoans.length > 0 ? `, ${dueLoans.length} due soon.` : '.'}
+            {overdueCount > 0
+              ? `, ${overdueCount} overdue.`
+              : dueLoans.length > 0
+                ? `, ${dueLoans.length} due soon.`
+                : '.'}
           </p>
           {dueLoans.length > 0 && (
             <ul className={s.suggestionList}>
@@ -333,7 +338,7 @@ export default function HomeFeed() {
                     onClick={() => navigate(`/library?isbn=${encodeURIComponent(book.isbn)}`)}
                   >
                     <div>
-                      <span className={s.suggestionReason}>{formatLoanDue(book)} · {book.loan?.borrowerName}</span>
+                      <span className={s.suggestionReason}>{formatLoanDue(book)} · {book.loan?.borrowerName || book.lentTo}</span>
                       <span className={s.suggestionTitle}>{book.title}</span>
                     </div>
                   </button>

@@ -70,6 +70,18 @@ describe('filterLibraryBooks', () => {
     expect(filterLibraryBooks(books, { locationRoom: 'Study', locationCase: 'Pine', locationShelf: '2' }).map((book) => book.id)).toEqual(['loose']);
   });
 
+  it('filters to copies that are lent out and matches the borrower name', () => {
+    const lent = makeBook({
+      id: 'out',
+      title: 'Contact',
+      lentTo: 'Ada',
+      loan: { borrowerName: 'Ada', lentAt: '2026-10-01T00:00:00.000Z', dueAt: null },
+    });
+    const library = [...books, lent];
+    expect(filterLibraryBooks(library, { lentOnly: true }).map((book) => book.id)).toEqual(['out']);
+    expect(filterLibraryBooks(library, { searchTerm: 'ada' }).map((book) => book.id)).toEqual(['out']);
+  });
+
   it('treats an empty location filter as unassigned and finds placed books by location text', () => {
     expect(filterLibraryBooks(books, { locationRoom: '' }).map((book) => book.id)).toEqual(['unplaced']);
     expect(filterLibraryBooks(books, { searchTerm: 'oak' }).map((book) => book.id)).toEqual(['study', 'hall']);

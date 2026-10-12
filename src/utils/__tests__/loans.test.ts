@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BookEntry } from '../../types';
-import { formatLoanDue, isLoanDueSoon, isOnLoan, lendBook, returnBook } from '../loans';
+import { formatLentSince, formatLoanDue, isLoanDueSoon, isOnLoan, lendBook, loanBadgeText, mergeLoanLedgers, returnBook } from '../loans';
 
 const book = (overrides: Partial<BookEntry> = {}): BookEntry => ({
   id: 'b1',
@@ -32,8 +32,65 @@ describe('loans', () => {
       lentAt: '2026-10-01T00:00:00.000Z',
       dueAt: '2026-10-10',
     });
-    expect(isOnLoan(returnBook(lent))).toBe(false);
-    expect(returnBook(lent).loan).toBeNull();
+    const returned = returnBook(lent, '2026-10-11T00:00:00.000Z');
+    expect(isOnLoan(returned)).toBe(false);
+    expect(returned.loan).toBeNull();
+    expect(returned.lentTo).toBe('Ada');
+    expect(returned.returnedAt).toBe('2026-10-11T00:00:00.000Z');
+    expect(returned.loanLedger).toEqual([
+      {
+        lentTo: 'Ada',
+        lentAt: '2026-10-01T00:00:00.000Z',
+        dueAt: '2026-10-10',
+        returnedAt: '2026-10-11T00:00:00.000Z',
+      },
+    ]);
+    expect(returned.title).toBe('1984');
+  });
+
+  it('keeps earlier returns when the same copy is lent again', () => {
+    const once = returnBook(
+      lendBook(book(), { borrowerName: 'Ada', lentAt: '2026-10-01T00:00:00.000Z' }),
+      '2026-10-05T00:00:00.000Z',
+    );
+    const twice = lendBook(once, { lentTo: 'Grace', lentAt: '2026-10-06T00:00:00.000Z', dueAt: '' });
+    expect(isOnLoan(twice)).toBe(true);
+    expect(twice.lentTo).toBe('Grace');
+    expect(twice.returnedAt).toBe('');
+    expect(twice.loanLedger).toHaveLength(2);
+    expect(twice.loanLedger?.[0].returnedAt).toBe('2026-10-05T00:00:00.000Z');
+    expect(formatLentSince(twice)).toBe('Lent to Grace since 2026-10-06');
+  });
+
+  it('labels overdue copies and ignores returned ones', () => {
+    const overdue = lendBook(book(), { borrowerName: 'Lin', dueAt: '2026-10-01', lentAt: '2026-09-01T00:00:00.000Z' });
+    expect(loanBadgeText(overdue, now)).toBe('Overdue');
+    expect(formatLentSince(overdue)).toBe('Lent to Lin since 2026-09-01');
+    expect(loanBadgeText(returnBook(overdue, '2026-10-09T00:00:00.000Z'), now)).toBeNull();
+    expect(loanBadgeText(lendBook(book({ id: 'open' }), { borrowerName: 'Sam' }), now)).toBe('Lent out');
+  });
+
+  it('does not replace the person who already has the book', () => {
+    const lent = lendBook(book({ notes: 'keep' }), { borrowerName: 'Ada', lentAt: '2026-10-01T00:00:00.000Z' });
+    const again = lendBook(lent, { borrowerName: 'Grace', lentAt: '2026-10-02T00:00:00.000Z' });
+    expect(again.lentTo).toBe('Ada');
+    expect(again.notes).toBe('keep');
+    expect(again.loanLedger).toHaveLength(1);
+  });
+
+  it('keeps the first open loan when two copies of the same book are both out', () => {
+    const primary = lendBook(book({ id: 'keep', notes: 'shelf' }), {
+      borrowerName: 'Ada',
+      lentAt: '2026-10-01T00:00:00.000Z',
+    });
+    const secondary = lendBook(book({ id: 'drop' }), {
+      borrowerName: 'Grace',
+      lentAt: '2026-09-01T00:00:00.000Z',
+    });
+    const merged = mergeLoanLedgers(primary, secondary);
+    expect(merged.lentTo).toBe('Ada');
+    expect(merged.loan?.borrowerName).toBe('Ada');
+    expect(merged.loanLedger?.some((entry) => entry.lentTo === 'Grace' && entry.returnedAt)).toBe(true);
   });
 
   it('flags loans due within a week and overdue loans', () => {

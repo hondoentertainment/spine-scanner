@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { BookEntry, ProfilePreferences, Shelf } from '../types.ts';
 import { normalizeBookEntry, normalizeBooks, updateBookForStatus, updateBookProgress } from '../utils/bookState.ts';
+import { lendBook as applyLend, mergeLoanLedgers, returnBook as applyReturn } from '../utils/loans.ts';
 import { normalizePhysicalLocation } from '../utils/physicalLocation.ts';
 import { migrateBooks } from '../lib/schemaMigrations.ts';
 import { useProfileStore } from './useProfileStore.ts';
@@ -76,6 +77,10 @@ interface BookStore {
   bulkUpdateStatus: (ids: string[], status: BookEntry['status']) => void;
   bulkAssignShelf: (ids: string[], shelfId: string) => void;
   bulkUnassignShelf: (ids: string[], shelfId: string) => void;
+  /** Record who has this copy, and since when. Optional due date. Does nothing without a name. */
+  lendBook: (id: string, input: { lentTo: string; dueAt?: string | null; lentAt?: string }) => void;
+  /** Record that the current loan was returned. Keeps the row in the ledger. */
+  markBookReturned: (id: string, returnedAt?: string) => void;
   /** Set physical room / case / shelf on the selected books. Omitted fields stay as they are. */
   bulkAssignLocation: (
     ids: string[],
@@ -175,6 +180,18 @@ export const useBookStore = create<BookStore>()(
               : b
           ),
         })),
+      lendBook: (id, input) =>
+        set((state) => ({
+          books: state.books.map((book) => (
+            book.id === id ? normalizeBookEntry(applyLend(book, input)) : book
+          )),
+        })),
+      markBookReturned: (id, returnedAt) =>
+        set((state) => ({
+          books: state.books.map((book) => (
+            book.id === id ? normalizeBookEntry(applyReturn(book, returnedAt)) : book
+          )),
+        })),
       bulkAssignLocation: (ids, location) =>
         set((state) => {
           const idSet = new Set(ids);
@@ -247,6 +264,7 @@ export const useBookStore = create<BookStore>()(
               locationRoom: normalizePhysicalLocation(merged).locationRoom || normalizePhysicalLocation(other).locationRoom,
               locationCase: normalizePhysicalLocation(merged).locationCase || normalizePhysicalLocation(other).locationCase,
               locationShelf: normalizePhysicalLocation(merged).locationShelf || normalizePhysicalLocation(other).locationShelf,
+              ...mergeLoanLedgers(merged, other),
             };
           }
           const rest = state.books.filter((b) => b.id !== keepId && !toRemove.has(b.id));

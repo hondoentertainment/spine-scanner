@@ -1,4 +1,5 @@
 import type { BookEntry } from '../types.ts';
+import { lendingFields } from '../utils/loans.ts';
 import { normalizePhysicalLocation } from '../utils/physicalLocation.ts';
 
 export interface BookConflictSnapshot {
@@ -8,9 +9,11 @@ export interface BookConflictSnapshot {
 }
 
 function loanKey(book: BookEntry): string {
-  const name = book.loan?.borrowerName?.trim() ?? '';
-  const due = book.loan?.dueAt ?? '';
-  return `${name}|${due}`;
+  const lending = lendingFields(book);
+  const history = lending.loanLedger
+    .map((entry) => `${entry.lentTo}|${entry.lentAt}|${entry.dueAt}|${entry.returnedAt}`)
+    .join(';');
+  return `${lending.lentTo}|${lending.dueAt}|${lending.returnedAt}|${history}`;
 }
 
 function locationKey(book: BookEntry): string {

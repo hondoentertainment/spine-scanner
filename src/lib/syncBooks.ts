@@ -1,10 +1,11 @@
 import { supabase } from './supabase.ts';
-import type { BookEntry, MetadataSource, Shelf, UserEditedFields } from '../types.ts';
+import type { BookEntry, LoanLedgerEntry, MetadataSource, Shelf, UserEditedFields } from '../types.ts';
 import { addBreadcrumb, captureException } from './errorMonitoring.ts';
 import { migrateBooks } from './schemaMigrations.ts';
 import { findBookConflicts } from './bookConflicts.ts';
 import { withRetry } from './syncRetry.ts';
 import { useSyncQueue } from '../store/useSyncQueue.ts';
+import { lendingFields } from '../utils/loans.ts';
 import { cleanLocation } from '../utils/physicalLocation.ts';
 
 /** Row shape in the Supabase `books` table */
@@ -31,6 +32,7 @@ interface BookRow {
   metadata_source?: MetadataSource | null;
   user_edited_fields?: UserEditedFields | null;
   loan?: BookEntry['loan'];
+  loan_ledger?: LoanLedgerEntry[] | null;
   location_room?: string | null;
   location_case?: string | null;
   location_shelf?: string | null;
@@ -38,30 +40,44 @@ interface BookRow {
 }
 
 const LOCATION_COLUMNS = ['location_room', 'location_case', 'location_shelf'] as const;
+const LOAN_LEDGER_COLUMNS = ['loan_ledger'] as const;
+const OPTIONAL_BOOK_COLUMN_GROUPS = [LOCATION_COLUMNS, LOAN_LEDGER_COLUMNS] as const;
 
-/** True when PostgREST or Postgres rejected the write because location columns are not migrated yet. */
-export function isMissingLocationColumnError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
+function schemaErrorMessage(error: unknown): { message: string; schemaMiss: boolean } {
+  if (!error || typeof error !== 'object') return { message: '', schemaMiss: false };
   const record = error as { message?: unknown; code?: unknown };
   const message = typeof record.message === 'string' ? record.message.toLowerCase() : '';
   const code = typeof record.code === 'string' ? record.code : '';
-  const mentionsLocation = LOCATION_COLUMNS.some((column) => message.includes(column));
-  if (!mentionsLocation) return false;
-  return (
+  const schemaMiss = (
     code === 'PGRST204'
     || code === '42703'
     || message.includes('schema cache')
     || message.includes('does not exist')
     || message.includes('could not find')
   );
+  return { message, schemaMiss };
 }
 
-function withoutLocationColumns<T extends object>(row: T): Omit<T, (typeof LOCATION_COLUMNS)[number]> {
-  const next: Record<string, unknown> = { ...(row as Record<string, unknown>) };
-  for (const key of LOCATION_COLUMNS) {
-    delete next[key];
+/** Columns to omit when the database has not been migrated yet. A named column strips its whole group. */
+export function missingOptionalBookColumns(error: unknown): string[] {
+  const { message, schemaMiss } = schemaErrorMessage(error);
+  if (!schemaMiss) return [];
+  const missing: string[] = [];
+  for (const group of OPTIONAL_BOOK_COLUMN_GROUPS) {
+    if (group.some((column) => message.includes(column))) missing.push(...group);
   }
-  return next as Omit<T, (typeof LOCATION_COLUMNS)[number]>;
+  return missing;
+}
+
+/** True when PostgREST or Postgres rejected the write because location columns are not migrated yet. */
+export function isMissingLocationColumnError(error: unknown): boolean {
+  return missingOptionalBookColumns(error).some((column) => column.startsWith('location_'));
+}
+
+function omitBookColumns<T extends object>(row: T, columns: readonly string[]): T {
+  const next: Record<string, unknown> = { ...(row as Record<string, unknown>) };
+  for (const key of columns) delete next[key];
+  return next as T;
 }
 
 /** Row shape in the Supabase `shelves` table */
@@ -75,7 +91,7 @@ interface ShelfRow {
 // ─── Converters ─────────────────────────────────────────────────
 
 export function toBookEntry(row: BookRow): BookEntry {
-  return {
+  return withLendingDefaults({
     id: row.id,
     isbn: row.isbn,
     isPhotoOnly: row.is_photo_only ?? false,
@@ -99,13 +115,37 @@ export function toBookEntry(row: BookRow): BookEntry {
       ? { userEditedFields: row.user_edited_fields }
       : {}),
     ...(row.loan ? { loan: row.loan } : {}),
+    loanLedger: reconcileRemoteLedger(row),
     locationRoom: cleanLocation(row.location_room),
     locationCase: cleanLocation(row.location_case),
     locationShelf: cleanLocation(row.location_shelf),
-  };
+  });
+}
+
+/**
+ * An older app marks a return by clearing `loan` and does not know about
+ * `loan_ledger`. When the loan column is empty, close any open ledger rows
+ * so a return made elsewhere is not undone on the next pull.
+ */
+function reconcileRemoteLedger(row: BookRow): LoanLedgerEntry[] {
+  const ledger = Array.isArray(row.loan_ledger) ? row.loan_ledger : [];
+  if (row.loan?.borrowerName?.trim()) return ledger;
+  const returnedAt = row.updated_at || '';
+  return ledger.map((entry) => {
+    if (!entry || typeof entry !== 'object') return entry;
+    const name = typeof entry.lentTo === 'string' ? entry.lentTo.trim() : '';
+    const alreadyReturned = typeof entry.returnedAt === 'string' && entry.returnedAt.trim();
+    if (!name || alreadyReturned) return entry;
+    return { ...entry, returnedAt: returnedAt || (typeof entry.lentAt === 'string' ? entry.lentAt : '') };
+  });
+}
+
+function withLendingDefaults(book: BookEntry): BookEntry {
+  return { ...book, ...lendingFields(book) };
 }
 
 export function toBookRow(book: BookEntry, userId: string): Omit<BookRow, 'updated_at'> {
+  const lending = lendingFields(book);
   return {
     id: book.id,
     user_id: userId,
@@ -128,7 +168,8 @@ export function toBookRow(book: BookEntry, userId: string): Omit<BookRow, 'updat
     last_progress_at: book.lastProgressAt ?? null,
     metadata_source: book.metadataSource ?? null,
     user_edited_fields: book.userEditedFields ?? {},
-    loan: book.loan ?? null,
+    loan: lending.loan,
+    loan_ledger: lending.loanLedger,
     location_room: cleanLocation(book.locationRoom),
     location_case: cleanLocation(book.locationCase),
     location_shelf: cleanLocation(book.locationShelf),
@@ -203,22 +244,28 @@ export async function pushBooks(userId: string, books: BookEntry[]): Promise<boo
   if (rows.length > 0) {
     try {
       await withRetry(async () => {
-        const { error } = await supabase!
-          .from('books')
-          .upsert(rows, { onConflict: 'id' });
-        if (!error) return;
-        if (isMissingLocationColumnError(error)) {
-          const stripped = rows.map((row) => withoutLocationColumns(row));
-          const retry = await supabase!
+        let payload = rows;
+        const stripped = new Set<string>();
+        for (;;) {
+          const { error } = await supabase!
             .from('books')
-            .upsert(stripped, { onConflict: 'id' });
-          if (retry.error) throw retry.error;
-          console.warn(
-            '[sync] books.location_room/location_case/location_shelf are missing. Synced without physical location. Run supabase/migrations/007_books_physical_location.sql.',
-          );
-          return;
+            .upsert(payload, { onConflict: 'id' });
+          if (!error) return;
+          const missing = missingOptionalBookColumns(error).filter((column) => !stripped.has(column));
+          if (missing.length === 0) throw error;
+          for (const column of missing) stripped.add(column);
+          payload = rows.map((row) => omitBookColumns(row, [...stripped]));
+          if (missing.some((column) => column.startsWith('location_'))) {
+            console.warn(
+              '[sync] books.location_room/location_case/location_shelf are missing. Synced without physical location. Run supabase/migrations/007_books_physical_location.sql.',
+            );
+          }
+          if (missing.includes('loan_ledger')) {
+            console.warn(
+              '[sync] books.loan_ledger is missing. Synced the current loan only. Run supabase/migrations/008_books_loan_ledger.sql.',
+            );
+          }
         }
-        throw error;
       });
     } catch (err) {
       const error = err as Error;

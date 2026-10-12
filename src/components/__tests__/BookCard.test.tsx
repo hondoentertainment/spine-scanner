@@ -172,4 +172,39 @@ describe('BookCard', () => {
 
     expect(useBookStore.getState().books).toHaveLength(0);
   });
+
+  it('lends a book from the card and marks it returned', () => {
+    const book = makeBook();
+    useBookStore.setState({ books: [book] });
+    renderWithToast(<BookCard book={book} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lend 1984' }));
+    fireEvent.change(screen.getByLabelText('Borrower for 1984'), { target: { value: 'Ada' } });
+    fireEvent.change(screen.getByLabelText('Due date for 1984'), { target: { value: '2026-12-01' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm lend 1984' }));
+
+    const lent = useBookStore.getState().books[0];
+    expect(lent.lentTo).toBe('Ada');
+    expect(lent.dueAt).toBe('2026-12-01');
+    expect(lent.returnedAt).toBe('');
+    expect(lent.loan?.borrowerName).toBe('Ada');
+    expect(lent.title).toBe('1984');
+  });
+
+  it('shows an overdue badge and records a return', () => {
+    const book = makeBook({
+      loan: { borrowerName: 'Ada', lentAt: '2020-01-01T00:00:00.000Z', dueAt: '2020-01-02' },
+    });
+    useBookStore.setState({ books: [book] });
+    renderWithToast(<BookCard book={book} />);
+    expect(screen.getByText('Overdue')).toBeInTheDocument();
+    expect(screen.getByText('Lent to Ada since 2020-01-01')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark 1984 returned' }));
+    const returned = useBookStore.getState().books[0];
+    expect(returned.loan).toBeNull();
+    expect(returned.returnedAt).not.toBe('');
+    expect(returned.loanLedger?.[0].lentTo).toBe('Ada');
+    expect(returned.notes).toBe('');
+  });
 });

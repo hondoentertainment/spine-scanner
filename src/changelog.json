@@ -3,6 +3,7 @@
     "version": "Unreleased",
     "date": "2026-08-04",
     "items": [
+      "Lending ledger: record who borrowed a book, when it is due, and when it came back. Filter the library to lent-out copies and see an overdue badge",
       "Physical shelf map: assign a room, case, and shelf, then filter the library by where a book lives",
       "Missing-cover recovery: one tap re-fetches covers for books without one (Phase 26)",
       "Swipe down to close book details on touch devices",
