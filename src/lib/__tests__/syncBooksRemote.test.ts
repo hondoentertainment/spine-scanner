@@ -64,9 +64,9 @@ vi.mock('../errorMonitoring', () => ({
 }));
 
 const saveSnapshot = vi.fn();
-const setConflictBookIds = vi.fn();
+const setBookConflicts = vi.fn();
 vi.mock('../../store/useSyncQueue', () => ({
-  useSyncQueue: { getState: () => ({ saveSnapshot, setConflictBookIds }) },
+  useSyncQueue: { getState: () => ({ saveSnapshot, setBookConflicts }) },
 }));
 
 // Import AFTER the mocks so the implementation picks them up.
@@ -114,7 +114,7 @@ beforeEach(() => {
   }
   vi.mocked(captureException).mockClear();
   saveSnapshot.mockClear();
-  setConflictBookIds.mockClear();
+  setBookConflicts.mockClear();
 });
 
 describe('pullBooks', () => {
@@ -276,7 +276,7 @@ describe('mergeSync', () => {
     expect(result).not.toBeNull();
     expect(result!.books.map((b) => b.id).sort()).toEqual(['local-1', 'remote-1']);
     expect(saveSnapshot).toHaveBeenCalledWith(local);
-    expect(setConflictBookIds).toHaveBeenCalledWith([]);
+    expect(setBookConflicts).toHaveBeenCalledWith([]);
   });
 
   it('flags a conflict when the same book differs locally and remotely', async () => {
@@ -293,7 +293,13 @@ describe('mergeSync', () => {
     expect(result).not.toBeNull();
     // Local wins the merge, but the conflict is recorded.
     expect(result!.books[0].title).toBe('Local Title');
-    expect(setConflictBookIds).toHaveBeenCalledWith(['b1']);
+    expect(setBookConflicts).toHaveBeenCalledWith([
+      expect.objectContaining({
+        bookId: 'b1',
+        local: expect.objectContaining({ title: 'Local Title' }),
+        remote: expect.objectContaining({ title: 'Remote Title' }),
+      }),
+    ]);
   });
 
   it('returns null when the push fails after a successful pull', async () => {
@@ -303,7 +309,7 @@ describe('mergeSync', () => {
     await expect(mergeSync('user-1', [makeBook({ id: 'b2' })])).resolves.toBeNull();
     // Snapshot is taken before the push attempt so recovery is possible.
     expect(saveSnapshot).toHaveBeenCalled();
-    expect(setConflictBookIds).not.toHaveBeenCalled();
+    expect(setBookConflicts).not.toHaveBeenCalled();
   });
 
   it('merges shelves and still succeeds when there are no remote shelves', async () => {

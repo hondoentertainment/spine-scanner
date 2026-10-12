@@ -63,6 +63,30 @@ describe('LibraryList', () => {
     useProfileStore.setState({ preferences: { ...DEFAULT_PREFERENCES } });
   });
 
+  it('shows only lent books when opened from the lent-out link', () => {
+    useBookStore.setState({
+      books: [
+        makeBook({ id: 'home', title: 'On shelf' }),
+        makeBook({
+          id: 'out',
+          title: 'With Ada',
+          loan: { borrowerName: 'Ada', lentAt: '2026-10-01T00:00:00.000Z', dueAt: null },
+        }),
+      ],
+      shelves: [],
+    });
+    render(
+      <MemoryRouter initialEntries={['/library?lent=1']}>
+        <ToastProvider>
+          <LibraryList />
+        </ToastProvider>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('With Ada')).toBeInTheDocument();
+    expect(screen.queryByText('On shelf')).not.toBeInTheDocument();
+    expect(screen.getByText('Lent out')).toBeInTheDocument();
+  });
+
   it('shows the new browsing-focused hero copy', () => {
     renderLibraryList(<LibraryList />);
 

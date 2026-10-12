@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/useAuthStore.ts';
 import { useSyncQueue } from '../store/useSyncQueue.ts';
 import { getBookCoverSrc, getLibraryInsights } from '../utils/bookPresentation.ts';
 import { formatRelativeTime } from '../utils/formatRelativeTime.ts';
+import { formatLoanDue, isLoanDueSoon, isOnLoan } from '../utils/loans.ts';
 import type { BookEntry } from '../types.ts';
 import s from './HomeFeed.module.css';
 
@@ -121,6 +122,12 @@ export default function HomeFeed() {
 
     return { currentYear, booksRead, totalPages, avgPages, busiestMonthLabel };
   }, [books]);
+
+  const dueLoans = useMemo(
+    () => books.filter((book) => isLoanDueSoon(book)).sort((a, b) => (a.loan?.dueAt ?? '').localeCompare(b.loan?.dueAt ?? '')),
+    [books],
+  );
+  const lentCount = useMemo(() => books.filter(isOnLoan).length, [books]);
 
   const suggestions = useMemo(() => {
     const out: { book: BookEntry; reason: string }[] = [];
@@ -304,6 +311,39 @@ export default function HomeFeed() {
               </div>
             )}
           </div>
+        </section>
+      )}
+
+      {(dueLoans.length > 0 || lentCount > 0) && (
+        <section className={`glass ${s.seriesCard}`} aria-label="Lent out">
+          <div className={s.sectionHead}>
+            <h2 className={s.sectionTitle}>Lent out</h2>
+          </div>
+          <p className={s.lede}>
+            {lentCount} book{lentCount === 1 ? '' : 's'} with someone else
+            {dueLoans.length > 0 ? `, ${dueLoans.length} due soon.` : '.'}
+          </p>
+          {dueLoans.length > 0 && (
+            <ul className={s.suggestionList}>
+              {dueLoans.slice(0, 4).map((book) => (
+                <li key={book.id}>
+                  <button
+                    type="button"
+                    className={`glass ${s.suggestionCard}`}
+                    onClick={() => navigate(`/library?isbn=${encodeURIComponent(book.isbn)}`)}
+                  >
+                    <div>
+                      <span className={s.suggestionReason}>{formatLoanDue(book)} · {book.loan?.borrowerName}</span>
+                      <span className={s.suggestionTitle}>{book.title}</span>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <button type="button" className={s.goalLink} onClick={() => navigate('/library?lent=1')}>
+            View lent books
+          </button>
         </section>
       )}
 

@@ -71,6 +71,9 @@ describe('ProfileSettings', () => {
       lastGoodSnapshotAt: null,
       hadConflictLastSync: false,
       lastConflictBookIds: [],
+      bookConflicts: [],
+      syncHistory: [],
+      pendingMutations: [],
     });
     useAnalyticsStore.setState({ events: [] });
     vi.spyOn(URL, 'createObjectURL').mockReturnValue(objectUrl);
@@ -222,6 +225,26 @@ describe('ProfileSettings', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Open' })[0]);
     expect(navigate).toHaveBeenCalledWith(`/library?isbn=${encodeURIComponent(books[0].isbn)}`);
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(useSyncQueue.getState().hadConflictLastSync).toBe(false);
+  });
+
+  it('keeps the other device copy when that conflict choice is selected', () => {
+    const local = makeBook({ id: 'only', title: 'Local title', notes: 'mine' });
+    const remote = makeBook({ id: 'only', title: 'Remote title', notes: 'theirs' });
+    useBookStore.setState({ books: [local], shelves: [] });
+    useAuthStore.setState({ user: { id: 'u1' } as never });
+    useSyncQueue.setState({
+      hadConflictLastSync: true,
+      lastConflictBookIds: ['only'],
+      bookConflicts: [{ bookId: 'only', local, remote }],
+      syncHistory: [{ id: 'h1', at: '2026-10-08T12:00:00.000Z', outcome: 'synced', pendingChanges: 1, conflictCount: 1 }],
+      pendingMutations: [{ id: 'm1', at: '2026-10-08T12:00:00.000Z', label: 'Library edited on this device' }],
+    });
+    renderProfile();
+    expect(screen.getByText('Sync history')).toBeInTheDocument();
+    expect(screen.getByText(/Offline queue/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Use other device' }));
+    expect(useBookStore.getState().books[0].title).toBe('Remote title');
     expect(useSyncQueue.getState().hadConflictLastSync).toBe(false);
   });
 

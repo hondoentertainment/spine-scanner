@@ -2,6 +2,7 @@ import { supabase } from './supabase.ts';
 import type { BookEntry, MetadataSource, Shelf, UserEditedFields } from '../types.ts';
 import { addBreadcrumb, captureException } from './errorMonitoring.ts';
 import { migrateBooks } from './schemaMigrations.ts';
+import { findBookConflicts } from './bookConflicts.ts';
 import { withRetry } from './syncRetry.ts';
 import { useSyncQueue } from '../store/useSyncQueue.ts';
 
@@ -28,6 +29,7 @@ interface BookRow {
   last_progress_at?: string | null;
   metadata_source?: MetadataSource | null;
   user_edited_fields?: UserEditedFields | null;
+  loan?: BookEntry['loan'];
   updated_at: string;
 }
 
@@ -65,6 +67,7 @@ export function toBookEntry(row: BookRow): BookEntry {
     ...(row.user_edited_fields && Object.keys(row.user_edited_fields).length > 0
       ? { userEditedFields: row.user_edited_fields }
       : {}),
+    ...(row.loan ? { loan: row.loan } : {}),
   };
 }
 
@@ -91,6 +94,7 @@ export function toBookRow(book: BookEntry, userId: string): Omit<BookRow, 'updat
     last_progress_at: book.lastProgressAt ?? null,
     metadata_source: book.metadataSource ?? null,
     user_edited_fields: book.userEditedFields ?? {},
+    loan: book.loan ?? null,
   };
 }
 
@@ -391,20 +395,8 @@ export async function mergeSync(
 
   const remoteShelves = await pullShelves(userId);
 
-  // Detect conflict: any book that exists both locally and remotely with differing content.
-  // Collect the specific ids so the UI can surface which books were affected.
-  const remoteMap = new Map(remoteBooks.map((b) => [b.id, b]));
-  const conflictedBookIds = localBooks
-    .filter((local) => {
-      const remote = remoteMap.get(local.id);
-      if (!remote) return false;
-      return (
-        remote.title !== local.title ||
-        remote.author !== local.author ||
-        remote.notes !== local.notes
-      );
-    })
-    .map((b) => b.id);
+  // Keep both copies so the profile can offer "this device" vs "other device".
+  const conflicts = findBookConflicts(localBooks, remoteBooks);
 
   const mergedBooks = migrateBooks(mergeBooksLists(localBooks, remoteBooks));
   const mergedShelves = mergeShelvesLists(localShelves, remoteShelves || []);
@@ -417,8 +409,8 @@ export async function mergeSync(
 
   await pushShelves(userId, mergedShelves);
 
-  // Record conflict status and the specific ids so the UI can list them.
-  useSyncQueue.getState().setConflictBookIds(conflictedBookIds);
+  // Record conflict status and both copies so the UI can list and resolve them.
+  useSyncQueue.getState().setBookConflicts(conflicts);
 
   addBreadcrumb('sync', 'Merge sync completed', {
     mergedBooks: mergedBooks.length,
