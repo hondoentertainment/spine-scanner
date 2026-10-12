@@ -185,4 +185,62 @@ describe('useBookStore', () => {
     useBookStore.getState().unassignShelf('b1', 'nonexistent');
     expect(useBookStore.getState().books[0].shelfIds).toEqual(['s1']);
   });
+
+  it('defaults physical location to empty strings when a book is added', () => {
+    useBookStore.getState().addBook(makeBook({ id: 'b1' }));
+    const book = useBookStore.getState().books[0];
+    expect(book.locationRoom).toBe('');
+    expect(book.locationCase).toBe('');
+    expect(book.locationShelf).toBe('');
+  });
+
+  it('stores a trimmed physical location on updateBook', () => {
+    useBookStore.getState().addBook(makeBook({ id: 'b1', title: 'Dune' }));
+    useBookStore.getState().updateBook('b1', {
+      locationRoom: ' Study ',
+      locationCase: 'Oak',
+      locationShelf: '2',
+    });
+    const book = useBookStore.getState().books[0];
+    expect(book.title).toBe('Dune');
+    expect(book.locationRoom).toBe('Study');
+    expect(book.locationCase).toBe('Oak');
+    expect(book.locationShelf).toBe('2');
+  });
+
+  it('bulk-assigns location only to selected books and leaves omitted fields', () => {
+    useBookStore.getState().addBook(makeBook({
+      id: 'b1',
+      locationRoom: 'Hall',
+      locationCase: 'Pine',
+      locationShelf: '1',
+    }));
+    useBookStore.getState().addBook(makeBook({ id: 'b2', locationRoom: 'Keep' }));
+    useBookStore.getState().bulkAssignLocation(['b1'], { locationRoom: 'Study', locationShelf: ' 4 ' });
+    const updated = useBookStore.getState().books.find((book) => book.id === 'b1');
+    const untouched = useBookStore.getState().books.find((book) => book.id === 'b2');
+    expect(updated?.locationRoom).toBe('Study');
+    expect(updated?.locationCase).toBe('Pine');
+    expect(updated?.locationShelf).toBe('4');
+    expect(untouched?.locationRoom).toBe('Keep');
+    expect(untouched?.locationCase).toBe('');
+  });
+
+  it('keeps a physical location when merging duplicate copies', () => {
+    useBookStore.getState().addBook(makeBook({ id: 'keep', title: 'Dune', locationRoom: '' }));
+    useBookStore.getState().addBook(makeBook({
+      id: 'drop',
+      title: 'Dune',
+      locationRoom: 'Study',
+      locationCase: 'Oak',
+      locationShelf: '2',
+    }));
+    useBookStore.getState().mergeBooks('keep', ['drop']);
+    const books = useBookStore.getState().books;
+    expect(books).toHaveLength(1);
+    expect(books[0].id).toBe('keep');
+    expect(books[0].locationRoom).toBe('Study');
+    expect(books[0].locationCase).toBe('Oak');
+    expect(books[0].locationShelf).toBe('2');
+  });
 });

@@ -7,7 +7,7 @@ A progressive web app for digitizing and managing your personal book library. Sc
 - **OCR & Barcode Scanning** -- Point your camera at an ISBN barcode or spine text. Uses Tesseract.js for OCR and ZXing for barcode detection, with automatic rotation handling for vertical spines and a confidence-band signal (low / medium / high) per scan.
 - **Shelf photo scan** -- Photograph or upload a whole shelf. On-device detection finds multiple spines, proposes title / author / ISBN candidates (barcode, Tesseract, then Google Books and Open Library), and shows a review list. Accepted books are added to the library; rejected ones are not. The single-spine barcode and OCR modes are unchanged.
 - **Automatic Metadata Lookup** -- Fetches title, author, page count, and cover art from Google Books and Open Library in parallel. Source attribution per book and a warning when the two sources disagree on author / page count / title.
-- **Library Management** -- Search, sort (by title, author, date, pages), and filter by reading status, shelf, series, or page range. Bulk multi-select for status changes, shelf assignment, and deletion. Smart shelves and saved views for repeated filters.
+- **Library Management** -- Search, sort (by title, author, date, pages), and filter by reading status, shelf, series, page range, or physical location (room, case, and shelf label). Bulk multi-select for status changes, shelf assignment, location assignment, and deletion. Smart shelves and saved views for repeated filters.
 - **Reading Tracking** -- Per-book pages read, started/finished dates, current and longest reading streak, and a "{year} in Books" card with books finished, pages read, average pages/book, and busiest month. A start/stop session timer on reading books logs a per-book session history with aggregate stats.
 - **Import & Export** -- Goodreads CSV import (real export format, including ISBN wrappers and shelf mapping), StoryGraph CSV import, plus full JSON backup/restore. Exports: Goodreads CSV, LibraryThing TSV, StoryGraph CSV, Notion CSV, ICS reading calendar, HTML print-friendly.
 - **Duplicate Handling** -- Exact-ISBN duplicate merge plus edition-level detection that catches hardcover / paperback / unabridged duplicates of the same book.
@@ -15,6 +15,7 @@ A progressive web app for digitizing and managing your personal book library. Sc
 - **Persistent Storage** -- Library data is saved to localStorage and persists across sessions.
 - **Cloud Sync (Optional)** -- Sign in with Supabase to sync your library across devices. A Sync status panel in Profile shows last sync time, pending count, and any failures. Works without an account too.
 - **Bookshelves** -- Create custom shelves (Sci-Fi, Lent Out, Work Reading, etc.) and assign books to multiple shelves. Filter your library by shelf.
+- **Physical shelf map** -- Record where a copy lives: room, bookcase, and shelf number or label. Edit it on the book card or in book details, assign it to a multi-select, and browse the library by those fields. Show shelves to see the room / case / shelf map.
 - **Edit Book Metadata** -- Fix incorrect titles, authors, page counts, and cover images inline. The **Refresh metadata** action re-queries APIs but never overwrites fields you've manually edited. **Recover missing covers** re-fetches artwork for books without a cover and updates only the cover field.
 - **Accessibility & Theming** -- Light, dark, system, and high-contrast (WCAG AAA) themes; full reduced-motion support; skip link, focus traps, and screen-reader announcements throughout.
 - **Onboarding & Support** -- A four-step welcome tour for new users, an in-app "What's new" changelog, and a one-click diagnostics bundle download for support requests.
@@ -132,7 +133,18 @@ VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-6. Restart the dev server. A "Sign in to sync" button will appear in the header.
+6. If `books` already exists, run the SQL files in `supabase/migrations/` that your project does not have yet. Physical locations need [`supabase/migrations/007_books_physical_location.sql`](supabase/migrations/007_books_physical_location.sql):
+
+```sql
+alter table books
+  add column if not exists location_room text not null default '',
+  add column if not exists location_case text not null default '',
+  add column if not exists location_shelf text not null default '';
+```
+
+Empty string means that part of the location is unset. Sync still uploads the rest of each book when these columns are missing; the location stays on this device until the migration is applied.
+
+7. Restart the dev server. A "Sign in to sync" button will appear in the header.
 
 **Auth flow:** Sign-up collects email, password, and optional username. Username is stored in profiles and shown in the UI when available. Sign-in uses email + password only (not username).
 

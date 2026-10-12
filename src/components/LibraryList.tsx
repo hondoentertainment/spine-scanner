@@ -19,6 +19,7 @@ import {
   ScanLine,
   Search,
   Layers,
+  MapPin,
   Settings,
   Sparkles,
   Trash2,
@@ -36,8 +37,10 @@ import ShelfManager from './ShelfManager.tsx';
 import { useToast } from './Toast.tsx';
 import { isMvpMode } from '../lib/appMode.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
-import { isOnLoan } from '../utils/loans.ts';
 import { getBookCoverSrc, getLibraryInsights } from '../utils/bookPresentation.ts';
+import { filterLibraryBooks } from '../utils/libraryFilter.ts';
+import { choiceStillValid, formatPhysicalLocation, hasPhysicalLocation, locationFilterChoices, matchesPhysicalLocation } from '../utils/physicalLocation.ts';
+import PhysicalShelfMap from './PhysicalShelfMap.tsx';
 import s from './LibraryList.module.css';
 
 type SortField = 'title' | 'author' | 'dateAdded' | 'pageCount';
@@ -50,6 +53,20 @@ interface LibraryListProps {
   initialOpenIsbn?: string | null;
   onOpenComplete?: () => void;
   initialSeriesFilter?: string | null;
+}
+
+const UNASSIGNED_LOCATION_OPTION = '__unassigned__';
+
+function locationSelectValue(filter: string | null): string {
+  if (filter === null) return '';
+  if (filter === '') return UNASSIGNED_LOCATION_OPTION;
+  return filter;
+}
+
+function locationFilterFromSelect(value: string): string | null {
+  if (value === '') return null;
+  if (value === UNASSIGNED_LOCATION_OPTION) return '';
+  return value;
 }
 
 function createId(): string {
@@ -68,7 +85,8 @@ function bookMatchesSmartShelf(book: BookEntry, smartShelf: SmartShelf): boolean
   const matchesReview = !smartShelf.reviewOnly || book.needsReview === true;
   const matchesMin = smartShelf.minPageCount == null || (book.pageCount || 0) >= smartShelf.minPageCount;
   const matchesMax = smartShelf.maxPageCount == null || (book.pageCount || 0) <= smartShelf.maxPageCount;
-  return matchesSearch && matchesStatus && matchesReview && matchesMin && matchesMax;
+  const matchesLocation = matchesPhysicalLocation(book, smartShelf);
+  return matchesSearch && matchesStatus && matchesReview && matchesMin && matchesMax && matchesLocation;
 }
 
 const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string; icon: React.ReactNode }> = [
@@ -97,6 +115,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     markNeedsReview,
     bulkUpdateStatus,
     bulkAssignShelf,
+    bulkAssignLocation,
     bulkRemoveBooks,
     bulkUpdateBooks,
   } = useBookStore();
@@ -105,6 +124,9 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
 
   const [searchTerm, setSearchTerm] = useState('');
   const [shelfFilter, setShelfFilter] = useState<string | null>(null);
+  const [locationRoom, setLocationRoom] = useState<string | null>(null);
+  const [locationCase, setLocationCase] = useState<string | null>(null);
+  const [locationShelf, setLocationShelf] = useState<string | null>(null);
   const [reviewOnly, setReviewOnly] = useState(false);
   const [seriesFilter, setSeriesFilter] = useState<string | null>(initialSeriesFilter ?? null);
   const [lentOnly, setLentOnly] = useState(false);
@@ -114,6 +136,9 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectionMode, setSelectionMode] = useState(false);
   const [bulkShelfId, setBulkShelfId] = useState('');
+  const [bulkLocationRoom, setBulkLocationRoom] = useState('');
+  const [bulkLocationCase, setBulkLocationCase] = useState('');
+  const [bulkLocationShelf, setBulkLocationShelf] = useState('');
   const [activeSavedViewId, setActiveSavedViewId] = useState<string | null>(null);
   const [activeSmartShelfId, setActiveSmartShelfId] = useState<string | null>(null);
   const [showSaveViewForm, setShowSaveViewForm] = useState(false);
@@ -182,6 +207,9 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     setLentOnly(false);
     setMinPages('');
     setMaxPages('');
+    setLocationRoom(null);
+    setLocationCase(null);
+    setLocationShelf(null);
     setStatusFilter('all');
     resetActivePresets();
   }, [resetActivePresets, setStatusFilter]);
@@ -205,25 +233,22 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     const forYou = librarySegment === 'foryou';
     const effectiveSortBy = forYou ? 'dateAdded' : sortBy;
     const effectiveSortAsc = forYou ? false : sortAsc;
-    const loweredSearch = searchTerm.trim().toLowerCase();
     const minPageValue = minPages.trim() ? parseInt(minPages, 10) : null;
     const maxPageValue = maxPages.trim() ? parseInt(maxPages, 10) : null;
 
-    return [...books]
-      .filter((book) => {
-        const matchesSearch = !loweredSearch
-          || book.title.toLowerCase().includes(loweredSearch)
-          || book.author.toLowerCase().includes(loweredSearch)
-          || book.isbn.includes(loweredSearch);
-        const matchesStatus = statusFilter === 'all' || book.status === statusFilter;
-        const matchesShelf = !shelfFilter || (book.shelfIds || []).includes(shelfFilter);
-        const matchesReview = !reviewOnly || book.needsReview === true;
-        const matchesMin = minPageValue == null || (book.pageCount || 0) >= minPageValue;
-        const matchesMax = maxPageValue == null || (book.pageCount || 0) <= maxPageValue;
-        const matchesSeries = !seriesFilter || (book.seriesName?.trim() === seriesFilter);
-        const matchesLoan = !lentOnly || isOnLoan(book);
-        return matchesSearch && matchesStatus && matchesShelf && matchesReview && matchesMin && matchesMax && matchesSeries && matchesLoan;
-      })
+    return filterLibraryBooks(books, {
+      searchTerm,
+      status: statusFilter,
+      shelfId: shelfFilter,
+      reviewOnly,
+      seriesName: seriesFilter,
+      lentOnly,
+      minPages: minPageValue,
+      maxPages: maxPageValue,
+      locationRoom,
+      locationCase,
+      locationShelf,
+    })
       .sort((a, b) => {
         let cmp = 0;
         switch (effectiveSortBy) {
@@ -242,7 +267,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
         }
         return effectiveSortAsc ? cmp : -cmp;
       });
-  }, [books, searchTerm, statusFilter, shelfFilter, reviewOnly, seriesFilter, lentOnly, minPages, maxPages, sortBy, sortAsc, librarySegment]);
+  }, [books, searchTerm, statusFilter, shelfFilter, reviewOnly, seriesFilter, lentOnly, minPages, maxPages, locationRoom, locationCase, locationShelf, sortBy, sortAsc, librarySegment]);
 
   const selectedShelf = shelves.find((shelf) => shelf.id === shelfFilter) ?? null;
   const filterChips = useMemo(() => {
@@ -278,6 +303,27 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     if (lentOnly) {
       chips.push({ id: 'lent', label: 'Lent out', onRemove: () => setLentOnly(false) });
     }
+    if (locationRoom != null) {
+      chips.push({
+        id: 'locationRoom',
+        label: `Room: ${locationRoom || 'No room'}`,
+        onRemove: () => setLocationRoom(null),
+      });
+    }
+    if (locationCase != null) {
+      chips.push({
+        id: 'locationCase',
+        label: `Case: ${locationCase || 'No case'}`,
+        onRemove: () => setLocationCase(null),
+      });
+    }
+    if (locationShelf != null) {
+      chips.push({
+        id: 'locationShelf',
+        label: `Shelf: ${locationShelf || 'No shelf label'}`,
+        onRemove: () => setLocationShelf(null),
+      });
+    }
     if (minPages.trim()) {
       chips.push({
         id: 'minPages',
@@ -293,7 +339,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
       });
     }
     return chips;
-  }, [searchTerm, statusFilter, selectedShelf, reviewOnly, seriesFilter, lentOnly, minPages, maxPages, setStatusFilter]);
+  }, [searchTerm, statusFilter, selectedShelf, reviewOnly, seriesFilter, lentOnly, locationRoom, locationCase, locationShelf, minPages, maxPages, setStatusFilter]);
 
   const listParentRef = useRef<HTMLDivElement>(null);
   const gridParentRef = useRef<HTMLDivElement>(null);
@@ -406,6 +452,9 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     setReviewOnly(view.reviewOnly ?? false);
     setMinPages(view.minPageCount == null ? '' : String(view.minPageCount));
     setMaxPages(view.maxPageCount == null ? '' : String(view.maxPageCount));
+    setLocationRoom(view.locationRoom ?? null);
+    setLocationCase(view.locationCase ?? null);
+    setLocationShelf(view.locationShelf ?? null);
     setActiveSavedViewId(view.id);
     setActiveSmartShelfId(view.smartShelfId ?? null);
   }, [setSortAsc, setSortBy, setStatusFilter]);
@@ -416,6 +465,9 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     setReviewOnly(Boolean(smartShelf.reviewOnly));
     setMinPages(smartShelf.minPageCount == null ? '' : String(smartShelf.minPageCount));
     setMaxPages(smartShelf.maxPageCount == null ? '' : String(smartShelf.maxPageCount));
+    setLocationRoom(smartShelf.locationRoom ?? null);
+    setLocationCase(smartShelf.locationCase ?? null);
+    setLocationShelf(smartShelf.locationShelf ?? null);
     setShelfFilter(null);
     setActiveSmartShelfId(smartShelf.id);
     setActiveSavedViewId(null);
@@ -440,6 +492,9 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
       reviewOnly,
       minPageCount: minPages.trim() ? parseInt(minPages, 10) : null,
       maxPageCount: maxPages.trim() ? parseInt(maxPages, 10) : null,
+      locationRoom,
+      locationCase,
+      locationShelf,
     };
 
     updatePreferences({ savedViews: [...savedViews, nextView] });
@@ -456,6 +511,9 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     savedViews,
     searchTerm,
     shelfFilter,
+    locationRoom,
+    locationCase,
+    locationShelf,
     sortAsc,
     sortBy,
     statusFilter,
@@ -479,6 +537,9 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
       reviewOnly,
       minPageCount: minPages.trim() ? parseInt(minPages, 10) : null,
       maxPageCount: maxPages.trim() ? parseInt(maxPages, 10) : null,
+      locationRoom,
+      locationCase,
+      locationShelf,
     };
 
     updatePreferences({ smartShelves: [...smartShelves, nextShelf] });
@@ -492,6 +553,9 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     minPages,
     newSmartShelfName,
     reviewOnly,
+    locationRoom,
+    locationCase,
+    locationShelf,
     searchTerm,
     smartShelves,
     statusFilter,
@@ -555,6 +619,68 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     toast(`Added selected books to ${shelf?.name ?? 'shelf'}`, 'success');
     setBulkShelfId('');
   }, [bulkAssignShelf, bulkShelfId, selectedIds, shelves, toast]);
+
+  const handleBulkAssignLocation = useCallback(() => {
+    if (selectedIds.length === 0) return;
+    const nextRoom = bulkLocationRoom.trim();
+    const nextCase = bulkLocationCase.trim();
+    const nextShelf = bulkLocationShelf.trim();
+    if (!nextRoom && !nextCase && !nextShelf) {
+      toast('Enter a room, case, or shelf to assign.', 'warning');
+      return;
+    }
+    bulkAssignLocation(selectedIds, {
+      ...(nextRoom ? { locationRoom: nextRoom } : {}),
+      ...(nextCase ? { locationCase: nextCase } : {}),
+      ...(nextShelf ? { locationShelf: nextShelf } : {}),
+    });
+    const where = [nextRoom, nextCase, nextShelf && formatPhysicalLocation({ locationShelf: nextShelf })]
+      .filter(Boolean)
+      .join(' · ');
+    toast(`Set ${where} on ${selectedIds.length} book${selectedIds.length > 1 ? 's' : ''}`, 'success');
+    setBulkLocationRoom('');
+    setBulkLocationCase('');
+    setBulkLocationShelf('');
+  }, [bulkAssignLocation, bulkLocationCase, bulkLocationRoom, bulkLocationShelf, selectedIds, toast]);
+
+  const roomChoices = useMemo(
+    () => locationFilterChoices(books, 'locationRoom'),
+    [books],
+  );
+  const caseChoices = useMemo(
+    () => locationFilterChoices(books, 'locationCase', { locationRoom }),
+    [books, locationRoom],
+  );
+  const shelfChoices = useMemo(
+    () => locationFilterChoices(books, 'locationShelf', { locationRoom, locationCase }),
+    [books, locationRoom, locationCase],
+  );
+  const showLocationFilters = books.some(hasPhysicalLocation)
+    || locationRoom != null
+    || locationCase != null
+    || locationShelf != null;
+
+  const applyLocationFromSelect = useCallback((
+    field: 'room' | 'case' | 'shelf',
+    value: string,
+  ) => {
+    const nextRoom = field === 'room' ? locationFilterFromSelect(value) : locationRoom;
+    let nextCase = field === 'case' ? locationFilterFromSelect(value) : locationCase;
+    let nextShelf = field === 'shelf' ? locationFilterFromSelect(value) : locationShelf;
+    if (field === 'room') {
+      const cases = locationFilterChoices(books, 'locationCase', { locationRoom: nextRoom });
+      if (!choiceStillValid(cases, nextCase)) nextCase = null;
+      const shelvesForCase = locationFilterChoices(books, 'locationShelf', { locationRoom: nextRoom, locationCase: nextCase });
+      if (!choiceStillValid(shelvesForCase, nextShelf)) nextShelf = null;
+    } else if (field === 'case') {
+      const shelvesForCase = locationFilterChoices(books, 'locationShelf', { locationRoom: nextRoom, locationCase: nextCase });
+      if (!choiceStillValid(shelvesForCase, nextShelf)) nextShelf = null;
+    }
+    setLocationRoom(nextRoom);
+    setLocationCase(nextCase);
+    setLocationShelf(nextShelf);
+    resetActivePresets();
+  }, [books, locationCase, locationRoom, locationShelf, resetActivePresets]);
 
   return (
     <section className={s.container}>
@@ -679,7 +805,23 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
         </div>
       )}
 
-      {showShelves && <ShelfManager />}
+      {showShelves && (
+        <>
+          <ShelfManager />
+          <PhysicalShelfMap
+            books={books}
+            locationRoom={locationRoom}
+            locationCase={locationCase}
+            locationShelf={locationShelf}
+            onSelect={(next) => {
+              setLocationRoom(next.locationRoom);
+              setLocationCase(next.locationCase);
+              setLocationShelf(next.locationShelf);
+              resetActivePresets();
+            }}
+          />
+        </>
+      )}
 
       {!emptyLibrary && filterChips.length === 0 && insights.recentlyAdded.length > 0 && (
         <div className={s.recentSection}>
@@ -911,7 +1053,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
                   setSearchTerm(event.target.value);
                   resetActivePresets();
                 }}
-                placeholder="Search title, author, or ISBN"
+                placeholder="Search title, author, ISBN, or location"
               />
             </label>
             <button type="button" className={`glass ${s.clearBtn}`} onClick={clearFilters}>
@@ -986,6 +1128,59 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
                   ))}
                 </select>
               </label>
+            )}
+            {showLocationFilters && (
+              <>
+                <label className={`glass ${s.filterBtn}`} style={{ padding: '0.35rem 0.65rem', gap: '0.35rem' }}>
+                  <MapPin size={14} aria-hidden />
+                  <span className="sr-only">Filter by room</span>
+                  <select
+                    className={s.seriesSelect}
+                    aria-label="Filter by room"
+                    value={locationSelectValue(locationRoom)}
+                    onChange={(event) => applyLocationFromSelect('room', event.target.value)}
+                  >
+                    <option value="">All rooms</option>
+                    {roomChoices.map((choice) => (
+                      <option key={choice.value || UNASSIGNED_LOCATION_OPTION} value={choice.value || UNASSIGNED_LOCATION_OPTION}>
+                        {choice.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={`glass ${s.filterBtn}`} style={{ padding: '0.35rem 0.65rem', gap: '0.35rem' }}>
+                  <span className="sr-only">Filter by case</span>
+                  <select
+                    className={s.seriesSelect}
+                    aria-label="Filter by case"
+                    value={locationSelectValue(locationCase)}
+                    onChange={(event) => applyLocationFromSelect('case', event.target.value)}
+                  >
+                    <option value="">All cases</option>
+                    {caseChoices.map((choice) => (
+                      <option key={choice.value || UNASSIGNED_LOCATION_OPTION} value={choice.value || UNASSIGNED_LOCATION_OPTION}>
+                        {choice.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={`glass ${s.filterBtn}`} style={{ padding: '0.35rem 0.65rem', gap: '0.35rem' }}>
+                  <span className="sr-only">Filter by shelf label</span>
+                  <select
+                    className={s.seriesSelect}
+                    aria-label="Filter by shelf label"
+                    value={locationSelectValue(locationShelf)}
+                    onChange={(event) => applyLocationFromSelect('shelf', event.target.value)}
+                  >
+                    <option value="">All shelf labels</option>
+                    {shelfChoices.map((choice) => (
+                      <option key={choice.value || UNASSIGNED_LOCATION_OPTION} value={choice.value || UNASSIGNED_LOCATION_OPTION}>
+                        {choice.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
             )}
             {shelves.length > 0 && (
               <>
@@ -1124,6 +1319,51 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
             <button type="button" className={`glass ${s.bulkBtn}`} onClick={handleBulkAssignShelf} disabled={!bulkShelfId}>
               Apply shelf
             </button>
+            <input
+              type="text"
+              aria-label="Bulk location room"
+              className={`${s.bulkSelect} glass`}
+              value={bulkLocationRoom}
+              onChange={(event) => setBulkLocationRoom(event.target.value)}
+              placeholder="Room"
+              list="bulk-location-rooms"
+            />
+            <input
+              type="text"
+              aria-label="Bulk location case"
+              className={`${s.bulkSelect} glass`}
+              value={bulkLocationCase}
+              onChange={(event) => setBulkLocationCase(event.target.value)}
+              placeholder="Case"
+              list="bulk-location-cases"
+            />
+            <input
+              type="text"
+              aria-label="Bulk location shelf"
+              className={`${s.bulkSelect} glass`}
+              value={bulkLocationShelf}
+              onChange={(event) => setBulkLocationShelf(event.target.value)}
+              placeholder="Shelf"
+              list="bulk-location-shelves"
+            />
+            <datalist id="bulk-location-rooms">
+              {locationFilterChoices(books, 'locationRoom').map((choice) => (
+                choice.value ? <option key={choice.value} value={choice.value} /> : null
+              ))}
+            </datalist>
+            <datalist id="bulk-location-cases">
+              {locationFilterChoices(books, 'locationCase').map((choice) => (
+                choice.value ? <option key={choice.value} value={choice.value} /> : null
+              ))}
+            </datalist>
+            <datalist id="bulk-location-shelves">
+              {locationFilterChoices(books, 'locationShelf').map((choice) => (
+                choice.value ? <option key={choice.value} value={choice.value} /> : null
+              ))}
+            </datalist>
+            <button type="button" className={`glass ${s.bulkBtn}`} onClick={handleBulkAssignLocation}>
+              Apply location
+            </button>
             <button type="button" className={`glass ${s.bulkBtn} ${s.bulkDanger}`} onClick={() => void handleBulkDelete()}>
               <Trash2 size={14} />
               Delete selected
@@ -1254,6 +1494,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
                     <div className={s.listMeta}>
                       <span>{book.pageCount > 0 ? `${book.pageCount} pages` : 'Page count unknown'}</span>
                       <span>{progress}% read</span>
+                      {formatPhysicalLocation(book) && <span>{formatPhysicalLocation(book)}</span>}
                       {book.needsReview && <span className={s.reviewBadgeInline}>Needs review</span>}
                     </div>
                   </div>

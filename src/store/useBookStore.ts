@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { BookEntry, ProfilePreferences, Shelf } from '../types.ts';
 import { normalizeBookEntry, normalizeBooks, updateBookForStatus, updateBookProgress } from '../utils/bookState.ts';
+import { normalizePhysicalLocation } from '../utils/physicalLocation.ts';
 import { migrateBooks } from '../lib/schemaMigrations.ts';
 import { useProfileStore } from './useProfileStore.ts';
 
@@ -75,6 +76,11 @@ interface BookStore {
   bulkUpdateStatus: (ids: string[], status: BookEntry['status']) => void;
   bulkAssignShelf: (ids: string[], shelfId: string) => void;
   bulkUnassignShelf: (ids: string[], shelfId: string) => void;
+  /** Set physical room / case / shelf on the selected books. Omitted fields stay as they are. */
+  bulkAssignLocation: (
+    ids: string[],
+    location: Partial<Pick<BookEntry, 'locationRoom' | 'locationCase' | 'locationShelf'>>,
+  ) => void;
   bulkRemoveBooks: (ids: string[]) => void;
   setBooks: (books: BookEntry[]) => void;
   addShelf: (shelf: Shelf) => void;
@@ -169,6 +175,22 @@ export const useBookStore = create<BookStore>()(
               : b
           ),
         })),
+      bulkAssignLocation: (ids, location) =>
+        set((state) => {
+          const idSet = new Set(ids);
+          const trimmed = normalizePhysicalLocation(location);
+          return {
+            books: state.books.map((book) => {
+              if (!idSet.has(book.id)) return book;
+              return normalizeBookEntry({
+                ...book,
+                ...(location.locationRoom !== undefined ? { locationRoom: trimmed.locationRoom } : {}),
+                ...(location.locationCase !== undefined ? { locationCase: trimmed.locationCase } : {}),
+                ...(location.locationShelf !== undefined ? { locationShelf: trimmed.locationShelf } : {}),
+              });
+            }),
+          };
+        }),
       bulkRemoveBooks: (ids) => set((state) => ({ books: state.books.filter((b) => !ids.includes(b.id)) })),
       setBooks: (books) => set({ books: normalizeBooks(books) }),
       addShelf: (shelf) => set((state) => ({ shelves: [...state.shelves, shelf] })),
@@ -222,6 +244,9 @@ export const useBookStore = create<BookStore>()(
               seriesName: merged.seriesName?.trim() || other.seriesName?.trim() || undefined,
               seriesIndex: merged.seriesIndex ?? other.seriesIndex,
               amazonLink: merged.amazonLink?.trim() ? merged.amazonLink : other.amazonLink,
+              locationRoom: normalizePhysicalLocation(merged).locationRoom || normalizePhysicalLocation(other).locationRoom,
+              locationCase: normalizePhysicalLocation(merged).locationCase || normalizePhysicalLocation(other).locationCase,
+              locationShelf: normalizePhysicalLocation(merged).locationShelf || normalizePhysicalLocation(other).locationShelf,
             };
           }
           const rest = state.books.filter((b) => b.id !== keepId && !toRemove.has(b.id));

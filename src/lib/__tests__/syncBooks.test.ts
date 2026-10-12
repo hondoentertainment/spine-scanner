@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeBooksLists, mergeShelvesLists, toBookEntry, toBookRow } from '../syncBooks';
+import { isMissingLocationColumnError, mergeBooksLists, mergeShelvesLists, toBookEntry, toBookRow } from '../syncBooks';
 import type { BookEntry, Shelf } from '../../types';
 
 const makeBook = (overrides: Partial<BookEntry> = {}): BookEntry => ({
@@ -147,11 +147,64 @@ describe('toBookEntry / toBookRow', () => {
     expect(restored.pageCount).toBe(book.pageCount);
     expect(restored.status).toBe(book.status);
     expect(restored.shelfIds).toEqual(book.shelfIds);
+    expect(restored.locationRoom).toBe('');
+    expect(restored.locationCase).toBe('');
+    expect(restored.locationShelf).toBe('');
+  });
+
+  it('round-trips a physical location and defaults missing columns to empty strings', () => {
+    const book = makeBook({
+      locationRoom: ' Study ',
+      locationCase: 'Oak',
+      locationShelf: '2',
+    });
+    const row = { ...toBookRow(book, 'user-123'), updated_at: '2026-01-01T00:00:00.000Z' };
+    expect(row.location_room).toBe('Study');
+    expect(row.location_case).toBe('Oak');
+    expect(row.location_shelf).toBe('2');
+
+    const restored = toBookEntry(row);
+    expect(restored.locationRoom).toBe('Study');
+    expect(restored.locationCase).toBe('Oak');
+    expect(restored.locationShelf).toBe('2');
+
+    const legacy = toBookEntry({
+      id: 'legacy',
+      user_id: 'user-123',
+      isbn: '',
+      title: 'Old',
+      author: '',
+      page_count: 0,
+      amazon_link: '',
+      cover_img: '',
+      status: 'to-read',
+      notes: 'keep',
+      date_added: '',
+      shelf_ids: [],
+      updated_at: '',
+    });
+    expect(legacy.title).toBe('Old');
+    expect(legacy.notes).toBe('keep');
+    expect(legacy.locationRoom).toBe('');
+    expect(legacy.locationCase).toBe('');
+    expect(legacy.locationShelf).toBe('');
   });
 
   it('toBookRow includes user_id', () => {
     const row = toBookRow(makeBook(), 'user-456');
     expect(row.user_id).toBe('user-456');
+  });
+
+  it('detects a missing physical-location column without treating other errors as schema drift', () => {
+    expect(isMissingLocationColumnError({
+      code: 'PGRST204',
+      message: "Could not find the 'location_room' column of 'books' in the schema cache",
+    })).toBe(true);
+    expect(isMissingLocationColumnError({
+      code: '42703',
+      message: 'column "location_case" of relation "books" does not exist',
+    })).toBe(true);
+    expect(isMissingLocationColumnError(new Error('upsert boom'))).toBe(false);
   });
 
   it('toBookEntry defaults shelfIds to empty array when null', () => {

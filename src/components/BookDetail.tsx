@@ -13,9 +13,10 @@ import { shareBook } from '../utils/shareBook.ts';
 import { isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
 import { isOnLoan, lendBook, returnBook } from '../utils/loans.ts';
+import { formatPhysicalLocation } from '../utils/physicalLocation.ts';
 import {
   X, ExternalLink, BookOpen, CheckCircle, Clock, XCircle,
-  Pencil, Save, Tag, Trash2, Share2, RefreshCw, AlertTriangle
+  Pencil, Save, Tag, Trash2, Share2, RefreshCw, AlertTriangle, MapPin
 } from 'lucide-react';
 import styles from './BookDetail.module.css';
 
@@ -75,6 +76,9 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
     coverImg: book.coverImg,
     seriesName: book.seriesName ?? '',
     seriesIndex: book.seriesIndex != null ? String(book.seriesIndex) : '',
+    locationRoom: book.locationRoom ?? '',
+    locationCase: book.locationCase ?? '',
+    locationShelf: book.locationShelf ?? '',
   });
 
   const bookShelfIds = book.shelfIds || [];
@@ -151,6 +155,9 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
       coverImg: book.coverImg,
       seriesName: book.seriesName ?? '',
       seriesIndex: book.seriesIndex != null ? String(book.seriesIndex) : '',
+      locationRoom: book.locationRoom ?? '',
+      locationCase: book.locationCase ?? '',
+      locationShelf: book.locationShelf ?? '',
     });
     setEditing(true);
   };
@@ -179,6 +186,9 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
       amazonLink: generateAmazonLink(draft.isbn.trim() || book.isbn),
       seriesName: draft.seriesName.trim() || undefined,
       seriesIndex: parsedIdx !== undefined && Number.isFinite(parsedIdx) ? parsedIdx : undefined,
+      locationRoom: draft.locationRoom.trim(),
+      locationCase: draft.locationCase.trim(),
+      locationShelf: draft.locationShelf.trim(),
       userEditedFields: edited,
     });
     setEditing(false);
@@ -322,6 +332,41 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                     />
                   </div>
                 </div>
+                <div className={styles.row}>
+                  <div style={{ flex: 1 }}>
+                    <label className={styles.label} htmlFor={`location-room-${book.id}`}>Room</label>
+                    <input
+                      id={`location-room-${book.id}`}
+                      className={styles.input}
+                      aria-label="Location room"
+                      value={draft.locationRoom}
+                      onChange={(e) => setDraft({ ...draft, locationRoom: e.target.value })}
+                      placeholder="Study"
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label className={styles.label} htmlFor={`location-case-${book.id}`}>Case</label>
+                    <input
+                      id={`location-case-${book.id}`}
+                      className={styles.input}
+                      aria-label="Location case"
+                      value={draft.locationCase}
+                      onChange={(e) => setDraft({ ...draft, locationCase: e.target.value })}
+                      placeholder="Oak"
+                    />
+                  </div>
+                  <div style={{ width: '90px' }}>
+                    <label className={styles.label} htmlFor={`location-shelf-${book.id}`}>Shelf</label>
+                    <input
+                      id={`location-shelf-${book.id}`}
+                      className={styles.input}
+                      aria-label="Location shelf"
+                      value={draft.locationShelf}
+                      onChange={(e) => setDraft({ ...draft, locationShelf: e.target.value })}
+                      placeholder="2"
+                    />
+                  </div>
+                </div>
                 <label className={styles.label}>Cover URL</label>
                 <input
                   className={styles.input}
@@ -374,6 +419,12 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                     {book.seriesName}
                     {book.seriesName && book.seriesIndex != null ? ' · ' : ''}
                     {book.seriesIndex != null ? `Book ${book.seriesIndex}` : ''}
+                  </p>
+                )}
+                {formatPhysicalLocation(book) && (
+                  <p className={styles.locationLine}>
+                    <MapPin size={13} aria-hidden />
+                    <span>{formatPhysicalLocation(book)}</span>
                   </p>
                 )}
                 <div className={styles.details}>

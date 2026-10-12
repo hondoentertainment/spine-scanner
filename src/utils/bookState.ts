@@ -1,4 +1,5 @@
 import type { BookEntry } from '../types.ts';
+import { normalizePhysicalLocation } from './physicalLocation.ts';
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
@@ -52,6 +53,7 @@ export function normalizeBookEntry(book: BookEntry): BookEntry {
     startedAt,
     finishedAt,
     lastProgressAt: book.lastProgressAt ?? null,
+    ...normalizePhysicalLocation(book),
   };
 }
 

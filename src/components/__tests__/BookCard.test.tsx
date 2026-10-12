@@ -74,6 +74,23 @@ describe('BookCard', () => {
     expect(updated.author).toBe('G. Orwell');
   });
 
+  it('saves a physical location from the edit form', () => {
+    const book = makeBook();
+    useBookStore.setState({ books: [book] });
+    renderWithToast(<BookCard book={book} />);
+
+    fireEvent.click(screen.getByLabelText('Edit 1984'));
+    fireEvent.change(screen.getByLabelText('Location room'), { target: { value: 'Study' } });
+    fireEvent.change(screen.getByLabelText('Location case'), { target: { value: 'Oak' } });
+    fireEvent.change(screen.getByLabelText('Location shelf'), { target: { value: '2' } });
+    fireEvent.click(screen.getByLabelText('Save changes'));
+
+    const updated = useBookStore.getState().books[0];
+    expect(updated.locationRoom).toBe('Study');
+    expect(updated.locationCase).toBe('Oak');
+    expect(updated.locationShelf).toBe('2');
+  });
+
   it('cancels editing without saving', () => {
     const book = makeBook();
     useBookStore.setState({ books: [book] });

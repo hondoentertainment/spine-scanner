@@ -3,11 +3,12 @@ import { useBookStore } from '../store/useBookStore.ts';
 import { useReadingSessionStore } from '../store/useReadingSessionStore.ts';
 import { useToast } from './Toast.tsx';
 import type { BookEntry } from '../types.ts';
-import { Trash2, ExternalLink, BookOpen, CheckCircle, Clock, XCircle, Pencil, X, Save, Tag, Share2, Square, Play } from 'lucide-react';
+import { Trash2, ExternalLink, BookOpen, CheckCircle, Clock, XCircle, Pencil, X, Save, Tag, Share2, Square, Play, MapPin } from 'lucide-react';
 import { generateAmazonLink } from '../utils/amazonLink.ts';
 import { shareBook } from '../utils/shareBook.ts';
 import { getBookCoverSrc } from '../utils/bookPresentation.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
+import { formatPhysicalLocation } from '../utils/physicalLocation.ts';
 import s from './BookCard.module.css';
 
 export interface BookCardProps {
@@ -31,6 +32,9 @@ function bookVisualEqual(a: BookEntry, b: BookEntry): boolean {
         && a.isbn === b.isbn
         && a.needsReview === b.needsReview
         && (a.shelfIds?.join(',') ?? '') === (b.shelfIds?.join(',') ?? '')
+        && (a.locationRoom ?? '') === (b.locationRoom ?? '')
+        && (a.locationCase ?? '') === (b.locationCase ?? '')
+        && (a.locationShelf ?? '') === (b.locationShelf ?? '')
     );
 }
 
@@ -94,6 +98,9 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
         isbn: book.isbn,
         pageCount: book.pageCount,
         coverImg: book.coverImg,
+        locationRoom: book.locationRoom ?? '',
+        locationCase: book.locationCase ?? '',
+        locationShelf: book.locationShelf ?? '',
     });
 
     const bookShelfIds = book.shelfIds || [];
@@ -122,6 +129,9 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
             isbn: book.isbn,
             pageCount: book.pageCount,
             coverImg: book.coverImg,
+            locationRoom: book.locationRoom ?? '',
+            locationCase: book.locationCase ?? '',
+            locationShelf: book.locationShelf ?? '',
         });
         setEditing(true);
     };
@@ -134,6 +144,9 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
             pageCount: draft.pageCount || 0,
             coverImg: draft.coverImg.trim(),
             amazonLink: generateAmazonLink(draft.isbn.trim() || book.isbn),
+            locationRoom: draft.locationRoom.trim(),
+            locationCase: draft.locationCase.trim(),
+            locationShelf: draft.locationShelf.trim(),
         });
         setEditing(false);
         toast('Book updated', 'success');
@@ -203,6 +216,23 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                         <input className={s.input} type="url" value={draft.coverImg}
                             onChange={(e) => setDraft({ ...draft, coverImg: e.target.value })} placeholder="https://..." />
                     </div>
+                    <div className={s.isbnRow}>
+                        <div style={{ flex: 1 }}>
+                            <div className={s.fieldLabel}>Room</div>
+                            <input className={s.input} type="text" aria-label="Location room" value={draft.locationRoom}
+                                onChange={(e) => setDraft({ ...draft, locationRoom: e.target.value })} placeholder="Study" />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <div className={s.fieldLabel}>Case</div>
+                            <input className={s.input} type="text" aria-label="Location case" value={draft.locationCase}
+                                onChange={(e) => setDraft({ ...draft, locationCase: e.target.value })} placeholder="Oak" />
+                        </div>
+                        <div style={{ width: '90px' }}>
+                            <div className={s.fieldLabel}>Shelf</div>
+                            <input className={s.input} type="text" aria-label="Location shelf" value={draft.locationShelf}
+                                onChange={(e) => setDraft({ ...draft, locationShelf: e.target.value })} placeholder="2" />
+                        </div>
+                    </div>
                     {draft.coverImg && (
                         <div className={s.coverPreview}>
                             <img src={draft.coverImg} alt="Cover preview" className={s.coverPreviewImg}
@@ -239,6 +269,12 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                 <div className={s.info}>
                     <h3 className={s.bookTitle}>{book.title}</h3>
                     <p className={s.bookAuthor}>{book.author}</p>
+                    {formatPhysicalLocation(book) && (
+                        <p className={s.locationLine}>
+                            <MapPin size={12} aria-hidden />
+                            <span>{formatPhysicalLocation(book)}</span>
+                        </p>
+                    )}
                     <div className={s.links}>
                         {generateAmazonLink(book.isbn) && (
                             <a href={generateAmazonLink(book.isbn)} target="_blank" rel="noopener noreferrer"

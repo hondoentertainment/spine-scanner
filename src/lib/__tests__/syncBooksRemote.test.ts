@@ -175,6 +175,7 @@ describe('pushBooks', () => {
     expect(tables.books.upsert).toHaveBeenCalledTimes(1);
     const [rows] = tables.books.upsert.mock.calls[0] as [Array<Record<string, unknown>>];
     expect(rows[0].id).toBe('b1');
+    expect(rows[0].location_room).toBe('');
     expect(rows[0].updated_at).toBeTruthy();
     expect(tables.books.deleteIn).toHaveBeenCalledWith('id', ['stale']);
   });
@@ -196,6 +197,36 @@ describe('pushBooks', () => {
     expect(ok).toBe(true);
     expect(tables.books.upsert).not.toHaveBeenCalled();
     expect(tables.books.deleteIn).toHaveBeenCalledWith('id', ['stale']);
+  });
+
+  it('retries the upsert without location columns when the schema has not been migrated', async () => {
+    tables.books.upsert
+      .mockResolvedValueOnce({
+        error: {
+          code: 'PGRST204',
+          message: "Could not find the 'location_shelf' column of 'books' in the schema cache",
+        },
+      })
+      .mockResolvedValueOnce({ error: null });
+    tables.books.select.mockResolvedValueOnce({ data: [{ id: 'b1' }], error: null });
+
+    const ok = await pushBooks('user-1', [makeBook({
+      id: 'b1',
+      locationRoom: 'Study',
+      locationCase: 'Oak',
+      locationShelf: '2',
+    })]);
+
+    expect(ok).toBe(true);
+    expect(tables.books.upsert).toHaveBeenCalledTimes(2);
+    const first = (tables.books.upsert.mock.calls[0] as [Array<Record<string, unknown>>])[0][0];
+    const second = (tables.books.upsert.mock.calls[1] as [Array<Record<string, unknown>>])[0][0];
+    expect(first.location_room).toBe('Study');
+    expect(second.location_room).toBeUndefined();
+    expect(second.location_case).toBeUndefined();
+    expect(second.location_shelf).toBeUndefined();
+    expect(second.title).toBe('Test Book');
+    expect(captureException).not.toHaveBeenCalled();
   });
 
   it('returns false when the upsert fails', async () => {

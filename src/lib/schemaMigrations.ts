@@ -1,6 +1,7 @@
 import type { BookEntry } from '../types.ts';
+import { normalizePhysicalLocation } from '../utils/physicalLocation.ts';
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 type Migration = (book: BookEntry) => BookEntry;
 
@@ -8,6 +9,12 @@ type Migration = (book: BookEntry) => BookEntry;
 const MIGRATIONS: Record<number, Migration> = {
   // Loan tracking lives on the book. Older rows simply have no loan.
   1: (book) => ({ ...book, schemaVersion: 2 }),
+  // Physical shelf map. Missing fields become empty strings; existing values stay.
+  2: (book) => ({
+    ...book,
+    ...normalizePhysicalLocation(book),
+    schemaVersion: 3,
+  }),
 };
 
 /**
@@ -20,8 +27,9 @@ export function migrateBook(book: BookEntry): BookEntry {
   while (current < CURRENT_SCHEMA_VERSION) {
     const migration = MIGRATIONS[current];
     if (!migration) {
-      // Unknown version — stamp current to avoid infinite loop, log a breadcrumb
-      result = { ...result, schemaVersion: CURRENT_SCHEMA_VERSION };
+      // Unknown version — stamp current to avoid infinite loop, log a breadcrumb.
+      // Still fill location fields so a jump from v0 does not drop the new shape.
+      result = { ...result, ...normalizePhysicalLocation(result), schemaVersion: CURRENT_SCHEMA_VERSION };
       break;
     }
     result = migration(result);
@@ -29,7 +37,7 @@ export function migrateBook(book: BookEntry): BookEntry {
   }
   // Always stamp the current version on the result
   if ((result.schemaVersion ?? 0) < CURRENT_SCHEMA_VERSION) {
-    result = { ...result, schemaVersion: CURRENT_SCHEMA_VERSION };
+    result = { ...result, ...normalizePhysicalLocation(result), schemaVersion: CURRENT_SCHEMA_VERSION };
   }
   return result;
 }

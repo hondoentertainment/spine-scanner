@@ -1,4 +1,5 @@
 import type { BookEntry } from '../types.ts';
+import { normalizePhysicalLocation } from '../utils/physicalLocation.ts';
 
 export interface BookConflictSnapshot {
   bookId: string;
@@ -12,13 +13,19 @@ function loanKey(book: BookEntry): string {
   return `${name}|${due}`;
 }
 
-/** True when the copies a person would notice (title, author, notes, loan) differ. */
+function locationKey(book: BookEntry): string {
+  const location = normalizePhysicalLocation(book);
+  return `${location.locationRoom}|${location.locationCase}|${location.locationShelf}`;
+}
+
+/** True when the copies a person would notice (title, author, notes, loan, physical location) differ. */
 export function booksConflict(local: BookEntry, remote: BookEntry): boolean {
   return (
     local.title !== remote.title
     || local.author !== remote.author
     || local.notes !== remote.notes
     || loanKey(local) !== loanKey(remote)
+    || locationKey(local) !== locationKey(remote)
   );
 }
 

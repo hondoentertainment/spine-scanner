@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Physical shelf map
+
+- **Room, case, and shelf.** Each book can store where the copy lives (`locationRoom`, `locationCase`, `locationShelf`). Empty strings mean unassigned, and older libraries keep their books when the fields are added. Edit the location on a book card or in book details, or apply it to a multi-select. Library filters and the shelf map browse by those fields alongside status and virtual shelves.
+- **Cloud sync.** `supabase/migrations/007_books_physical_location.sql` adds `location_room`, `location_case`, and `location_shelf`. If those columns are not in the database yet, sync uploads the rest of the book and keeps the location locally.
+
 ### Shelf photo scan
 
 - **Multi-book shelf photos.** Scan → Shelf accepts a camera photo or upload, finds multiple spines on device, and proposes title, author, and ISBN candidates from ZXing, Tesseract, and the existing Google Books / Open Library lookup. A review list is required before import: accept, reject, or edit each book. Accepted books join the local library; the single-spine barcode and OCR paths are unchanged.
