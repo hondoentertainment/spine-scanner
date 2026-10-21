@@ -12,12 +12,19 @@ export interface LocationChoice {
   label: string;
 }
 
+export interface ShelfBookRef {
+  id: string;
+  title: string;
+  author: string;
+}
+
 export interface PhysicalShelfNode {
   locationRoom: string;
   locationCase: string;
   locationShelf: string;
   label: string;
   count: number;
+  books: ShelfBookRef[];
 }
 
 export interface PhysicalCaseNode {
@@ -146,18 +153,23 @@ export function buildPhysicalShelfMap(books: BookEntry[]): PhysicalRoomNode[] {
 
     const caseNodes: PhysicalCaseNode[] = [];
     for (const [bookcase, caseBooks] of cases) {
-      const shelves = new Map<string, number>();
+      const shelves = new Map<string, BookEntry[]>();
       for (const book of caseBooks) {
         const shelf = cleanLocation(book.locationShelf);
-        shelves.set(shelf, (shelves.get(shelf) ?? 0) + 1);
+        const list = shelves.get(shelf) ?? [];
+        list.push(book);
+        shelves.set(shelf, list);
       }
       const shelfNodes = [...shelves.entries()]
-        .map(([locationShelf, count]) => ({
+        .map(([locationShelf, shelfBooks]) => ({
           locationRoom: room,
           locationCase: bookcase,
           locationShelf,
           label: locationShelf ? shelfPlaceLabel(locationShelf) : 'No shelf label',
-          count,
+          count: shelfBooks.length,
+          books: shelfBooks
+            .map((book) => ({ id: book.id, title: book.title, author: book.author }))
+            .sort((a, b) => a.title.localeCompare(b.title)),
         }))
         .sort((a, b) => comparePlace(a.locationShelf, b.locationShelf));
       caseNodes.push({

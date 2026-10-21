@@ -51,7 +51,7 @@ const viewOptions: { value: ProfilePreferences['libraryViewMode']; label: string
 
 const statusOptions: { value: ProfilePreferences['libraryStatusFilter']; label: string }[] = [
   { value: 'all', label: 'All' },
-  { value: 'to-read', label: 'To Read' },
+  { value: 'to-read', label: 'Want to read' },
   { value: 'reading', label: 'Reading' },
   { value: 'read', label: 'Read' },
   { value: 'dnf', label: 'DNF' },
@@ -60,7 +60,7 @@ const statusOptions: { value: ProfilePreferences['libraryStatusFilter']; label: 
 const statusSummary = [
   { key: 'read', label: 'Read', accent: '#22c55e' },
   { key: 'reading', label: 'Reading', accent: '#a855f7' },
-  { key: 'to-read', label: 'Watchlist', accent: '#38bdf8' },
+  { key: 'to-read', label: 'Want to read', accent: '#38bdf8' },
   { key: 'dnf', label: 'DNF', accent: '#ef4444' },
 ] as const;
 
@@ -154,6 +154,19 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           ? 'Essentials only: theme, data, and export. Use the full build for the home feed and advanced preferences.'
           : 'Your preferences are saved locally and synced when you sign in.'}
       </p>
+      <nav className={s.sectionNav} aria-label="On this page">
+        {!isMvpMode() && <a href="#reading-activity">Reading activity</a>}
+        {user !== null && <a href="#sync-status">Sync</a>}
+        <a href="#library-data">Library data</a>
+        <a href="#danger-zone">Danger zone</a>
+        <a href="#support">Support</a>
+        <a href="#privacy">Privacy</a>
+        {!isMvpMode() && <a href="#reading-goals">Goals</a>}
+        <a href="#theme">Theme</a>
+        {!isMvpMode() && <a href="#library-defaults">Defaults</a>}
+        {!isMvpMode() && <a href="#scanner-settings">Scanner</a>}
+        {!isMvpMode() && <a href="#library-shortcuts">Shortcuts</a>}
+      </nav>
 
       {!isMvpMode() && (
       <>
@@ -181,16 +194,25 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
               </span>
               <span className={s.profileBadge}>
                 <Bookmark size={14} />
-                Since {joinedLabel}
+                {user?.created_at ? `Since ${joinedLabel}` : 'On this device'}
               </span>
             </div>
+            {!user && (
+              <button
+                type="button"
+                className={s.optBtn}
+                onClick={() => document.getElementById('account-sign-in')?.click()}
+              >
+                Sign in
+              </button>
+            )}
           </div>
         </div>
         <div className={s.profileSpotlight}>
           <div className={s.spotlightLabel}>Library summary</div>
           <div className={s.spotlightValue}>{summary.completionRate}% finished</div>
           <div className={s.spotlightText}>
-            {summary.read.toLocaleString()} read, {summary.toRead.toLocaleString()} queued, {summary.readPages.toLocaleString()} pages completed.
+            {summary.read.toLocaleString()} read, {summary.toRead.toLocaleString()} want to read, {summary.readPages.toLocaleString()} pages completed.
           </div>
         </div>
       </div>
@@ -221,7 +243,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       <div className={s.letterboxdPanel}>
         <div className={s.panelHeader}>
           <div>
-            <h3 className={s.panelTitle}>Reading activity</h3>
+            <h3 id="reading-activity" className={s.panelTitle}>Reading activity</h3>
             <p className={s.panelSubtitle}>A quick snapshot of how your library is moving.</p>
           </div>
           <div className={s.panelIcon}>
@@ -359,7 +381,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
 
       {user !== null && (
         <div className={s.syncSection}>
-          <h3 className={s.sectionTitle}>Sync status</h3>
+          <h3 id="sync-status" className={s.sectionTitle}>Sync status</h3>
           <div className={s.syncRow}>
             <span>Last synced:</span>
             <span>
@@ -523,10 +545,10 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
         </div>
       )}
 
-      <div className={s.section}>
-        <h3 className={s.sectionTitle}>Data on this device</h3>
+      <div className={`${s.section} ${s.dangerZone}`} id="danger-zone">
+        <h3 className={s.sectionTitle}>Danger zone</h3>
         <p className={s.sectionHint}>
-          Clears books, shelves, preferences, sync queue state, and local analytics in this browser. Download a JSON backup first if you want to keep a copy.
+          Clear all local data removes books, shelves, preferences, and sync state from this browser only. It does not delete a cloud account. Download a JSON backup first if you want to keep a copy.
         </p>
         <button
           type="button"
@@ -546,6 +568,42 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
         >
           <Eraser size={16} aria-hidden />
           Clear all local data
+        </button>
+        <p className={s.sectionHint}>
+          Delete all my data does the same on this device. When you are signed in, it also deletes your cloud library and signs you out.
+        </p>
+        <button
+          type="button"
+          className={s.dangerOutlineBtn}
+          onClick={async () => {
+            const ok = await confirm({
+              title: 'Delete all your data?',
+              message:
+                "This permanently deletes your entire library, shelves, preferences, and analytics from this device. If you're signed in, your cloud data will also be deleted. This cannot be undone.",
+              confirmLabel: 'Delete all my data',
+              danger: true,
+            });
+            if (!ok) return;
+
+            const signedIn = user !== null;
+            if (signedIn && user) {
+              const { deleteAllCloudData } = await import('../lib/syncBooks.ts');
+              await deleteAllCloudData(user.id);
+            }
+
+            const { clearLocalAppData } = await import('../utils/clearLocalAppData.ts');
+            clearLocalAppData();
+
+            if (signedIn) {
+              await useAuthStore.getState().signOut();
+            }
+
+            toast('All data deleted', 'success');
+            setTimeout(() => window.location.reload(), 1500);
+          }}
+        >
+          <Trash2 size={16} aria-hidden />
+          Delete all my data
         </button>
       </div>
 
@@ -568,7 +626,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       </div>
 
       <div className={s.section}>
-        <h3 className={s.sectionTitle}>Library data & sharing</h3>
+        <h3 id="library-data" className={s.sectionTitle}>Library data & sharing</h3>
         <p className={s.sectionHint}>Import, export, backups, and a link that opens your library in the browser.</p>
         <div className={s.optionRow}>
           <button
@@ -618,7 +676,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       </div>
 
       <div className={s.section}>
-        <h3 className={s.sectionTitle}>Support</h3>
+        <h3 id="support" className={s.sectionTitle}>Support</h3>
         <p className={s.sectionHint}>
           Download a diagnostics bundle to help report issues. The file includes your book count, preferences, recent analytics events, and app storage — passwords, tokens, and keys are excluded.
         </p>
@@ -636,7 +694,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       </div>
 
       <div className={s.section}>
-        <h3 className={s.sectionTitle}>
+        <h3 id="privacy" className={s.sectionTitle}>
           <ShieldCheck size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} aria-hidden />
           Privacy
         </h3>
@@ -655,47 +713,11 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           </div>
           {preferences.analyticsOptIn && <CheckCircle size={18} className={s.check} />}
         </button>
-        <p className={s.sectionHint}>
-          Permanently delete your entire library, shelves, preferences, and analytics. If you are signed in, your cloud data is removed too.
-        </p>
-        <button
-          type="button"
-          className={s.dangerOutlineBtn}
-          onClick={async () => {
-            const ok = await confirm({
-              title: 'Delete all your data?',
-              message:
-                "This permanently deletes your entire library, shelves, preferences, and analytics from this device. If you're signed in, your cloud data will also be deleted. This cannot be undone.",
-              confirmLabel: 'Delete all my data',
-              danger: true,
-            });
-            if (!ok) return;
-
-            const signedIn = user !== null;
-            if (signedIn && user) {
-              const { deleteAllCloudData } = await import('../lib/syncBooks.ts');
-              await deleteAllCloudData(user.id);
-            }
-
-            const { clearLocalAppData } = await import('../utils/clearLocalAppData.ts');
-            clearLocalAppData();
-
-            if (signedIn) {
-              await useAuthStore.getState().signOut();
-            }
-
-            toast('All data deleted', 'success');
-            setTimeout(() => window.location.reload(), 1500);
-          }}
-        >
-          <Trash2 size={16} aria-hidden />
-          Delete all my data
-        </button>
       </div>
 
       {!isMvpMode() && (
       <div className={s.section}>
-        <h3 className={s.sectionTitle}>
+        <h3 id="reading-goals" className={s.sectionTitle}>
           <Target size={18} style={{ verticalAlign: 'middle', marginRight: 6 }} aria-hidden />
           Reading goals ({new Date().getFullYear()})
         </h3>
@@ -736,7 +758,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       )}
 
       <div className={s.section}>
-        <h3 className={s.sectionTitle}>Theme</h3>
+        <h3 id="theme" className={s.sectionTitle}>Theme</h3>
         <div className={s.optionRow}>
           {themeOptions.map((opt) => (
             <button
@@ -756,7 +778,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       {!isMvpMode() && (
       <>
       <div className={s.section}>
-        <h3 className={s.sectionTitle}>Library defaults</h3>
+        <h3 id="library-defaults" className={s.sectionTitle}>Library defaults</h3>
         <div className={s.field}>
           <label className={s.label}>Sort by</label>
           <div className={s.optionRow}>
@@ -781,7 +803,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
             className={`${s.optBtn} ${s.optBtnSmall}`}
           >
             <ArrowUpDown size={14} />
-            {preferences.librarySortAsc ? 'A -> Z' : 'Z -> A'}
+            {preferences.librarySortAsc ? 'A to Z' : 'Z to A'}
           </button>
         </div>
         <div className={s.field}>
@@ -820,7 +842,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       </div>
 
       <div className={s.section}>
-        <h3 className={s.sectionTitle}>Scanner</h3>
+        <h3 id="scanner-settings" className={s.sectionTitle}>Scanner</h3>
         <button
           type="button"
           onClick={() => updatePreferences({ batchModeDefault: !preferences.batchModeDefault })}
@@ -848,7 +870,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       </div>
 
       <div className={s.section}>
-        <h3 className={s.sectionTitle}>Library shortcuts</h3>
+        <h3 id="library-shortcuts" className={s.sectionTitle}>Library shortcuts</h3>
         <button
           type="button"
           onClick={() => updatePreferences({ showStatsDefault: !preferences.showStatsDefault })}

@@ -117,11 +117,11 @@ describe('LibraryList', () => {
     expect(screen.getByText('Overdue')).toBeInTheDocument();
   });
 
-  it('shows the new browsing-focused hero copy', () => {
+  it('shows a compact library summary and explains needs review', () => {
     renderLibraryList(<LibraryList />);
 
-    expect(screen.getByText('Your library, built for browsing not digging.')).toBeInTheDocument();
-    expect(screen.getByText('Build a library that feels easy to use')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Library' })).toBeInTheDocument();
+    expect(screen.getByText('Needs review means a title, author, or ISBN still needs a quick check.')).toBeInTheDocument();
   });
 
   it('calls onStartScanning from the empty state', () => {
@@ -210,6 +210,7 @@ describe('LibraryList', () => {
 
     renderLibraryList(<LibraryList />);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
     fireEvent.change(screen.getByLabelText('Filter by room'), { target: { value: 'Study' } });
     expect(screen.getByText('Room: Study')).toBeInTheDocument();
     expect(screen.getAllByText('Dune').length).toBeGreaterThan(0);
@@ -228,17 +229,30 @@ describe('LibraryList', () => {
 
     renderLibraryList(<LibraryList />);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
     expect(screen.getByText('All Shelves')).toBeInTheDocument();
     expect(screen.getAllByText(/Fiction/).length).toBeGreaterThanOrEqual(1);
   });
 
-  it('toggles reading statistics from the hero action', () => {
-    useBookStore.setState({ books: [makeBook({ status: 'read', pageCount: 300 })] });
+  it('shows one compact stats strip and switches library sections', () => {
+    useBookStore.setState({
+      books: [
+        makeBook({ status: 'read', pageCount: 300, title: 'Finished book', locationRoom: 'Study', locationCase: 'Oak', locationShelf: '2' }),
+      ],
+    });
     renderLibraryList(<LibraryList />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Show stats/i }));
-    expect(screen.getByText('Total Books')).toBeInTheDocument();
-    expect(screen.getByText('Pages Read')).toBeInTheDocument();
+    expect(screen.getByText('Books')).toBeInTheDocument();
+    expect(screen.getByText('Finished')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Search library')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Shelves' }));
+    expect(screen.getByText('Physical shelf map')).toBeInTheDocument();
+    expect(screen.getByText('Finished book')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Search library')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'All books' }));
+    expect(screen.getByLabelText('Search library')).toBeInTheDocument();
   });
 
   it('opens book detail when initialOpenIsbn matches a book', () => {
@@ -252,6 +266,33 @@ describe('LibraryList', () => {
 
     expect(screen.getByText(/ISBN: 9780141036144/)).toBeInTheDocument();
     expect(onOpenComplete).toHaveBeenCalled();
+  });
+
+  it('treats wishlist as want-to-read and links suggestions', () => {
+    useBookStore.setState({
+      books: [
+        makeBook({ id: 'a', title: 'Owned read', status: 'read' }),
+        makeBook({ id: 'b', title: 'Wanted', status: 'to-read', isbn: '9780544003415' }),
+      ],
+    });
+    render(
+      <MemoryRouter initialEntries={['/library']}>
+        <ToastProvider>
+          <Routes>
+            <Route path="/library" element={<LibraryList />} />
+            <Route path="/recommendations" element={<div>Suggestions page</div>} />
+          </Routes>
+        </ToastProvider>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Wishlist' }));
+    expect(screen.getByText('Status: to read')).toBeInTheDocument();
+    expect(screen.getByText('Wanted')).toBeInTheDocument();
+    expect(screen.queryByText('Owned read')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Suggestions' }));
+    expect(screen.getByText('Suggestions page')).toBeInTheDocument();
   });
 
   it('navigates to data management when import & export is clicked', () => {

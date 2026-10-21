@@ -198,7 +198,7 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSyncedAt,
             <Settings size={16} />
           </button>
         )}
-        <button onClick={() => setShowPanel(true)} className={`glass ${s.signInBtn}`}>
+        <button id="account-sign-in" onClick={() => setShowPanel(true)} className={`glass ${s.signInBtn}`}>
           <CloudOff size={14} /> Sign in to sync
         </button>
       </div>

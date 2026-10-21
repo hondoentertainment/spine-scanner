@@ -245,23 +245,27 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                         <input className={s.input} type="url" value={draft.coverImg}
                             onChange={(e) => setDraft({ ...draft, coverImg: e.target.value })} placeholder="https://..." />
                     </div>
-                    <div className={s.isbnRow}>
-                        <div style={{ flex: 1 }}>
-                            <div className={s.fieldLabel}>Room</div>
+                    <fieldset className={s.locationFields}>
+                        <legend className={s.fieldLabel}>Shelf location</legend>
+                        <label className={s.locationField}>
+                            <span className={s.fieldLabel}>Room</span>
                             <input className={s.input} type="text" aria-label="Location room" value={draft.locationRoom}
                                 onChange={(e) => setDraft({ ...draft, locationRoom: e.target.value })} placeholder="Study" />
-                        </div>
-                        <div style={{ flex: 1 }}>
-                            <div className={s.fieldLabel}>Case</div>
+                        </label>
+                        <label className={s.locationField}>
+                            <span className={s.fieldLabel}>Case</span>
                             <input className={s.input} type="text" aria-label="Location case" value={draft.locationCase}
                                 onChange={(e) => setDraft({ ...draft, locationCase: e.target.value })} placeholder="Oak" />
-                        </div>
-                        <div style={{ width: '90px' }}>
-                            <div className={s.fieldLabel}>Shelf</div>
+                        </label>
+                        <label className={s.locationField}>
+                            <span className={s.fieldLabel}>Shelf</span>
                             <input className={s.input} type="text" aria-label="Location shelf" value={draft.locationShelf}
                                 onChange={(e) => setDraft({ ...draft, locationShelf: e.target.value })} placeholder="2" />
-                        </div>
-                    </div>
+                        </label>
+                        <button type="button" onClick={handleSave} className={s.saveLocationBtn}>
+                            <Save size={14} /> Save location
+                        </button>
+                    </fieldset>
                     {draft.coverImg && (
                         <div className={s.coverPreview}>
                             <img src={draft.coverImg} alt="Cover preview" className={s.coverPreviewImg}

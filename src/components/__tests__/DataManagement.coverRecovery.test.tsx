@@ -261,7 +261,7 @@ describe('DataManagement — import, export, merge, and danger zone', () => {
     await waitFor(() => {
       expect(screen.getAllByText(/Added 1 book from StoryGraph/).length).toBeGreaterThan(0);
     });
-    fireEvent.click(screen.getByRole('button', { name: /Import from StoryGraph/ }));
+    expect(screen.getAllByText('Drop file here or click to browse').length).toBeGreaterThan(1);
   });
 
   it('does nothing when Goodreads or StoryGraph inputs are empty', () => {

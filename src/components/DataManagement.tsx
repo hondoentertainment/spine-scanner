@@ -352,12 +352,15 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                 <button onClick={handleExport} className={`glass ${s.exportBtn}`}>
                     Export ({exportFormat.toUpperCase()})
                 </button>
-                <button onClick={handleICSExport} className={`glass ${s.exportBtn}`} style={{ marginTop: '0.5rem' }}>
-                    Export reading calendar (.ics)
-                </button>
-                <button onClick={handleNotionExport} className={`glass ${s.exportBtn}`} style={{ marginTop: '0.5rem' }}>
-                    Export to Notion (CSV)
-                </button>
+                <div className={s.otherExports}>
+                    <h4 className={s.otherExportsTitle}>Other exports</h4>
+                    <button onClick={handleICSExport} className={`glass ${s.exportBtn}`}>
+                        Export reading calendar (.ics)
+                    </button>
+                    <button onClick={handleNotionExport} className={`glass ${s.exportBtn}`}>
+                        Export to Notion (CSV)
+                    </button>
+                </div>
             </section>
 
             {duplicateGroups.length > 0 && (
@@ -490,7 +493,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                     <input type="file" accept=".csv" onChange={handleGoodreadsImport}
                         aria-label="Import Goodreads CSV export" className={s.fileInput} />
                     <div className={`glass ${s.fileDrop}`}>
-                        Import Goodreads CSV
+                        Drop file here or click to browse
                     </div>
                 </div>
                 {goodreadsMsg && (
@@ -506,21 +509,19 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                 <p className={s.sectionDesc}>
                     Import your StoryGraph library export. Go to StoryGraph → Account → Import/Export → Export your library data.
                 </p>
-                <input
-                    ref={storygraphInputRef}
-                    type="file"
-                    accept=".csv"
-                    onChange={handleStoryGraphImport}
-                    aria-label="Import StoryGraph CSV export"
-                    className={s.fileInput}
-                    style={{ display: 'none' }}
-                />
-                <button
-                    onClick={() => storygraphInputRef.current?.click()}
-                    className={`glass ${s.exportBtn}`}
-                >
-                    Import from StoryGraph
-                </button>
+                <div className={s.fileWrap}>
+                    <input
+                        ref={storygraphInputRef}
+                        type="file"
+                        accept=".csv"
+                        onChange={handleStoryGraphImport}
+                        aria-label="Import StoryGraph CSV export"
+                        className={s.fileInput}
+                    />
+                    <div className={`glass ${s.fileDrop}`}>
+                        Drop file here or click to browse
+                    </div>
+                </div>
                 {storygraphMsg && (
                     <p className={s.goodreadsMsg}>{storygraphMsg}</p>
                 )}
