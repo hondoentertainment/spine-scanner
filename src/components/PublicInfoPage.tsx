@@ -260,17 +260,9 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
             <article className={styles.card}>
               <h3>Support diagnostics</h3>
               <p className={styles.note}>
-                This snapshot helps debug sync, release, and configuration issues for this browser session.
+                This snapshot helps debug sync and configuration for this browser session. Release and environment stay in Profile diagnostics.
               </p>
               <div className={styles.diagnosticsGrid}>
-                <div>
-                  <span className={styles.diagLabel}>Release</span>
-                  <strong>{diagnostics.app.release}</strong>
-                </div>
-                <div>
-                  <span className={styles.diagLabel}>Environment</span>
-                  <strong>{diagnostics.app.environment}</strong>
-                </div>
                 <div>
                   <span className={styles.diagLabel}>Online</span>
                   <strong>{diagnostics.runtime.online ? 'Yes' : 'No'}</strong>

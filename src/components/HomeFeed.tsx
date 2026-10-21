@@ -155,6 +155,54 @@ export default function HomeFeed() {
   }, [books]);
   const unownedSuggestions = loadedSuggestions ?? peekedSuggestions;
 
+  if (books.length === 0) {
+    return (
+      <div className={s.wrap}>
+        {user && (pendingChanges > 0 || lastSyncedAt) && (
+          <div className={`glass ${s.syncStrip}`} aria-live="polite">
+            <Cloud size={16} className={s.syncIcon} aria-hidden />
+            <span>
+              {pendingChanges > 0
+                ? `${pendingChanges} local change${pendingChanges === 1 ? '' : 's'} waiting to sync`
+                : lastSyncedAt
+                  ? `Last synced ${formatRelativeTime(lastSyncedAt)}`
+                  : 'Cloud sync ready'}
+            </span>
+          </div>
+        )}
+        {currentStreak >= 1 && (
+          <section className={`glass ${s.streak}`} aria-label="Reading streak">
+            <div className={s.streakMain}>
+              <span className={s.streakEmoji} aria-hidden>🔥</span>
+              <div className={s.streakInfo}>
+                <span className={s.streakValue}>{currentStreak}-day streak</span>
+                {longestStreak > currentStreak && (
+                  <span className={s.streakBest}>Best: {longestStreak} days</span>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+        <section className={`glass ${s.empty}`} aria-label="Empty library">
+          <h1 className={s.title}>Home</h1>
+          <p className={s.lede}>Your shelf is empty.</p>
+          <div className={s.emptyActions}>
+            <button type="button" className={`glass ${s.primary}`} onClick={() => navigate('/scan')}>
+              <ScanLine size={18} aria-hidden />
+              Start scanning
+            </button>
+            <button type="button" className={`glass ${s.secondary}`} onClick={() => navigate('/scan?focus=isbn')}>
+              Type an ISBN
+            </button>
+            <button type="button" className={`glass ${s.secondary}`} onClick={() => navigate('/data#goodreads-import')}>
+              Import from Goodreads
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className={s.wrap}>
       <header className={`glass ${s.hero}`}>
@@ -444,17 +492,8 @@ export default function HomeFeed() {
           <BookOpen size={16} aria-hidden />
           <h2 className={s.sectionTitle}>For you</h2>
         </div>
-        {feedItems.length === 0 ? (
-          <div className={`glass ${s.empty}`}>
-            <p>No books yet. Scan your first spine and it will show up here.</p>
-            <button type="button" className={`glass ${s.primary}`} onClick={() => navigate('/scan')}>
-              <ScanLine size={18} aria-hidden />
-              Start scanning
-            </button>
-          </div>
-        ) : (
-          <ul className={s.feedList}>
-            {feedItems.map((book) => (
+        <ul className={s.feedList}>
+          {feedItems.map((book) => (
               <li key={book.id}>
                 <button
                   type="button"
@@ -479,8 +518,7 @@ export default function HomeFeed() {
                 </button>
               </li>
             ))}
-          </ul>
-        )}
+        </ul>
       </section>
     </div>
   );

@@ -20,9 +20,12 @@ import { pluralize } from '../utils/plural.ts';
 import { getShareBaseUrl } from '../utils/shareBook.ts';
 import { exportAccountSnapshot } from '../utils/exportFormats.ts';
 import { downloadDiagnosticsBundle } from '../utils/supportDiagnostics.ts';
+import { readClientAppMeta } from '../lib/appRelease.ts';
 import { useToast } from './Toast.tsx';
 import ChangelogModal from './ChangelogModal.tsx';
 import s from './ProfileSettings.module.css';
+
+const { release: appRelease, environment: appEnvironment } = readClientAppMeta();
 
 interface ProfileSettingsProps {
   onClose?: () => void;
@@ -680,6 +683,12 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
         <p className={s.sectionHint}>
           Download a diagnostics bundle to help report issues. The file includes your book count, preferences, recent analytics events, and app storage — passwords, tokens, and keys are excluded.
         </p>
+        <dl className={s.diagnostics}>
+          <dt>Release</dt>
+          <dd>{appRelease || 'Not set'}</dd>
+          <dt>Environment</dt>
+          <dd>{appEnvironment || 'Not set'}</dd>
+        </dl>
         <button
           type="button"
           className={s.optBtn}

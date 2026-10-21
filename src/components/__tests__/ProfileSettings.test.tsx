@@ -308,6 +308,8 @@ describe('ProfileSettings', () => {
     expect(await screen.findByText('Account data downloaded')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Download diagnostics/ }));
     expect(await screen.findByText('Diagnostics downloaded')).toBeInTheDocument();
+    expect(screen.getByText('Release')).toBeInTheDocument();
+    expect(screen.getByText('Environment')).toBeInTheDocument();
   });
 
   it('cancels the delete-all confirmation', async () => {

@@ -1,7 +1,15 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { releaseFromBuildEnv } from './src/lib/releaseFromBuildEnv.ts';
 import { applyBuildTimeSocialMetadata } from './src/lib/productionMetadata.ts';
+
+// Vercel provides VERCEL_GIT_COMMIT_SHA but not VITE_APP_RELEASE. Copy it
+// before Vite loads env so the client does not fall back to "dev-local".
+const injectedRelease = releaseFromBuildEnv(process.env);
+if (injectedRelease && !process.env.VITE_APP_RELEASE?.trim()) {
+  process.env.VITE_APP_RELEASE = injectedRelease;
+}
 
 function normalizeBasePath(value?: string): string {
   if (!value) return '/';

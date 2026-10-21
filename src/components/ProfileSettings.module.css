@@ -33,7 +33,8 @@
   border-radius: 1.25rem;
   padding: 2rem;
   width: 100%;
-  max-width: 860px;
+  max-width: min(860px, 100%);
+  min-width: 0;
   margin: 0 auto;
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
   display: flex;
@@ -93,6 +94,7 @@
   grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.9fr);
   gap: 1rem;
   align-items: stretch;
+  min-width: 0;
 }
 
 .profileIdentity,
@@ -197,11 +199,13 @@
   font-size: 2rem;
   line-height: 1;
   font-weight: 800;
+  overflow-wrap: anywhere;
 }
 
 .spotlightText {
   color: var(--text-muted);
   font-size: 0.9rem;
+  overflow-wrap: anywhere;
 }
 
 .summaryGrid {
@@ -458,6 +462,24 @@
   margin: 0 0 0.35rem;
   line-height: 1.45;
   max-width: 52ch;
+}
+
+.diagnostics {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.2rem 0.75rem;
+  margin: 0 0 0.65rem;
+  font-size: 0.8rem;
+}
+
+.diagnostics dt {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.diagnostics dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .field {
@@ -767,7 +789,16 @@
   .statusSummaryGrid,
   .recentGrid,
   .scanStatsGrid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+  }
+
+  .profileHero > *,
+  .summaryGrid > *,
+  .statusSummaryGrid > *,
+  .recentGrid > *,
+  .scanStatsGrid > * {
+    min-width: 0;
   }
 
   .profileIdentity {
