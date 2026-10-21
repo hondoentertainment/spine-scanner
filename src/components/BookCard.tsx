@@ -311,23 +311,6 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                 </span>
             </span>
             </button>
-            <div className={s.links}>
-                        {generateAmazonLink(book.isbn) && (
-                            <a href={generateAmazonLink(book.isbn)} target="_blank" rel="noopener noreferrer"
-                               className={`glass ${s.amazonBtn}`} onClick={(e) => e.stopPropagation()}>
-                                <ExternalLink size={12} /> Amazon
-                            </a>
-                        )}
-                        <button type="button" onClick={async (e) => {
-                            e.stopPropagation();
-                            const ok = await shareBook(book.isbn, book.title, book.author, () => toast('Link copied to clipboard', 'success'));
-                            if (!ok) toast('Could not share', 'error');
-                        }} className={`glass ${s.amazonBtn}`}
-                            aria-label={`Share ${book.title}`} title="Share book">
-                            <Share2 size={12} /> Share
-                        </button>
-            </div>
-
             {/* Shelf chips */}
             <div className={s.shelfRow} onClick={(e) => e.stopPropagation()}>
                 {bookShelves.map((shelf) => (
@@ -381,36 +364,6 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                         {icon}
                     </button>
                 ))}
-            </div>
-
-            <div className={s.progressBlock} onClick={(e) => e.stopPropagation()}>
-                <div className={s.progressHeader}>
-                    <span>Progress</span>
-                    <span>{progressPercent}%</span>
-                </div>
-                <div className={s.progressTrack}>
-                    <span className={s.progressFill} style={{ width: `${progressPercent}%` }} />
-                </div>
-                <div className={s.quickActions}>
-                    <button type="button" className={s.quickBtn} onClick={() => updateBookStatus(book.id, 'reading')}>
-                        Start
-                    </button>
-                    <button
-                        type="button"
-                        className={s.quickBtn}
-                        onClick={() => updateReadingProgress(book.id, progressValue + 25)}
-                    >
-                        +25 pages
-                    </button>
-                    <button type="button" className={s.quickBtn} onClick={() => updateBookStatus(book.id, 'read')}>
-                        Finish
-                    </button>
-                    {book.needsReview && (
-                        <button type="button" className={s.quickBtn} onClick={() => markNeedsReview(book.id, false)}>
-                            Resolve review
-                        </button>
-                    )}
-                </div>
             </div>
 
             <div className={s.loanRow} onClick={(e) => e.stopPropagation()}>
@@ -516,10 +469,60 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
               </div>
             )}
 
+            <details className={s.more}>
+                <summary className={s.moreSummary}>Notes and links</summary>
+                <div className={s.links}>
+                        {generateAmazonLink(book.isbn) && (
+                            <a href={generateAmazonLink(book.isbn)} target="_blank" rel="noopener noreferrer"
+                               className={`glass ${s.amazonBtn}`} onClick={(e) => e.stopPropagation()}>
+                                <ExternalLink size={12} /> Amazon
+                            </a>
+                        )}
+                        <button type="button" onClick={async (e) => {
+                            e.stopPropagation();
+                            const ok = await shareBook(book.isbn, book.title, book.author, () => toast('Link copied to clipboard', 'success'));
+                            if (!ok) toast('Could not share', 'error');
+                        }} className={`glass ${s.amazonBtn}`}
+                            aria-label={`Share ${book.title}`} title="Share book">
+                            <Share2 size={12} /> Share
+                        </button>
+                </div>
+
+            <div className={s.progressBlock} onClick={(e) => e.stopPropagation()}>
+                <div className={s.progressHeader}>
+                    <span>Progress</span>
+                    <span>{progressPercent}%</span>
+                </div>
+                <div className={s.progressTrack}>
+                    <span className={s.progressFill} style={{ width: `${progressPercent}%` }} />
+                </div>
+                <div className={s.quickActions}>
+                    <button type="button" className={s.quickBtn} onClick={() => updateBookStatus(book.id, 'reading')}>
+                        Start
+                    </button>
+                    <button
+                        type="button"
+                        className={s.quickBtn}
+                        onClick={() => updateReadingProgress(book.id, progressValue + 25)}
+                    >
+                        +25 pages
+                    </button>
+                    <button type="button" className={s.quickBtn} onClick={() => updateBookStatus(book.id, 'read')}>
+                        Finish
+                    </button>
+                    {book.needsReview && (
+                        <button type="button" className={s.quickBtn} onClick={() => markNeedsReview(book.id, false)}>
+                            Resolve review
+                        </button>
+                    )}
+                </div>
+            </div>
+
             <textarea placeholder="Add your notes or quotes..." value={book.notes}
                 onChange={(e) => updateBookNotes(book.id, e.target.value)}
                 className={`glass ${s.notes}`}
                 onClick={(e) => e.stopPropagation()} />
+            </details>
 
             <div className={s.actionsRow} onClick={(e) => e.stopPropagation()}>
                 <button onClick={handleEdit} aria-label={`Edit ${book.title}`} className={s.editBtn}>

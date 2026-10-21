@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Phone tab bar and the deferred usability pass
+
+- **Scan tab.** The center control is a filled accent pill inside the bar, with a Scan label and an active ring. It lines up with Home, Library, and Profile and no longer covers the camera. Page content clears the bar plus the home-indicator inset in the browser and in the installed app. The Add header is shorter so the camera shows up sooner.
+- **Home.** Reading activity comes before suggestions and goals.
+- **Import & export.** Export, Import, and Maintain are separate tabs. Format chips, drop zones, and the delete action use solid colors that meet contrast.
+- **Library.** One Import & export button. For you is a short recent row and a single review line. Grid, Covers, and List show their names.
+- **Profile.** Danger zone is the last section on the page.
+- **Book cards.** Notes, progress, and store links sit behind one disclosure. Status, shelf, lend, edit, and remove stay on the card at 44px.
+
 ### Usability pass
 
 - **Library links land on the filtered list.** Series, lent-out, and needs-review links open All books, name the filter, and scroll to the matching books. Want to read replaces To Read on status controls.

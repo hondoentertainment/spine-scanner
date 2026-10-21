@@ -350,11 +350,22 @@ describe('LibraryList', () => {
     expect(screen.getByText('Room: Study')).toBeInTheDocument();
   });
 
+  it('labels the grid, cover, and list layout controls', () => {
+    useBookStore.setState({ books: [makeBook()] });
+    renderLibraryList(<LibraryList />);
+
+    expect(screen.getByRole('button', { name: 'Show grid view' })).toHaveTextContent('Grid');
+    expect(screen.getByRole('button', { name: 'Show cover columns view' })).toHaveTextContent('Covers');
+    expect(screen.getByRole('button', { name: 'Show list view' })).toHaveTextContent('List');
+    expect(screen.getByRole('button', { name: 'Show grid view' })).toHaveAttribute('title', 'Grid');
+  });
+
   it('navigates to data management when import & export is clicked', () => {
     useBookStore.setState({ books: [makeBook()] });
     renderLibraryList(<LibraryList />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Import & export' })[0]);
+    expect(screen.getAllByRole('button', { name: 'Import & export' })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Import & export' }));
     expect(screen.getByTestId('data-route')).toBeInTheDocument();
   });
 });

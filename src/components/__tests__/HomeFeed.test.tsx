@@ -132,6 +132,25 @@ describe('HomeFeed', () => {
     expect(screen.queryByText(/waiting to sync/)).not.toBeInTheDocument();
   });
 
+  it('leads with reading activity before suggestions and goals', () => {
+    useProfileStore.setState({
+      preferences: {
+        ...DEFAULT_PREFERENCES,
+        onboardingCompleted: true,
+        readingGoalBooksPerYear: 12,
+      },
+    });
+    useBookStore.setState({
+      books: [makeBook({ id: 'reading-now', title: 'Piranesi', status: 'reading' })],
+    });
+    renderFeed();
+    const activity = screen.getByRole('heading', { name: 'Reading activity' });
+    const suggestions = screen.getByRole('region', { name: "Books you don't own yet" });
+    const goals = screen.getByRole('region', { name: 'Reading goals this year' });
+    expect(activity.compareDocumentPosition(suggestions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(suggestions.compareDocumentPosition(goals) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('renders book and page goals and links to profile', () => {
     useProfileStore.setState({
       preferences: {

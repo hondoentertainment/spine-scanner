@@ -36,6 +36,33 @@ test.describe('Accessibility (axe-core)', () => {
       const critical = results.violations.filter((v) => v.impact === 'critical');
       const serious = results.violations.filter((v) => v.impact === 'serious');
 
+      if (route.name === 'data') {
+        const contrast = serious.filter((v) => v.id === 'color-contrast');
+        expect(
+          contrast.flatMap((v) => v.nodes).length,
+          contrast.length
+            ? `color-contrast on data:\n${contrast
+                .flatMap((v) => v.nodes.map((node) => `  - ${node.target.join(' ')} ${node.failureSummary ?? ''}`))
+                .join('\n')}`
+            : undefined,
+        ).toBe(0);
+        for (const tabName of ['Import', 'Maintain']) {
+          await page.getByRole('tab', { name: tabName }).click();
+          const tabResults = await new AxeBuilder({ page })
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+            .analyze();
+          const tabContrast = tabResults.violations.filter((v) => v.id === 'color-contrast' && v.impact === 'serious');
+          expect(
+            tabContrast.flatMap((v) => v.nodes).length,
+            tabContrast.length
+              ? `color-contrast on data ${tabName}:\n${tabContrast
+                  .flatMap((v) => v.nodes.map((node) => `  - ${node.target.join(' ')}`))
+                  .join('\n')}`
+              : undefined,
+          ).toBe(0);
+        }
+      }
+
       // Non-blocking signal so the gate can be tightened over time without breaking CI today.
       if (serious.length > 0) {
         console.warn(`[a11y] ${route.name}: ${serious.length} serious violation(s)`);

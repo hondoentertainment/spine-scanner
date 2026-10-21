@@ -40,6 +40,73 @@ test.describe('SpineScanner release smoke', () => {
     await expect(page.getByRole('heading', { name: /^Home$/ })).toBeVisible();
   });
 
+  test('scan tab stays inside the bar on phone widths', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'Phone tab-bar geometry is checked in Chromium with Safari and Chrome iOS user agents.');
+    const agents = [
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/126.0.6478.108 Mobile/15E148 Safari/604.1',
+    ];
+    for (const width of [375, 390, 430]) {
+      for (const userAgent of agents) {
+        await page.setViewportSize({ width, height: 844 });
+        const client = await page.context().newCDPSession(page);
+        await client.send('Emulation.setUserAgentOverride', { userAgent });
+        await page.goto('./scan');
+        await dismissOnboardingIfPresent(page);
+        const nav = page.getByRole('navigation', { name: 'Main navigation' });
+        const scan = page.getByTestId(uiContracts.navTabTestId('scan'));
+        const home = page.getByTestId(uiContracts.navTabTestId('home'));
+        await expect(scan).toBeVisible();
+        await expect(scan).toContainText('Scan');
+        const navBox = await nav.boundingBox();
+        const scanBox = await scan.boundingBox();
+        const homeBox = await home.boundingBox();
+        expect(navBox).not.toBeNull();
+        expect(scanBox).not.toBeNull();
+        expect(homeBox).not.toBeNull();
+        expect(scanBox!.y).toBeGreaterThanOrEqual(navBox!.y - 1);
+        expect(scanBox!.y + scanBox!.height).toBeLessThanOrEqual(navBox!.y + navBox!.height + 1);
+        expect(Math.abs(scanBox!.width - homeBox!.width)).toBeLessThan(12);
+        expect(Math.abs(scanBox!.y - homeBox!.y)).toBeLessThan(4);
+        const camera = page.getByTestId('scanner-camera');
+        await expect(camera).toBeVisible();
+        const cameraBox = await camera.boundingBox();
+        expect(cameraBox).not.toBeNull();
+        expect(cameraBox!.y + cameraBox!.height).toBeLessThanOrEqual(navBox!.y + 1);
+        const pad = await page.locator('#main-content').evaluate((el) => parseFloat(getComputedStyle(el).paddingBottom));
+        expect(pad).toBeGreaterThanOrEqual((navBox!.height) - 1);
+        await client.detach();
+      }
+    }
+
+    // Chromium's automated window stays in display-mode: browser (CDP cannot override it).
+    // The installed PWA uses the same bar height and safe-area padding under display-mode: standalone.
+    const safeAreaRule = await page.evaluate(() => {
+      const hits: string[] = [];
+      for (const sheet of document.styleSheets) {
+        let rules: CSSRuleList;
+        try {
+          rules = sheet.cssRules;
+        } catch {
+          continue;
+        }
+        for (const rule of rules) {
+          const text = rule.cssText;
+          if (
+            text.includes('safe-area-inset-bottom')
+            && text.includes('--bottom-nav-bar-height')
+            && text.includes('padding-bottom')
+          ) {
+            hits.push(text);
+          }
+        }
+      }
+      return hits.join('\n');
+    });
+    expect(safeAreaRule).toContain('env(safe-area-inset-bottom');
+    expect(safeAreaRule).toContain('display-mode: standalone');
+  });
+
   test('scanner view and manual ISBN entry work from the nav', async ({ page }) => {
     await page.getByTestId(uiContracts.navTabTestId('scan')).click();
     await expect(page.getByTestId(uiContracts.scannerManualInputTestId)).toBeVisible();

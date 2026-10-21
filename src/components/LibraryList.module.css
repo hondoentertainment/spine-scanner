@@ -204,6 +204,37 @@
   gap: 0.85rem;
 }
 
+.recentRail {
+  display: flex;
+  gap: 0.65rem;
+  overflow-x: auto;
+  padding-bottom: 0.15rem;
+}
+
+.recentRail .recentCard {
+  flex: 0 0 8.25rem;
+  min-height: 44px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.55rem;
+}
+
+.reviewBanner {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+  padding: 0.65rem 0.8rem;
+}
+
+.reviewBanner p {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.88rem;
+}
+
 .reviewSection {
   margin-bottom: 1.25rem;
 }
@@ -449,18 +480,33 @@
 }
 
 .viewBtn {
-  padding: 0.45rem 0.75rem;
+  padding: 0.35rem 0.55rem;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 0.65rem;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.03);
+  gap: 0.3rem;
+  color: var(--text-main);
+  background: var(--surface-solid);
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
 .viewBtnActive {
   color: var(--accent-blue);
   background: rgba(56, 189, 248, 0.1);
+}
+
+.viewBtn.viewBtnActive {
+  color: #fff;
+  background: #1d4ed8;
+}
+
+:global([data-theme="high-contrast"]) .viewBtn.viewBtnActive {
+  color: #000;
+  background: #ffeb3b;
 }
 
 .emptyState {

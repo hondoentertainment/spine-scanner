@@ -105,7 +105,7 @@ function getPublicPageFromPath(pathname: string): PublicPage | null {
 /** One line under the logo — changes with route so each area feels distinct. */
 const ROUTE_BRANDING_SUBTITLE: Record<string, string> = {
   '/home': 'Your reading feed, library snapshot, and quick paths to scan.',
-  '/scan': 'A friendlier home for scanning, organizing, and finding books fast.',
+  '/scan': 'Scan a barcode or type an ISBN.',
   '/library': 'Browse, search, and organize your saved books.',
   '/recommendations': 'Books you don\'t own yet, based on the ones already on your shelves.',
   '/data': 'Import, export, and back up your library.',
@@ -725,7 +725,7 @@ function App() {
         {srAnnouncement}
       </div>
 
-      <header className={styles.header}>
+      <header className={`${styles.header} ${location.pathname === '/scan' ? styles.headerOnScan : ''}`.trim()}>
         <div className={styles.headerTop}>
           <div className={styles.branding}>
             <NavLink

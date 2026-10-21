@@ -47,9 +47,31 @@
 }
 
 .sectionDesc {
-  color: var(--text-muted);
+  color: #cbd5e1;
   font-size: 0.9rem;
   margin-bottom: 1rem;
+}
+
+:global([data-theme="light"]) .sectionDesc,
+:global([data-theme="light"]) .duplicateAuthor,
+:global([data-theme="light"]) .editionMeta,
+:global([data-theme="light"]) .editionBookAuthor,
+:global([data-theme="light"]) .editionBookFacts,
+:global([data-theme="light"]) .refreshResult,
+:global([data-theme="light"]) .resultList,
+:global([data-theme="light"]) .fileDrop {
+  color: #1e293b;
+}
+
+:global([data-theme="high-contrast"]) .sectionDesc,
+:global([data-theme="high-contrast"]) .duplicateAuthor,
+:global([data-theme="high-contrast"]) .editionMeta,
+:global([data-theme="high-contrast"]) .editionBookAuthor,
+:global([data-theme="high-contrast"]) .editionBookFacts,
+:global([data-theme="high-contrast"]) .refreshResult,
+:global([data-theme="high-contrast"]) .resultList,
+:global([data-theme="high-contrast"]) .fileDrop {
+  color: #fff;
 }
 
 /* ---- Export ---- */
@@ -66,14 +88,64 @@
   font-size: 0.8rem;
   font-weight: 600;
   border-radius: 9999px;
+  color: var(--text-main);
+  background: var(--surface-solid);
+  border: 1px solid var(--glass-border);
 }
 
-.exportBtn {
+.formatBtnActive {
+  color: #fff;
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+:global([data-theme="high-contrast"]) .formatBtnActive {
+  color: #000;
+  background: #ffeb3b;
+  border-color: #ffeb3b;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+}
+
+.tab {
+  flex: 1 1 0;
+  min-height: 44px;
+  border-radius: 999px;
+  background: var(--surface-solid);
+  color: var(--text-main);
+  border: 1px solid var(--glass-border);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.tabActive {
+  color: #fff;
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+:global([data-theme="high-contrast"]) .tabActive {
+  color: #000;
+  background: #ffeb3b;
+  border-color: #ffeb3b;
+}
+
+.exportBtn,
+:global(.glass).exportBtn {
   width: 100%;
   padding: 1rem;
-  background: var(--primary);
-  color: white;
+  background: #4338ca;
+  color: #fff;
   font-weight: 600;
+}
+
+:global([data-theme="high-contrast"]) .exportBtn {
+  background: #ffeb3b;
+  color: #000;
 }
 
 /* ---- Import ---- */
@@ -88,11 +160,13 @@
   cursor: pointer;
 }
 
-.fileDrop {
+.fileDrop,
+:global(.glass).fileDrop {
   padding: 1rem;
   text-align: center;
   border: 2px dashed var(--glass-border);
-  color: var(--text-muted);
+  color: #cbd5e1;
+  background: var(--surface-solid);
   border-radius: 12px;
   min-height: 3.25rem;
 }
@@ -126,10 +200,13 @@
   background: var(--glass-bg);
 }
 
-.fetchBtn {
+.fetchBtn,
+:global(.glass).fetchBtn {
   padding: 0 1.5rem;
-  background: var(--glass-bg);
+  min-height: 44px;
+  background: var(--surface-solid);
   color: var(--text-main);
+  border: 1px solid var(--glass-border);
 }
 
 .confirmBox {
@@ -173,12 +250,28 @@
 }
 
 .dangerBtn {
-  color: #f87171;
-  background: none;
+  color: #fecaca;
+  background: #450a0a;
+  border: 1px solid #fecaca;
   font-size: 0.9rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+}
+
+:global([data-theme="light"]) .dangerBtn {
+  color: #7f1d1d;
+  background: #fee2e2;
+  border-color: #7f1d1d;
+}
+
+:global([data-theme="high-contrast"]) .dangerBtn {
+  color: #000;
+  background: #ffeb3b;
+  border-color: #fff;
 }
 
 .dangerBtn:disabled {

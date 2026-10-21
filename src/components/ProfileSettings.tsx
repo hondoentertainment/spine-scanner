@@ -548,67 +548,6 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
         </div>
       )}
 
-      <div className={`${s.section} ${s.dangerZone}`} id="danger-zone">
-        <h3 className={s.sectionTitle}>Danger zone</h3>
-        <p className={s.sectionHint}>
-          Clear all local data removes books, shelves, preferences, and sync state from this browser only. It does not delete a cloud account. Download a JSON backup first if you want to keep a copy.
-        </p>
-        <button
-          type="button"
-          className={s.dangerOutlineBtn}
-          onClick={async () => {
-            const ok = await confirm({
-              title: 'Clear all local data?',
-              message: 'This removes your library and settings from this browser. It does not delete your cloud account. This cannot be undone.',
-              confirmLabel: 'Clear local data',
-              danger: true,
-            });
-            if (!ok) return;
-            const { clearLocalAppData } = await import('../utils/clearLocalAppData.ts');
-            clearLocalAppData();
-            toast('Local data cleared', 'success');
-          }}
-        >
-          <Eraser size={16} aria-hidden />
-          Clear all local data
-        </button>
-        <p className={s.sectionHint}>
-          Delete all my data does the same on this device. When you are signed in, it also deletes your cloud library and signs you out.
-        </p>
-        <button
-          type="button"
-          className={s.dangerOutlineBtn}
-          onClick={async () => {
-            const ok = await confirm({
-              title: 'Delete all your data?',
-              message:
-                "This permanently deletes your entire library, shelves, preferences, and analytics from this device. If you're signed in, your cloud data will also be deleted. This cannot be undone.",
-              confirmLabel: 'Delete all my data',
-              danger: true,
-            });
-            if (!ok) return;
-
-            const signedIn = user !== null;
-            if (signedIn && user) {
-              const { deleteAllCloudData } = await import('../lib/syncBooks.ts');
-              await deleteAllCloudData(user.id);
-            }
-
-            const { clearLocalAppData } = await import('../utils/clearLocalAppData.ts');
-            clearLocalAppData();
-
-            if (signedIn) {
-              await useAuthStore.getState().signOut();
-            }
-
-            toast('All data deleted', 'success');
-            setTimeout(() => window.location.reload(), 1500);
-          }}
-        >
-          <Trash2 size={16} aria-hidden />
-          Delete all my data
-        </button>
-      </div>
 
       <div className={s.section}>
         <h3 className={s.sectionTitle}>Cloud account & deletion</h3>
@@ -916,6 +855,68 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       </div>
       </>
       )}
+
+      <div className={`${s.section} ${s.dangerZone}`} id="danger-zone">
+        <h3 className={s.sectionTitle}>Danger zone</h3>
+        <p className={s.sectionHint}>
+          Clear all local data removes books, shelves, preferences, and sync state from this browser only. It does not delete a cloud account. Download a JSON backup first if you want to keep a copy.
+        </p>
+        <button
+          type="button"
+          className={s.dangerOutlineBtn}
+          onClick={async () => {
+            const ok = await confirm({
+              title: 'Clear all local data?',
+              message: 'This removes your library and settings from this browser. It does not delete your cloud account. This cannot be undone.',
+              confirmLabel: 'Clear local data',
+              danger: true,
+            });
+            if (!ok) return;
+            const { clearLocalAppData } = await import('../utils/clearLocalAppData.ts');
+            clearLocalAppData();
+            toast('Local data cleared', 'success');
+          }}
+        >
+          <Eraser size={16} aria-hidden />
+          Clear all local data
+        </button>
+        <p className={s.sectionHint}>
+          Delete all my data does the same on this device. When you are signed in, it also deletes your cloud library and signs you out.
+        </p>
+        <button
+          type="button"
+          className={s.dangerOutlineBtn}
+          onClick={async () => {
+            const ok = await confirm({
+              title: 'Delete all your data?',
+              message:
+                "This permanently deletes your entire library, shelves, preferences, and analytics from this device. If you're signed in, your cloud data will also be deleted. This cannot be undone.",
+              confirmLabel: 'Delete all my data',
+              danger: true,
+            });
+            if (!ok) return;
+
+            const signedIn = user !== null;
+            if (signedIn && user) {
+              const { deleteAllCloudData } = await import('../lib/syncBooks.ts');
+              await deleteAllCloudData(user.id);
+            }
+
+            const { clearLocalAppData } = await import('../utils/clearLocalAppData.ts');
+            clearLocalAppData();
+
+            if (signedIn) {
+              await useAuthStore.getState().signOut();
+            }
+
+            toast('All data deleted', 'success');
+            setTimeout(() => window.location.reload(), 1500);
+          }}
+        >
+          <Trash2 size={16} aria-hidden />
+          Delete all my data
+        </button>
+      </div>
 
     </div>
   );
