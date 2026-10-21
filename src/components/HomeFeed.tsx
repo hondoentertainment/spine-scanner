@@ -170,6 +170,19 @@ export default function HomeFeed() {
             </span>
           </div>
         )}
+        {currentStreak >= 1 && (
+          <section className={`glass ${s.streak}`} aria-label="Reading streak">
+            <div className={s.streakMain}>
+              <span className={s.streakEmoji} aria-hidden>🔥</span>
+              <div className={s.streakInfo}>
+                <span className={s.streakValue}>{currentStreak}-day streak</span>
+                {longestStreak > currentStreak && (
+                  <span className={s.streakBest}>Best: {longestStreak} days</span>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
         <section className={`glass ${s.empty}`} aria-label="Empty library">
           <h1 className={s.title}>Home</h1>
           <p className={s.lede}>Your shelf is empty.</p>

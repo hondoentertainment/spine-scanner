@@ -72,6 +72,22 @@ describe('HomeFeed', () => {
     expect(navigate).toHaveBeenCalledWith('/scan');
   });
 
+  it('keeps an active reading streak on the empty shelf', () => {
+    useProfileStore.setState({
+      preferences: {
+        ...DEFAULT_PREFERENCES,
+        onboardingCompleted: true,
+        currentStreak: 3,
+        longestStreak: 5,
+      },
+    });
+    renderFeed();
+    expect(screen.getByRole('region', { name: /reading streak/i })).toBeInTheDocument();
+    expect(screen.getByText('3-day streak')).toBeInTheDocument();
+    expect(screen.getByText('Best: 5 days')).toBeInTheDocument();
+    expect(screen.getByText('Your shelf is empty.')).toBeInTheDocument();
+  });
+
   it('offers an ISBN field and a Goodreads import from the empty shelf', () => {
     renderFeed();
     fireEvent.click(screen.getByRole('button', { name: 'Type an ISBN' }));

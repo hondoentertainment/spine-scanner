@@ -5,7 +5,7 @@
 ### Home on a phone
 
 - **Release line.** Production was labeled `Release dev-local · production` because Vercel sets `VITE_APP_ENV` and does not set `VITE_APP_RELEASE`, so the client fell back to `dev-local`. The dev-server check did not belong on the home footer. The release and environment now show only in Profile diagnostics, and a Vercel or GitHub commit fills the release when the env var is missing.
-- **Empty shelf.** Home opens with a short welcome, Start scanning, Type an ISBN, and Import from Goodreads. The app-info card is a single row of text links on Profile and the public pages.
+- **Empty shelf.** Home opens with a short welcome, Start scanning, Type an ISBN, and Import from Goodreads. An active reading streak still shows above that welcome. The app-info card is a single row of text links on Profile and the public pages.
 - **Tab bar.** Home, Library, Scan, and Profile share one even row. Scan has a label and stays inside the bar, with room for the home indicator and the notch.
 - **Profile on a phone.** The reader card and library summary stack in one column so they stay on screen.
 

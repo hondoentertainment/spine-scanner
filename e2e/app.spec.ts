@@ -81,6 +81,7 @@ test.describe('SpineScanner release smoke', () => {
   });
 
   test('public support page exposes diagnostics actions', async ({ page }) => {
+    await page.getByTestId(uiContracts.navTabTestId('profile')).click();
     await page.getByRole('button', { name: /^Support$/ }).click();
     await expect(page.getByRole('heading', { name: /help for scanning, syncing, and exports/i })).toBeVisible();
     await expect(page.getByRole('heading', { name: /support diagnostics/i })).toBeVisible();
