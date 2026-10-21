@@ -144,6 +144,7 @@
   margin-bottom: 1rem;
   flex-wrap: wrap;
   gap: 1rem;
+  scroll-margin-top: 1rem;
 }
 
 .headerActions {
@@ -526,9 +527,24 @@
   align-items: center;
   gap: 1rem;
   padding: 0.85rem 1rem;
-  cursor: pointer;
   border-bottom: 1px solid var(--glass-border);
   transition: background 0.15s;
+}
+
+.listOpen {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
 }
 
 .listRow:hover {
@@ -586,6 +602,8 @@
 
 .listStatusChip {
   padding: 0.25rem;
+  min-width: 44px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -766,7 +784,8 @@
 .segmentLink {
   background: none;
   border: none;
-  padding: 0;
+  padding: 0.35rem 0.15rem;
+  min-height: 44px;
   font: inherit;
   font-weight: 700;
   color: var(--accent-blue);
@@ -850,7 +869,11 @@
 .statLink {
   background: none;
   border: none;
-  padding: 0;
+  padding: 0.35rem 0.15rem;
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
   font: inherit;
   font-size: inherit;
   font-weight: inherit;

@@ -235,7 +235,7 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Can't access camera: Permission denied/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/Camera access is blocked/i).length).toBeGreaterThan(0);
       });
 
       expect(screen.queryByRole('button', { name: /scan book/i })).not.toBeInTheDocument();
@@ -596,7 +596,7 @@ describe('Scanner', () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/upload a photo or type the ISBN/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/No camera was found/i).length).toBeGreaterThan(0);
       });
     });
 
@@ -612,7 +612,7 @@ describe('Scanner', () => {
 
       // Camera error message should appear
       await waitFor(() => {
-        expect(screen.getByText(/Can't access camera: Device not found/)).toBeInTheDocument();
+        expect(screen.getAllByText(/No camera was found/).length).toBeGreaterThan(0);
       });
 
       fireEvent.click(screen.getByRole('button', { name: /show debug logs/i }));

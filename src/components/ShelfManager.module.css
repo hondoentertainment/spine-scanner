@@ -23,6 +23,7 @@
 
 .newBtn {
   padding: 0.3rem 0.6rem;
+  min-height: 44px;
   font-size: 0.7rem;
   font-weight: 600;
   display: flex;
@@ -120,7 +121,11 @@
   background: none;
   color: #22c55e;
   padding: 0.15rem;
-  display: flex;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .shelfName {
@@ -138,12 +143,20 @@
   background: none;
   color: var(--text-muted);
   padding: 0.15rem;
-  display: flex;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .shelfDeleteBtn {
   background: none;
   color: #f87171;
   padding: 0.15rem;
-  display: flex;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }

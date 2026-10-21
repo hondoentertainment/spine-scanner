@@ -231,7 +231,7 @@ describe('BookDetail', () => {
       useBookStore.setState({ books: [book] });
       renderWithToast(<BookDetail book={book} onClose={vi.fn()} />);
 
-      expect(screen.getByLabelText('Set status to To Read')).toBeInTheDocument();
+      expect(screen.getByLabelText('Set status to Want to read')).toBeInTheDocument();
       expect(screen.getByLabelText('Set status to Reading')).toBeInTheDocument();
       expect(screen.getByLabelText('Set status to Read')).toBeInTheDocument();
       expect(screen.getByLabelText('Set status to Did Not Finish')).toBeInTheDocument();

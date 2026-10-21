@@ -27,14 +27,14 @@ interface BookDetailProps {
 }
 
 const statusLabels: Record<BookEntry['status'], string> = {
-  'to-read': 'To Read',
+  'to-read': 'Want to read',
   reading: 'Reading',
   read: 'Read',
   dnf: 'Did Not Finish',
 };
 
 const statusShort: Record<BookEntry['status'], string> = {
-  'to-read': 'To Read',
+  'to-read': 'Want',
   reading: 'Reading',
   read: 'Read',
   dnf: 'DNF',
@@ -411,6 +411,12 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
             </div>
           ) : (
             <>
+              {isOnLoan(book) && (
+                <p className={`${styles.loanBanner} ${isLoanOverdue(book) ? styles.loanBannerOverdue : ''}`} role="status">
+                  <strong>{isLoanOverdue(book) ? 'Overdue' : 'Lent out'}</strong>
+                  <span>{formatLentSince(book)}{formatLoanDue(book) ? ` · ${formatLoanDue(book)}` : ''}</span>
+                </p>
+              )}
               <div className={styles.coverHero}>
                 <img
                   src={getBookCoverSrc(book.coverImg)}

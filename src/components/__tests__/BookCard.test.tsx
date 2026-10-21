@@ -42,6 +42,8 @@ describe('BookCard', () => {
     renderWithToast(<BookCard book={book} />);
     expect(screen.getByText('1984')).toBeInTheDocument();
     expect(screen.getByText('George Orwell')).toBeInTheDocument();
+    const open = screen.getByRole('button', { name: /^1984/ });
+    expect(open.querySelector('button, a')).toBeNull();
   });
 
   it('shows edit form when Edit button is clicked', () => {

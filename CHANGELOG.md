@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Usability pass
+
+- **Library links land on the filtered list.** Series, lent-out, and needs-review links open All books, name the filter, and scroll to the matching books. Want to read replaces To Read on status controls.
+- **Shelf map.** A title on the map opens that book. Choosing a room, case, or shelf stays on the map until you ask to show those books in All books.
+- **Home stays short.** The activity list shows what you are reading and a handful of recent adds, then links to the rest of the library. Goal meters have names, and the recent row is a real list.
+- **Cards and targets.** Opening a book is its own control, so status, lend, and shelf actions are no longer trapped inside it. Theme, shelf edit, import formats, detail actions, and profile controls are at least 44px.
+- **Add a book.** The how-it-works section stays for an empty library and steps aside once you have books. A missing or blocked camera explains what to do instead of repeating the browser error.
+- **Suggestions.** Add to wishlist can be undone, and the page has a way back to the library. An overdue or current loan is called out at the top of the book.
+
 ### Home on a phone
 
 - **Release line.** Production was labeled `Release dev-local · production` because Vercel sets `VITE_APP_ENV` and does not set `VITE_APP_RELEASE`, so the client fell back to `dev-local`. The dev-server check did not belong on the home footer. The release and environment now show only in Profile diagnostics, and a Vercel or GitHub commit fills the release when the env var is missing.

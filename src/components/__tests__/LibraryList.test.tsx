@@ -96,6 +96,9 @@ describe('LibraryList', () => {
     expect(screen.getByText('With Ada')).toBeInTheDocument();
     expect(screen.queryByText('On shelf')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove filter: Lent out' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'All books' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByText(/Newest titles first/)).not.toBeInTheDocument();
+    expect(screen.getByText(/that is with someone else/)).toBeInTheDocument();
   });
 
   it('filters to lent-out books and shows an overdue badge', () => {
@@ -118,6 +121,9 @@ describe('LibraryList', () => {
   });
 
   it('shows a compact library summary and explains needs review', () => {
+    useBookStore.setState({
+      books: [makeBook({ needsReview: true, title: 'Check me' })],
+    });
     renderLibraryList(<LibraryList />);
 
     expect(screen.getByRole('heading', { name: 'Library' })).toBeInTheDocument();
@@ -130,6 +136,7 @@ describe('LibraryList', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Add your first book/i }));
     expect(onStartScanning).toHaveBeenCalledOnce();
+    expect(screen.queryByText(/Needs review means/)).not.toBeInTheDocument();
   });
 
   it('shows recently added books in descending date order', () => {
@@ -287,7 +294,7 @@ describe('LibraryList', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Wishlist' }));
-    expect(screen.getByText('Status: to read')).toBeInTheDocument();
+    expect(screen.getByText('Status: Want to read')).toBeInTheDocument();
     expect(screen.getByText('Wanted')).toBeInTheDocument();
     expect(screen.queryByText('Owned read')).not.toBeInTheDocument();
 
@@ -295,11 +302,59 @@ describe('LibraryList', () => {
     expect(screen.getByText('Suggestions page')).toBeInTheDocument();
   });
 
+  it('opens All books when a series link arrives', () => {
+    useBookStore.setState({
+      books: [
+        makeBook({ id: 'a', title: 'Fifth Season', seriesName: 'The Broken Earth' }),
+        makeBook({ id: 'b', title: 'Piranesi', isbn: '9781635575637', seriesName: '' }),
+      ],
+    });
+    render(
+      <MemoryRouter initialEntries={['/library?series=The%20Broken%20Earth']}>
+        <ToastProvider>
+          <LibraryList initialSeriesFilter="The Broken Earth" />
+        </ToastProvider>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('tab', { name: 'All books' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: 'Remove filter: Series: The Broken Earth' })).toBeInTheDocument();
+    expect(screen.getByText(/in The Broken Earth/)).toBeInTheDocument();
+    expect(screen.queryByText('Piranesi')).not.toBeInTheDocument();
+  });
+
+  it('opens a book from the shelf map without leaving the map', () => {
+    useBookStore.setState({
+      books: [
+        makeBook({ id: 'study', title: 'Dune', locationRoom: 'Study', locationCase: 'Oak', locationShelf: '2' }),
+      ],
+    });
+    renderLibraryList(<LibraryList />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Shelves' }));
+    fireEvent.click(screen.getByRole('button', { name: /Dune/ }));
+    expect(screen.getByRole('dialog', { name: /Details for Dune/ })).toBeInTheDocument();
+  });
+
+  it('keeps the shelf map open until the reader asks to browse that place', () => {
+    useBookStore.setState({
+      books: [
+        makeBook({ id: 'study', title: 'Dune', locationRoom: 'Study', locationCase: 'Oak', locationShelf: '2' }),
+      ],
+    });
+    renderLibraryList(<LibraryList />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Shelves' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Study/ }));
+    expect(screen.getByText('Physical shelf map')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Search library')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show these books in All books' }));
+    expect(screen.getByLabelText('Search library')).toBeInTheDocument();
+    expect(screen.getByText('Room: Study')).toBeInTheDocument();
+  });
+
   it('navigates to data management when import & export is clicked', () => {
     useBookStore.setState({ books: [makeBook()] });
     renderLibraryList(<LibraryList />);
 
-    fireEvent.click(screen.getByLabelText('Import and export library data'));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Import & export' })[0]);
     expect(screen.getByTestId('data-route')).toBeInTheDocument();
   });
 });

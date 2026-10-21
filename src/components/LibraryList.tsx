@@ -91,7 +91,7 @@ function bookMatchesSmartShelf(book: BookEntry, smartShelf: SmartShelf): boolean
 
 const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string; icon: React.ReactNode }> = [
   { value: 'all', label: 'All', icon: <LibraryBig size={14} /> },
-  { value: 'to-read', label: 'To Read', icon: <Clock size={14} /> },
+  { value: 'to-read', label: 'Want to read', icon: <Clock size={14} /> },
   { value: 'reading', label: 'Reading', icon: <BookOpen size={14} /> },
   { value: 'read', label: 'Read', icon: <CheckCircle size={14} /> },
   { value: 'dnf', label: 'DNF', icon: <XCircle size={14} /> },
@@ -145,7 +145,9 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
   const [showSmartShelfForm, setShowSmartShelfForm] = useState(false);
   const [newViewName, setNewViewName] = useState('');
   const [newSmartShelfName, setNewSmartShelfName] = useState('');
-  const [librarySegment, setLibrarySegment] = useState<LibrarySegment>(() => (isMvpMode() ? 'all' : 'foryou'));
+  const [librarySegment, setLibrarySegment] = useState<LibrarySegment>(() => (
+    isMvpMode() || initialSeriesFilter ? 'all' : 'foryou'
+  ));
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const sortBy = preferences.librarySortBy;
@@ -185,18 +187,22 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     const review = searchParams.get('review') === '1';
     const lent = searchParams.get('lent') === '1';
     const wishlist = searchParams.get('wishlist') === '1';
-    if (!review && !lent && !wishlist) return;
+    const series = searchParams.get('series');
+    if (!review && !lent && !wishlist && !series) return;
     if (review) setReviewOnly(true);
     if (lent) setLentOnly(true);
-    if (wishlist) {
-      setStatusFilter('to-read');
-      setLibrarySegment('all');
-    }
+    if (series) setSeriesFilter(series);
+    if (wishlist) setStatusFilter('to-read');
+    setLibrarySegment('all');
     const next = new URLSearchParams(searchParams);
     next.delete('review');
     next.delete('lent');
     next.delete('wishlist');
+    next.delete('series');
     setSearchParams(next, { replace: true });
+    requestAnimationFrame(() => {
+      explorerRef.current?.scrollIntoView?.({ block: 'start', behavior: 'auto' });
+    });
   }, [searchParams, setSearchParams, setStatusFilter]);
 
   const resetActivePresets = useCallback(() => {
@@ -284,7 +290,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     if (statusFilter !== 'all') {
       chips.push({
         id: 'status',
-        label: `Status: ${statusFilter.replace('-', ' ')}`,
+        label: `Status: ${statusFilter === 'to-read' ? 'Want to read' : statusFilter === 'dnf' ? 'DNF' : statusFilter}`,
         onRemove: () => setStatusFilter('all'),
       });
     }
@@ -348,6 +354,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
 
   const listParentRef = useRef<HTMLDivElement>(null);
   const gridParentRef = useRef<HTMLDivElement>(null);
+  const explorerRef = useRef<HTMLDivElement>(null);
   const [gridColumns, setGridColumns] = useState(3);
   const gridColumnWidth = 220;
   const effectiveGridColumns = viewMode === 'masonry' ? 2 : gridColumns;
@@ -761,7 +768,9 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
             <dd>{insights.reviewCount}</dd>
           </div>
         </dl>
-        <p className={s.compactHint}>Needs review means a title, author, or ISBN still needs a quick check.</p>
+        {insights.reviewCount > 0 && (
+          <p className={s.compactHint}>Needs review means a title, author, or ISBN still needs a quick check.</p>
+        )}
         {!mvp && (
           <nav className={s.libraryTools} aria-label="Library sections">
             <button type="button" onClick={() => navigate('/recommendations')}>Suggestions</button>
@@ -781,15 +790,19 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
             locationRoom={locationRoom}
             locationCase={locationCase}
             locationShelf={locationShelf}
+            onOpenBook={openBookById}
             onSelect={(next) => {
               setLocationRoom(next.locationRoom);
               setLocationCase(next.locationCase);
               setLocationShelf(next.locationShelf);
               resetActivePresets();
-              const picked = next.locationRoom != null || next.locationCase != null || next.locationShelf != null;
-              if (picked) setLibrarySegment('all');
             }}
           />
+          {(locationRoom != null || locationCase != null || locationShelf != null) && (
+            <button type="button" className={`glass ${s.primaryAction}`} onClick={() => setLibrarySegment('all')}>
+              Show these books in All books
+            </button>
+          )}
         </>
       )}
 
@@ -868,7 +881,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
       )}
 
       {librarySegment !== 'shelves' && (
-      <div className={s.header}>
+      <div className={s.header} ref={explorerRef}>
         <div className="sr-only" aria-live="polite" aria-atomic="true">
           {!emptyLibrary &&
             `${filteredAndSorted.length} book${filteredAndSorted.length === 1 ? '' : 's'} match your filters.`}
@@ -879,7 +892,15 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
             Library explorer
           </span>
           <h2 className={s.heading}>{pluralize(filteredAndSorted.length, 'book')} ready to browse</h2>
-          <p className={s.resultsSummary}>Tune the view, save the filters you reuse, and tidy batches in one place.</p>
+          <p className={s.resultsSummary}>
+            {seriesFilter
+              ? `Showing ${pluralize(filteredAndSorted.length, 'book')} in ${seriesFilter}.`
+              : lentOnly
+                ? `Showing ${pluralize(filteredAndSorted.length, 'book')} that ${filteredAndSorted.length === 1 ? 'is' : 'are'} with someone else.`
+                : reviewOnly
+                  ? `Showing ${pluralize(filteredAndSorted.length, 'book')} that still ${filteredAndSorted.length === 1 ? 'needs' : 'need'} a metadata check.`
+                  : 'Tune the view, save the filters you reuse, and tidy batches in one place.'}
+          </p>
         </div>
         <div className={s.headerActions}>
           <button
@@ -895,7 +916,6 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
             type="button"
             className={`glass ${s.manageBtn}`}
             onClick={() => navigate('/data')}
-            aria-label="Import and export library data"
           >
             <Settings size={16} />
             Import & export
@@ -1483,7 +1503,6 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
                     width: '100%',
                     transform: `translateY(${virtualItem.start - listScrollMargin}px)`,
                   }}
-                  onClick={() => handleBookOpen(book)}
                 >
                   {selectionMode && (
                     <label className={s.listSelect} onClick={(event) => event.stopPropagation()}>
@@ -1494,9 +1513,10 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
                       />
                     </label>
                   )}
+                  <button type="button" className={s.listOpen} onClick={() => handleBookOpen(book)}>
                   <img
                     src={getBookCoverSrc(book.coverImg)}
-                    alt={book.title}
+                    alt=""
                     className={s.listCover}
                     loading="lazy"
                     decoding="async"
@@ -1517,13 +1537,16 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
                       )}
                     </div>
                   </div>
-                  <span className={`status-badge status-${book.status} ${s.listStatus}`}>{book.status}</span>
-                  <div className={s.listStatusChips} onClick={(event) => event.stopPropagation()}>
+                  </button>
+                  <span className={`status-badge status-${book.status} ${s.listStatus}`}>
+                    {book.status === 'to-read' ? 'Want to read' : book.status === 'dnf' ? 'DNF' : book.status === 'reading' ? 'Reading' : 'Read'}
+                  </span>
+                  <div className={s.listStatusChips}>
                     <button
                       type="button"
                       className={`${s.listStatusChip} ${book.status === 'to-read' ? s.listStatusChipActive : ''}`}
                       onClick={() => updateBookStatus(book.id, 'to-read')}
-                      aria-label={`Mark ${book.title} as to read`}
+                      aria-label={`Mark ${book.title} as want to read`}
                     >
                       <Clock size={12} />
                     </button>
