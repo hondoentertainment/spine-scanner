@@ -16,6 +16,7 @@ interface PhysicalShelfMapProps {
   locationCase: string | null;
   locationShelf: string | null;
   onSelect: (next: PhysicalLocationFilter) => void;
+  onOpenBook?: (bookId: string) => void;
 }
 
 function pluralLabel(count: number): string {
@@ -34,6 +35,7 @@ const PhysicalShelfMap: React.FC<PhysicalShelfMapProps> = ({
   locationCase,
   locationShelf,
   onSelect,
+  onOpenBook,
 }) => {
   const rooms = buildPhysicalShelfMap(books);
   const current = { locationRoom, locationCase, locationShelf };
@@ -111,8 +113,14 @@ const PhysicalShelfMap: React.FC<PhysicalShelfMapProps> = ({
                               <ul className={s.bookList}>
                                 {shelf.books.map((book) => (
                                   <li key={book.id}>
-                                    <span className={s.bookTitle}>{book.title}</span>
-                                    <span className={s.bookAuthor}>{book.author}</span>
+                                    <button
+                                      type="button"
+                                      className={s.bookBtn}
+                                      onClick={() => onOpenBook?.(book.id)}
+                                    >
+                                      <span className={s.bookTitle}>{book.title}</span>
+                                      <span className={s.bookAuthor}>{book.author}</span>
+                                    </button>
                                   </li>
                                 ))}
                               </ul>

@@ -182,11 +182,11 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const publicPage = getPublicPageFromPath(location.pathname);
-  const showMarketingHero = location.pathname === '/scan' && !isMvpMode();
   const showLegalFooter = publicPage != null || location.pathname === '/profile';
   const brandingSubtitle = getBrandingSubtitle(location.pathname, publicPage);
   const { lookupByIsbn, loading, error } = useBookLookup();
   const { addBook, books, setBooks, shelves, setShelves } = useBookStore();
+  const showScanGuide = location.pathname === '/scan' && !isMvpMode() && books.length === 0;
   const { user, recoveryMode, initialize: initAuth } = useAuthStore();
   const { preferences, loadFromCloud, saveToCloud, updatePreferences } = useProfileStore();
   const { pendingChanges, markDirty, markSynced, markSyncFailed, flushing, setFlushing } = useSyncQueue();
@@ -731,7 +731,6 @@ function App() {
             <NavLink
               to={isMvpMode() ? '/scan' : '/home'}
               className={styles.brandLinkBlock}
-              aria-label={isMvpMode() ? 'SpineScanner — Add books' : 'SpineScanner home — Feed'}
               onClick={() => setSrAnnouncement(isMvpMode() ? 'Scanner view' : 'Home feed')}
             >
               <div className={styles.logoBox}>
@@ -948,7 +947,7 @@ function App() {
                   )}
 
                   <div className={styles.scanBelow}>
-                    {showMarketingHero && (
+                    {showScanGuide && (
                       <>
                         <section className={`glass ${styles.hero}`} aria-label="Book site overview">
                           <div className={styles.heroIntro}>
@@ -1020,6 +1019,7 @@ function App() {
                       </>
                     )}
 
+                    {showScanGuide && (
                     <section className={styles.scanExplainer} aria-label="Ways to add a book">
                       <h2 className={styles.scanTitle}>Three easy ways to capture a book</h2>
                       <p className={styles.scanSubtitle}>Use the camera for speed, upload a photo for tricky spines, or type the ISBN when you want full control.</p>
@@ -1042,6 +1042,7 @@ function App() {
                         </button>
                       </div>
                     </section>
+                    )}
                   </div>
                 </div>
               </ErrorBoundary>

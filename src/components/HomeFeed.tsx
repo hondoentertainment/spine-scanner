@@ -47,10 +47,15 @@ export default function HomeFeed() {
     [books],
   );
 
-  const feedItems = useMemo(() => {
+  const activity = useMemo(() => {
     const reading = books.filter((b) => b.status === 'reading');
     const rest = sortedRecent.filter((b) => !reading.some((r) => r.id === b.id));
-    return [...reading, ...rest];
+    const shownReading = reading.slice(0, 12);
+    const shownRest = rest.slice(0, Math.max(0, 12 - shownReading.length));
+    return {
+      items: [...shownReading, ...shownRest],
+      hidden: books.length - shownReading.length - shownRest.length,
+    };
   }, [books, sortedRecent]);
 
   const strip = sortedRecent.slice(0, 12);
@@ -302,7 +307,7 @@ export default function HomeFeed() {
                   {insights.finishedThisYear} / {bookGoalTarget}
                 </span>
               </div>
-              <div className={s.goalTrack} role="progressbar" aria-valuenow={bookGoalPct} aria-valuemin={0} aria-valuemax={100}>
+              <div className={s.goalTrack} role="progressbar" aria-valuenow={bookGoalPct} aria-valuemin={0} aria-valuemax={100} aria-label={`Books finished this year, ${insights.finishedThisYear} of ${bookGoalTarget}`}>
                 <span className={s.goalFill} style={{ width: `${bookGoalPct}%` }} />
               </div>
             </div>
@@ -315,7 +320,7 @@ export default function HomeFeed() {
                   {insights.pagesReadThisYear.toLocaleString()} / {pageGoalTarget.toLocaleString()}
                 </span>
               </div>
-              <div className={s.goalTrack} role="progressbar" aria-valuenow={pageGoalPct} aria-valuemin={0} aria-valuemax={100}>
+              <div className={s.goalTrack} role="progressbar" aria-valuenow={pageGoalPct} aria-valuemin={0} aria-valuemax={100} aria-label={`Pages finished this year, ${insights.pagesReadThisYear} of ${pageGoalTarget}`}>
                 <span className={s.goalFill} style={{ width: `${pageGoalPct}%` }} />
               </div>
             </div>
@@ -356,6 +361,7 @@ export default function HomeFeed() {
               aria-valuenow={Math.round((topSeries.read / topSeries.owned) * 100)}
               aria-valuemin={0}
               aria-valuemax={100}
+              aria-label={`${topSeries.name}, ${topSeries.read} of ${topSeries.owned} books read`}
             >
               <span
                 className={s.goalFill}
@@ -462,14 +468,13 @@ export default function HomeFeed() {
             <Clock size={16} aria-hidden />
             <h2 className={s.sectionTitle}>Recently added</h2>
           </div>
-          <div className={s.storiesRow} role="list">
+          <ul className={s.storiesRow}>
             {strip.map((book) => (
+              <li key={book.id}>
               <button
-                key={book.id}
                 type="button"
                 className={s.storyRing}
                 onClick={() => navigate(`/library?isbn=${encodeURIComponent(book.isbn)}`)}
-                aria-label={`Open ${book.title}`}
               >
                 <span className={s.storyImgWrap}>
                   <img
@@ -482,8 +487,9 @@ export default function HomeFeed() {
                 </span>
                 <span className={s.storyCaption}>{book.title}</span>
               </button>
+              </li>
             ))}
-          </div>
+          </ul>
         </section>
       )}
 
@@ -493,7 +499,7 @@ export default function HomeFeed() {
           <h2 className={s.sectionTitle}>For you</h2>
         </div>
         <ul className={s.feedList}>
-          {feedItems.map((book) => (
+          {activity.items.map((book) => (
               <li key={book.id}>
                 <button
                   type="button"
@@ -519,6 +525,11 @@ export default function HomeFeed() {
               </li>
             ))}
         </ul>
+        {activity.hidden > 0 && (
+          <button type="button" className={s.goalLink} onClick={() => navigate('/library')}>
+            See all {pluralize(books.length, 'book')} in your library
+          </button>
+        )}
       </section>
     </div>
   );

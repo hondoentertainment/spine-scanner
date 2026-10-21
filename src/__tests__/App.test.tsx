@@ -495,6 +495,14 @@ describe('App', () => {
     expect(screen.getByText(/Three easy ways to capture a book/)).toBeInTheDocument();
   });
 
+  it('hides the scan explainer once the library has books', async () => {
+    useBookStore.setState({ books: [makeBook()], shelves: [] });
+    renderApp('/scan');
+    await screen.findByTestId('mock-scanner');
+    expect(screen.queryByText(/Add books in seconds/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Three easy ways to capture a book/)).not.toBeInTheDocument();
+  });
+
   it('opens support and privacy from the scanner stubs', async () => {
     renderApp('/scan');
     await screen.findByTestId('mock-scanner');
@@ -702,14 +710,15 @@ describe('App', () => {
     expect(screen.queryByText('Sync status')).not.toBeInTheDocument();
   });
 
-  it('shows currently-reading stats when a book is in progress', async () => {
+  it('keeps the scanner clear of library marketing once a book is saved', async () => {
     useBookStore.setState({
       books: [makeBook({ status: 'reading', title: 'Dune', author: 'Frank Herbert' })],
       shelves: [],
     });
     renderApp('/scan');
-    expect(await screen.findByText('Dune')).toBeInTheDocument();
-    expect(screen.getByText('Frank Herbert')).toBeInTheDocument();
+    await screen.findByTestId('mock-scanner');
+    expect(screen.queryByText('Dune')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Three easy ways to capture a book/)).not.toBeInTheDocument();
   });
 
   it('syncs a newly added book when signed in and online', async () => {

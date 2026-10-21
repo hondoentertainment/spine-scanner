@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import RecommendationsView from '../RecommendationsView';
+import { ToastProvider } from '../Toast';
 import { useBookStore } from '../../store/useBookStore';
 import { clearRecommendationCache, writeRecommendationCache } from '../../recommendations/cache';
 import { libraryFingerprint } from '../../recommendations/rank';
@@ -45,7 +46,9 @@ const suggestion: BookRecommendation = {
 function renderView() {
   return render(
     <MemoryRouter>
-      <RecommendationsView />
+      <ToastProvider>
+        <RecommendationsView />
+      </ToastProvider>
     </MemoryRouter>,
   );
 }
@@ -79,13 +82,16 @@ describe('RecommendationsView', () => {
 
     expect(await screen.findByText('Because you own Dune and Hyperion')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Dune Messiah' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Add Dune Messiah to wishlist' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to wishlist: Dune Messiah' }));
 
     const saved = useBookStore.getState().books.find((book) => book.title === 'Dune Messiah');
     expect(saved?.status).toBe('to-read');
     expect(saved?.isbn).toBe('9780441013593');
-    expect(screen.getByText(/Added Dune Messiah to your to-read list/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Add Dune Messiah to wishlist' })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Added Dune Messiah to your wishlist/).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Add to wishlist: Dune Messiah' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(useBookStore.getState().books.find((book) => book.title === 'Dune Messiah')).toBeUndefined();
   });
 
   it('asks for books before suggesting anything', async () => {

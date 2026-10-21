@@ -81,6 +81,22 @@ const getVideoConstraints = (facing: 'environment' | 'user' = 'environment'): Me
 
 const SCANNER_DEBUG_ENABLED = import.meta.env.DEV || import.meta.env.VITE_ENABLE_SCANNER_DEBUG === 'true';
 
+function cameraUnavailableMessage(raw: string): string {
+    const text = raw.toLowerCase();
+    if (text.includes('permission') || text.includes('notallowed') || text.includes('denied')) {
+        return 'Camera access is blocked. Allow it in the browser, or add a book from a photo.';
+    }
+    if (
+        text.includes('notfound')
+        || text.includes('device not found')
+        || text.includes('no camera')
+        || text.includes('requested device')
+    ) {
+        return 'No camera was found. Add a book from a photo or type the ISBN.';
+    }
+    return 'The camera didn\u2019t start. Add a book from a photo or type the ISBN.';
+}
+
 const SCAN_MODES: { mode: ScanMode; label: string; description: string }[] = [
     { mode: 'auto', label: 'Auto', description: 'Try a barcode, then the title' },
     { mode: 'barcode', label: 'Barcode', description: 'Read the ISBN barcode' },
@@ -732,7 +748,7 @@ const Scanner: React.FC<ScannerProps> = ({
                     <p className={s.statusHeading} id="status-text">
                         {processing ? (inOcrPhase ? `Analyzing spine... ${ocrElapsedSec}s` : 'Scanning...') : cameraError ? 'No camera' : 'Ready to scan'}
                     </p>
-                    <p className={s.statusText}>{cameraError ? 'No camera — add from a photo or type the ISBN' : status}</p>
+                    <p className={s.statusText}>{cameraError ?? status}</p>
                 </div>
 
                 {scanResultSummary && !processing && (
@@ -754,10 +770,6 @@ const Scanner: React.FC<ScannerProps> = ({
                     <button type="button" onClick={cancelScan} className={s.cancelScanBtn} aria-label="Cancel scan">
                         <X size={16} /> Cancel
                     </button>
-                )}
-
-                {cameraError && (
-                    <div className={s.cameraError}>{cameraError}</div>
                 )}
 
                 {/* Hidden file inputs */}
@@ -902,8 +914,8 @@ const Scanner: React.FC<ScannerProps> = ({
                 }}
                 onUserMediaError={(err) => {
                     const msg = err instanceof Error ? err.message : 'Camera access denied';
-                    setCameraError(`Can't access camera: ${msg}`);
-                    setStatus('No camera - upload a photo or type the ISBN');
+                    setCameraError(cameraUnavailableMessage(msg));
+                    setStatus(cameraUnavailableMessage(msg));
                     addLog(`Camera error: ${msg}`);
                 }}
                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
@@ -994,7 +1006,7 @@ const Scanner: React.FC<ScannerProps> = ({
                 {/* Viewfinder overlay */}
                 <div className={s.viewfinderOverlay} role="img" aria-label={cameraError ? 'Camera unavailable' : 'Camera viewfinder'}>
                     {cameraError ? (
-                        <p className={s.cameraUnavailable} role="status">Camera unavailable. Add from a photo or type the ISBN.</p>
+                        <p className={s.cameraUnavailable} role="status">{cameraError}</p>
                     ) : (
                         <>
                             <div className={s.barcodeGuide} aria-hidden="true">

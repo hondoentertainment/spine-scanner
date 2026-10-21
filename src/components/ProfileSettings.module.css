@@ -514,6 +514,7 @@
 
 .optBtn {
   padding: 0.45rem 0.75rem;
+  min-height: 44px;
   font-size: 0.8rem;
   font-weight: 600;
   border-radius: 0.5rem;
@@ -772,8 +773,11 @@
   text-decoration: underline;
   text-underline-offset: 2px;
   min-height: 44px;
+  min-width: 44px;
+  padding: 0 0.35rem;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
 }
 
 .dangerZone {

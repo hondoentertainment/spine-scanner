@@ -358,9 +358,9 @@ describe('HomeFeed', () => {
     expect(screen.getByText('Added 3 days ago')).toBeInTheDocument();
     expect(screen.getAllByText('Want to read').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Finished').length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole('button', { name: 'Open Today Book' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Today Book', exact: true }));
     expect(navigate).toHaveBeenCalledWith(`/library?isbn=${encodeURIComponent('9780141036144')}`);
-    fireEvent.click(screen.getByRole('button', { name: 'Open Older Book' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Older Book', exact: true }));
     expect(navigate).toHaveBeenCalledWith(`/library?isbn=${encodeURIComponent('9780000000004')}`);
   });
 
@@ -380,6 +380,23 @@ describe('HomeFeed', () => {
     expect(screen.getByText(/Ada/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'View lent books' }));
     expect(navigate).toHaveBeenCalledWith('/library?lent=1');
+  });
+
+  it('caps the activity list and links to the rest of the library', () => {
+    useBookStore.setState({
+      books: Array.from({ length: 16 }, (_, index) => makeBook({
+        id: `cap-${index}`,
+        title: `Shelf Book ${index}`,
+        isbn: `978000000${String(index).padStart(4, '0')}`,
+        status: 'to-read',
+        dateAdded: isoDaysAgo(index),
+      })),
+    });
+    renderFeed();
+    expect(screen.getAllByText('Shelf Book 0').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Shelf Book 15')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /See all 16 books in your library/ }));
+    expect(navigate).toHaveBeenCalledWith('/library');
   });
 
   it('does not show goals, streak, series, or year stats when those conditions are empty', () => {

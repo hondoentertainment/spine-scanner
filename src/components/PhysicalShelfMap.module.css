@@ -96,11 +96,31 @@
 
 .bookList li {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 0.6rem;
+  width: 100%;
   color: var(--text-main);
   font-size: 0.95rem;
   line-height: 1.35;
+}
+
+.bookBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.35rem 0.15rem;
+  border: none;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.bookBtn:hover,
+.bookBtn:focus-visible {
+  color: var(--accent-blue);
 }
 
 .bookTitle {

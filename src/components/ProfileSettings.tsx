@@ -159,16 +159,16 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       </p>
       <nav className={s.sectionNav} aria-label="On this page">
         {!isMvpMode() && <a href="#reading-activity">Reading activity</a>}
-        {user !== null && <a href="#sync-status">Sync</a>}
-        <a href="#library-data">Library data</a>
-        <a href="#danger-zone">Danger zone</a>
-        <a href="#support">Support</a>
-        <a href="#privacy">Privacy</a>
         {!isMvpMode() && <a href="#reading-goals">Goals</a>}
         <a href="#theme">Theme</a>
         {!isMvpMode() && <a href="#library-defaults">Defaults</a>}
         {!isMvpMode() && <a href="#scanner-settings">Scanner</a>}
         {!isMvpMode() && <a href="#library-shortcuts">Shortcuts</a>}
+        <a href="#library-data">Library data</a>
+        {user !== null && <a href="#sync-status">Sync</a>}
+        <a href="#support">Support</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#danger-zone">Danger zone</a>
       </nav>
 
       {!isMvpMode() && (

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookmarkPlus, RefreshCw, ScanLine, Sparkles } from 'lucide-react';
 import { useBookStore } from '../store/useBookStore.ts';
+import { useToast } from './Toast.tsx';
 import { getBookCoverSrc } from '../utils/bookPresentation.ts';
 import { loadRecommendations, peekRecommendations } from '../recommendations/engine.ts';
 import { isAlreadyInLibrary, matchesReaderLanguage } from '../recommendations/rank.ts';
@@ -19,6 +20,8 @@ export default function RecommendationsView() {
   const navigate = useNavigate();
   const books = useBookStore((state) => state.books);
   const addBook = useBookStore((state) => state.addBook);
+  const removeBook = useBookStore((state) => state.removeBook);
+  const { toast } = useToast();
   const [result, setResult] = useState<RecommendationResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshToken, setRefreshToken] = useState(0);
@@ -51,8 +54,16 @@ export default function RecommendationsView() {
 
   const addToWishlist = (recommendation: BookRecommendation) => {
     if (isAlreadyInLibrary(recommendation, books)) return;
-    addBook(toWishlistBook(recommendation));
-    setAnnouncement(`Added ${recommendation.title} to your to-read list.`);
+    const added = toWishlistBook(recommendation);
+    addBook(added);
+    setAnnouncement(`Added ${recommendation.title} to your wishlist.`);
+    toast(`Added ${recommendation.title} to your wishlist`, 'success', 6000, undefined, {
+      label: 'Undo',
+      onClick: () => {
+        removeBook(added.id);
+        setAnnouncement(`Removed ${recommendation.title} from your wishlist.`);
+      },
+    });
   };
 
   return (
@@ -67,6 +78,9 @@ export default function RecommendationsView() {
           Books you don&apos;t own yet. Each one names the books already on your shelves that suggested it.
         </p>
         <div className={s.heroActions}>
+          <button type="button" className={`glass ${s.secondary}`} onClick={() => navigate('/library')}>
+            Back to library
+          </button>
           <button
             type="button"
             className={`glass ${s.secondary}`}
@@ -135,7 +149,7 @@ export default function RecommendationsView() {
                   type="button"
                   className={s.primary}
                   onClick={() => addToWishlist(recommendation)}
-                  aria-label={`Add ${recommendation.title} to wishlist`}
+                  aria-label={`Add to wishlist: ${recommendation.title}`}
                 >
                   <BookmarkPlus size={18} aria-hidden />
                   Add to wishlist

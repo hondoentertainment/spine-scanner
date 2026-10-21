@@ -144,7 +144,7 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
     };
 
     const statusChips: { status: BookEntry['status']; icon: React.ReactNode; label: string }[] = [
-        { status: 'to-read', icon: <Clock size={14} />, label: 'To Read' },
+        { status: 'to-read', icon: <Clock size={14} />, label: 'Want to read' },
         { status: 'reading', icon: <BookOpen size={14} />, label: 'Reading' },
         { status: 'read', icon: <CheckCircle size={14} />, label: 'Read' },
         { status: 'dnf', icon: <XCircle size={14} />, label: 'DNF' },
@@ -278,47 +278,40 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
     }
 
     return (
-        <div
-            className={`book-card glass ${s.card}`}
-            onClick={openCard}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    openCard();
-                }
-            }}
-        >
-            <div className={s.cardInner}>
+        <div className={`book-card glass ${s.card}`}>
+            <button type="button" className={s.openBtn} onClick={openCard}>
+            <span className={s.cardInner}>
                 <img
                     src={getBookCoverSrc(book.coverImg)}
-                    alt={book.title}
+                    alt=""
                     className={s.coverImg}
                     loading="lazy"
                     decoding="async"
                     fetchPriority="low"
                 />
-                <div className={s.info}>
-                    <h3 className={s.bookTitle}>{book.title}</h3>
-                    <p className={s.bookAuthor}>{book.author}</p>
+                <span className={s.info}>
+                    <span className={s.bookTitle}>{book.title}</span>
+                    <span className={s.bookAuthor}>{book.author}</span>
                     {formatPhysicalLocation(book) && (
-                        <p className={s.locationLine}>
+                        <span className={s.locationLine}>
                             <MapPin size={12} aria-hidden />
                             <span>{formatPhysicalLocation(book)}</span>
-                        </p>
+                        </span>
                     )}
                     {(onLoan || loanBadge) && (
-                        <p className={s.loanLine}>
+                        <span className={s.loanLine}>
                             <span>{lentSince}</span>
                             {loanBadge && (
                                 <span className={`${s.loanBadge} ${loanBadge === 'Overdue' ? s.loanBadgeOverdue : ''}`}>
                                     {loanBadge}
                                 </span>
                             )}
-                        </p>
+                        </span>
                     )}
-                    <div className={s.links}>
+                </span>
+            </span>
+            </button>
+            <div className={s.links}>
                         {generateAmazonLink(book.isbn) && (
                             <a href={generateAmazonLink(book.isbn)} target="_blank" rel="noopener noreferrer"
                                className={`glass ${s.amazonBtn}`} onClick={(e) => e.stopPropagation()}>
@@ -333,8 +326,6 @@ const BookCardInner: React.FC<BookCardProps> = ({ book, onClick, onActivateBookI
                             aria-label={`Share ${book.title}`} title="Share book">
                             <Share2 size={12} /> Share
                         </button>
-                    </div>
-                </div>
             </div>
 
             {/* Shelf chips */}

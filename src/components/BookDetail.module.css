@@ -30,12 +30,32 @@
   position: absolute;
   top: 0.65rem;
   right: 0.65rem;
+  width: 44px;
+  height: 44px;
   background: rgba(0, 0, 0, 0.35);
   color: #f8fafc;
-  padding: 0.4rem;
+  padding: 0;
   border-radius: 0.5rem;
   display: flex;
+  align-items: center;
+  justify-content: center;
   z-index: 5;
+}
+
+.loanBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.6rem;
+  margin: 0;
+  padding: 0.65rem 0.8rem;
+  border-radius: 0.75rem;
+  background: rgba(56, 189, 248, 0.16);
+  color: var(--text-main);
+}
+
+.loanBannerOverdue {
+  background: rgba(248, 113, 113, 0.2);
 }
 
 .closeBtn:hover {
@@ -149,6 +169,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+  min-height: 44px;
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--accent-blue);
@@ -174,6 +195,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+  min-height: 44px;
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--accent-blue);
@@ -215,6 +237,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+  min-height: 44px;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--accent-purple);
@@ -400,6 +423,7 @@
 
 .quickBtn {
   padding: 0.45rem 0.7rem;
+  min-height: 44px;
   border-radius: 9999px;
   background: rgba(255, 255, 255, 0.06);
   color: var(--text-muted);
