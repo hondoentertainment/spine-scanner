@@ -21,7 +21,8 @@ import { BookOpen, Library, Scan, AlertCircle, Layers, User, Sparkles, Cloud, Bo
 import { generateAmazonLink } from './utils/amazonLink.ts';
 import { isValidIsbn, normalizeToIsbn13 } from './utils/isbnValidation.ts';
 import { isbnExistsInLibrary } from './utils/libraryUtils.ts';
-import { batchAddToastMessage, batchSummaryMessage } from './utils/batchSession.ts';
+import { batchSummaryMessage } from './utils/batchSession.ts';
+import ManualIsbnForm, { type ManualIsbnFormHandle } from './components/ManualIsbnForm.tsx';
 import { useAnalyticsStore } from './store/useAnalyticsStore.ts';
 import { getLibraryInsights } from './utils/bookPresentation.ts';
 import PublicInfoPage, { type PublicPage } from './components/PublicInfoPage.tsx';
@@ -184,7 +185,7 @@ function App() {
   const showMarketingHero = location.pathname === '/scan' && !isMvpMode();
   const brandingSubtitle = getBrandingSubtitle(location.pathname, publicPage);
   const { lookupByIsbn, loading, error } = useBookLookup();
-  const { addBook, removeBook, books, setBooks, shelves, setShelves } = useBookStore();
+  const { addBook, books, setBooks, shelves, setShelves } = useBookStore();
   const { user, recoveryMode, initialize: initAuth } = useAuthStore();
   const { preferences, loadFromCloud, saveToCloud, updatePreferences } = useProfileStore();
   const { pendingChanges, markDirty, markSynced, markSyncFailed, flushing, setFlushing } = useSyncQueue();
@@ -197,6 +198,9 @@ function App() {
   const { track } = useAnalyticsStore();
   const [srAnnouncement, setSrAnnouncement] = useState('');
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [recentAdd, setRecentAdd] = useState<{ title: string; isbn: string } | null>(null);
+  const [isbnEntryActive, setIsbnEntryActive] = useState(false);
+  const isbnFormRef = useRef<ManualIsbnFormHandle>(null);
   const batchMode = preferences.batchModeDefault;
   const insights = useMemo(() => getLibraryInsights(books), [books]);
   const diagnostics = useMemo(() => buildSupportDiagnostics({
@@ -449,11 +453,14 @@ function App() {
     };
     addBook(newBook);
     track('book_added', { method: 'photo' });
-    toast('Book added with photo. Edit details in your library.', 'success');
+    setRecentAdd({ title: newBook.title, isbn: newBook.isbn });
+    toast(`Added ${newBook.title}`, 'success', 6000, undefined, {
+      label: 'View',
+      onClick: () => navigate(`/library?isbn=${encodeURIComponent(photoIsbn)}`),
+    });
     if (user && online) {
       void pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
     }
-    navigate(`/library?isbn=${encodeURIComponent(photoIsbn)}`);
   }, [addBook, books, user, online, toast, track, navigate]);
 
   const handleShelfImport = useCallback((items: ShelfReviewItem[]) => {
@@ -467,12 +474,18 @@ function App() {
     }
     added.forEach((book) => track('book_added', { method: 'shelf_scan', isbn: book.isbn }));
     const skippedNote = skippedDuplicates > 0 ? ` Skipped ${skippedDuplicates} already in your library.` : '';
-    toast(`Added ${added.length} ${added.length === 1 ? 'book' : 'books'} from your shelf photo.${skippedNote}`, 'success');
+    const label = added.length === 1 ? added[0].title : `${added.length} books`;
+    setRecentAdd({ title: label, isbn: added[0].isbn });
+    toast(`Added ${label}${skippedNote}`, 'success', 6000, undefined, {
+      label: 'View',
+      onClick: () => navigate(added.length === 1
+        ? `/library?isbn=${encodeURIComponent(added[0].isbn)}`
+        : '/library'),
+    });
     if (user && online) {
       const next = useBookStore.getState().books;
       void pushBooks(user.id, next).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
     }
-    navigate('/library');
     return true;
   }, [addBook, navigate, online, toast, track, user]);
 
@@ -507,31 +520,20 @@ function App() {
     }
   }, [location.pathname, toast]);
 
-  const addBookAndOpen = useCallback((newBook: BookEntry, successMessage: string, trackMethod: string, forceOpen = false) => {
+  const addBookAndOpen = useCallback((newBook: BookEntry, trackMethod: string) => {
     addBook(newBook);
     track('book_added', { method: trackMethod, isbn: newBook.isbn });
-    if (batchMode && !forceOpen) {
-      batchBooksAddedRef.current += 1;
-      toast(batchAddToastMessage(batchBooksAddedRef.current), 'success', 4000, undefined, {
-        label: 'Undo',
-        onClick: () => {
-          removeBook(newBook.id);
-          batchBooksAddedRef.current = Math.max(0, batchBooksAddedRef.current - 1);
-          toast(`Removed "${newBook.title}"`, 'info');
-        },
-      });
-      if (batchBooksAddedRef.current === 1) {
-        toast("Batch mode: you'll stay on scanner. Tap Library when done.", 'info', 4500);
-      }
-    } else {
-      toast(successMessage, 'success');
-      navigate(`/library?isbn=${encodeURIComponent(newBook.isbn)}`);
-    }
+    if (batchMode) batchBooksAddedRef.current += 1;
+    setRecentAdd({ title: newBook.title, isbn: newBook.isbn });
+    toast(`Added ${newBook.title}`, 'success', 6000, undefined, {
+      label: 'View',
+      onClick: () => navigate(`/library?isbn=${encodeURIComponent(newBook.isbn)}`),
+    });
 
     if (user && online) {
       void pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));
     }
-  }, [addBook, batchMode, books, navigate, online, removeBook, toast, track, user]);
+  }, [addBook, batchMode, books, navigate, online, toast, track, user]);
 
   const handleScan = async (isbn: string, options: ScanRequestOptions = {}) => {
     const normalizedInput = isbn.replace(/[^0-9Xx]/g, '').replace(/x$/i, 'X') || isbn;
@@ -578,7 +580,7 @@ function App() {
         metadataSource: 'manual',
       };
 
-      addBookAndOpen(reviewBook, 'Added for review. Open the book to verify the ISBN and details.', 'manual_review', true);
+      addBookAndOpen(reviewBook, 'manual_review');
       return;
     }
 
@@ -600,7 +602,7 @@ function App() {
           shelfIds: [],
           metadataSource: metadata.source,
         };
-        addBookAndOpen(newBook, `Added "${metadata.title}" to your library.`, options.source === 'manual' ? 'manual' : 'scan', options.source === 'manual');
+        addBookAndOpen(newBook, options.source === 'manual' ? 'manual' : 'scan');
       } else {
         const addAnyway = await confirm({
           title: 'No metadata found',
@@ -626,7 +628,7 @@ function App() {
             reviewReason: 'Metadata not found. Add details manually.',
             metadataSource: 'manual',
           };
-          addBookAndOpen(newBook, 'Added with ISBN only. You can fill in the details in your library.', options.source === 'manual' ? 'manual_no_metadata' : 'scan_no_metadata', options.source === 'manual');
+          addBookAndOpen(newBook, options.source === 'manual' ? 'manual_no_metadata' : 'scan_no_metadata');
         } else {
           toast('No metadata found for that ISBN.', 'error');
         }
@@ -812,78 +814,6 @@ function App() {
           </div>
         </div>
 
-        {showMarketingHero && (
-          <>
-            <section className={`glass ${styles.hero}`} aria-label="Book site overview">
-              <div className={styles.heroIntro}>
-                <span className={styles.eyebrow}><Sparkles size={14} /> Reader-first workflow</span>
-                <h2 className={styles.heroTitle}>Add books in seconds and browse them like a real library.</h2>
-                <p className={styles.heroText}>
-                  Scan a spine, upload a photo, or type an ISBN. The app keeps your collection searchable, synced, and easy to return to.
-                </p>
-                <div className={styles.heroActions}>
-                  <button type="button" className={`glass ${styles.primaryAction}`} onClick={() => goToMain('/scan', 'Scanner view')}>
-                    <Scan size={18} /> Start scanning
-                  </button>
-                  <button type="button" className={`glass ${styles.secondaryAction}`} onClick={() => goToMain('/library', 'Library view')}>
-                    <Library size={18} /> Browse library
-                  </button>
-                </div>
-              </div>
-
-              <div className={styles.heroStats}>
-                <div className={`glass ${styles.statCard}`}>
-                  <span className={styles.statLabel}>Books saved</span>
-                  <strong>{insights.totalBooks}</strong>
-                  <span>{insights.toReadCount} still on deck</span>
-                </div>
-                <div className={`glass ${styles.statCard}`}>
-                  <span className={styles.statLabel}>Reading now</span>
-                  <strong>{insights.currentlyReading?.title ?? 'Nothing pinned yet'}</strong>
-                  <span>{insights.currentlyReading?.author ?? 'Mark a title as reading to keep it visible.'}</span>
-                </div>
-                <div className={`glass ${styles.statCard}`}>
-                  <span className={styles.statLabel}>{user ? 'Sync status' : 'Library'}</span>
-                  <strong>{user ? (online ? 'Online' : 'Offline') : 'On this device'}</strong>
-                  <span>
-                    {user
-                      ? pendingChanges > 0
-                        ? `${pendingChanges} change${pendingChanges === 1 ? '' : 's'} to sync`
-                        : lastSyncedAt
-                          ? `Synced ${formatRelativeTime(lastSyncedAt)}`
-                          : 'Everything is up to date.'
-                      : 'Saved on this device'}
-                  </span>
-                </div>
-              </div>
-            </section>
-
-            <section className={styles.quickGuide} aria-label="How it works">
-              <div className={`glass ${styles.guideCard}`}>
-                <Scan size={18} />
-                <div>
-                  <strong>1. Add a book</strong>
-                  <p>Scan live, snap a photo, or type the ISBN if the camera misses.</p>
-                </div>
-              </div>
-              <div className={`glass ${styles.guideCard}`}>
-                <BookMarked size={18} />
-                <div>
-                  <strong>2. Organize it</strong>
-                  <p>Track reading status, notes, and shelves without leaving the library view.</p>
-                </div>
-              </div>
-              <div className={`glass ${styles.guideCard}`}>
-                <Cloud size={18} />
-                <div>
-                  <strong>3. Pick up anywhere</strong>
-                  <p>Your collection stays searchable and syncs when you reconnect.</p>
-                </div>
-              </div>
-            </section>
-          </>
-        )}
-
         <nav className={`glass ${styles.nav}`} aria-label="Main navigation">
           {navItems.map(({ key, label, shortLabel, icon, fab }) => {
             const to = `/${key}`;
@@ -986,50 +916,56 @@ function App() {
             path="/scan"
             element={(
               <ErrorBoundary>
-                <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
-                  <div className={styles.scanView}>
-                    <div className={styles.scanHeader}>
+                <div className={styles.scanView}>
+                  <div className={styles.scanCapture}>
+                    <ManualIsbnForm
+                      ref={isbnFormRef}
+                      disabled={loading}
+                      onActiveChange={setIsbnEntryActive}
+                      onSubmit={(isbn, options) => { void handleScan(isbn, options); }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => updatePreferences({ batchModeDefault: !batchMode })}
+                      className={`glass ${styles.batchToggle} ${batchMode ? styles.batchToggleActive : ''}`}
+                      aria-pressed={batchMode}
+                      title={batchMode ? 'Exit batch mode' : 'Batch add keeps you on the scanner after each add'}
+                    >
+                      <Layers size={18} />
+                      {batchMode ? 'Batch mode on' : 'Batch add'}
+                    </button>
+                  </div>
+
+                  {recentAdd && (
+                    <div className={styles.scanAnother} role="status" aria-live="polite">
                       <div>
-                        <span className={styles.sectionBadge}>Add books</span>
-                        <h2 className={styles.scanTitle}>Three easy ways to capture a book</h2>
-                        <p className={styles.scanSubtitle}>Use the camera for speed, upload a photo for tricky spines, or type the ISBN when you want full control.</p>
+                        <strong>Added {recentAdd.title}</strong>
+                        <p>Ready for the next book.</p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => updatePreferences({ batchModeDefault: !batchMode })}
-                        className={`glass ${styles.batchToggle} ${batchMode ? styles.batchToggleActive : ''}`}
-                        aria-pressed={batchMode}
-                        title={batchMode ? 'Exit batch mode' : 'Batch add keeps you on the scanner after each add'}
-                      >
-                        <Layers size={18} />
-                        {batchMode ? 'Batch mode on' : 'Batch add'}
-                      </button>
+                      <div className={styles.scanAnotherActions}>
+                        <button type="button" className={styles.primaryAction} onClick={() => setRecentAdd(null)}>
+                          Scan another
+                        </button>
+                        <button
+                          type="button"
+                          className={`glass ${styles.secondaryAction}`}
+                          onClick={() => navigate(`/library?isbn=${encodeURIComponent(recentAdd.isbn)}`)}
+                        >
+                          View
+                        </button>
+                      </div>
                     </div>
+                  )}
 
-                    <div className={styles.scanTips}>
-                      <div className={`glass ${styles.tipCard}`}>
-                        <strong>Best for speed</strong>
-                        <span>Center the barcode and hold still for a second.</span>
-                      </div>
-                      <div className={`glass ${styles.tipCard}`}>
-                        <strong>Best for hard covers</strong>
-                        <span>Use photo upload when the spine text is small or reflective.</span>
-                      </div>
-                      <div className={`glass ${styles.tipCard}`}>
-                        <strong>Best for a whole shelf</strong>
-                        <span>Choose Shelf, photograph the row, then accept, edit, or reject each book.</span>
-                      </div>
-                      <button type="button" className={`glass ${styles.tipCard} ${styles.tipCardButton}`} onClick={() => goToMain('/library', 'Library view')}>
-                        <strong>Already scanned enough?</strong>
-                        <span>Jump to your library <ChevronRight size={14} /></span>
-                      </button>
-                    </div>
-
+                  <Suspense fallback={<div className={styles.lazyFallback}><div className={styles.skeletonBlock} /><div className={styles.skeletonGrid}><span /><span /><span /></div></div>}>
                     <Scanner
                       onScan={handleScan}
                       onPhotoCapture={handlePhotoCapture}
                       isScanning={loading}
                       batchMode={batchMode}
+                      liveScanPaused={isbnEntryActive}
+                      onNeedManualIsbn={() => isbnFormRef.current?.focus()}
+                      onEditIsbn={(isbn) => isbnFormRef.current?.setValue(isbn)}
                       onOpenSupport={() => openPublicPage('support')}
                       onOpenPrivacy={() => openPublicPage('privacy')}
                       onViewLibrary={(isbn) => {
@@ -1037,15 +973,112 @@ function App() {
                       }}
                       onShelfImport={handleShelfImport}
                     />
+                  </Suspense>
 
-                    {error && (
-                      <div className={`glass ${styles.alertError}`}>
-                        <AlertCircle size={20} />
-                        <span>{error}</span>
-                      </div>
+                  {error && (
+                    <div className={`glass ${styles.alertError}`}>
+                      <AlertCircle size={20} />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <div className={styles.scanBelow}>
+                    {showMarketingHero && (
+                      <>
+                        <section className={`glass ${styles.hero}`} aria-label="Book site overview">
+                          <div className={styles.heroIntro}>
+                            <span className={styles.eyebrow}><Sparkles size={14} /> Reader-first workflow</span>
+                            <h2 className={styles.heroTitle}>Add books in seconds and browse them like a real library.</h2>
+                            <p className={styles.heroText}>
+                              Scan a spine, upload a photo, or type an ISBN. The app keeps your collection searchable, synced, and easy to return to.
+                            </p>
+                            <div className={styles.heroActions}>
+                              <button type="button" className={`glass ${styles.primaryAction}`} onClick={() => isbnFormRef.current?.focus()}>
+                                <Scan size={18} /> Start scanning
+                              </button>
+                              <button type="button" className={`glass ${styles.secondaryAction}`} onClick={() => goToMain('/library', 'Library view')}>
+                                <Library size={18} /> Browse library
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className={styles.heroStats}>
+                            <div className={`glass ${styles.statCard}`}>
+                              <span className={styles.statLabel}>Books saved</span>
+                              <strong>{insights.totalBooks}</strong>
+                              <span>{insights.toReadCount} still on deck</span>
+                            </div>
+                            <div className={`glass ${styles.statCard}`}>
+                              <span className={styles.statLabel}>Reading now</span>
+                              <strong>{insights.currentlyReading?.title ?? 'Nothing pinned yet'}</strong>
+                              <span>{insights.currentlyReading?.author ?? 'Mark a title as reading to keep it visible.'}</span>
+                            </div>
+                            <div className={`glass ${styles.statCard}`}>
+                              <span className={styles.statLabel}>{user ? 'Sync status' : 'Library'}</span>
+                              <strong>{user ? (online ? 'Online' : 'Offline') : 'On this device'}</strong>
+                              <span>
+                                {user
+                                  ? pendingChanges > 0
+                                    ? `${pendingChanges} change${pendingChanges === 1 ? '' : 's'} to sync`
+                                    : lastSyncedAt
+                                      ? `Synced ${formatRelativeTime(lastSyncedAt)}`
+                                      : 'Everything is up to date.'
+                                  : 'Saved on this device'}
+                              </span>
+                            </div>
+                          </div>
+                        </section>
+
+                        <section className={styles.quickGuide} aria-label="How it works">
+                          <div className={`glass ${styles.guideCard}`}>
+                            <Scan size={18} />
+                            <div>
+                              <strong>1. Add a book</strong>
+                              <p>Scan live, snap a photo, or type the ISBN if the camera misses.</p>
+                            </div>
+                          </div>
+                          <div className={`glass ${styles.guideCard}`}>
+                            <BookMarked size={18} />
+                            <div>
+                              <strong>2. Organize it</strong>
+                              <p>Track reading status, notes, and shelves without leaving the library view.</p>
+                            </div>
+                          </div>
+                          <div className={`glass ${styles.guideCard}`}>
+                            <Cloud size={18} />
+                            <div>
+                              <strong>3. Pick up anywhere</strong>
+                              <p>Your collection stays searchable and syncs when you reconnect.</p>
+                            </div>
+                          </div>
+                        </section>
+                      </>
                     )}
+
+                    <section className={styles.scanExplainer} aria-label="Ways to add a book">
+                      <h2 className={styles.scanTitle}>Three easy ways to capture a book</h2>
+                      <p className={styles.scanSubtitle}>Use the camera for speed, upload a photo for tricky spines, or type the ISBN when you want full control.</p>
+                      <div className={styles.scanTips}>
+                        <div className={`glass ${styles.tipCard}`}>
+                          <strong>Best for speed</strong>
+                          <span>Center the barcode and hold still for a second.</span>
+                        </div>
+                        <div className={`glass ${styles.tipCard}`}>
+                          <strong>Best for hard covers</strong>
+                          <span>Use photo upload when the spine text is small or reflective.</span>
+                        </div>
+                        <div className={`glass ${styles.tipCard}`}>
+                          <strong>Best for a whole shelf</strong>
+                          <span>Choose Shelf, photograph the row, then accept, edit, or reject each book.</span>
+                        </div>
+                        <button type="button" className={`glass ${styles.tipCard} ${styles.tipCardButton}`} onClick={() => goToMain('/library', 'Library view')}>
+                          <strong>Already scanned enough?</strong>
+                          <span>Jump to your library <ChevronRight size={14} /></span>
+                        </button>
+                      </div>
+                    </section>
                   </div>
-                </Suspense>
+                </div>
               </ErrorBoundary>
             )}
           />

@@ -417,20 +417,25 @@ describe('App', () => {
     expect(await screen.findByText('Cloud sync failed. Changes saved locally.')).toBeInTheDocument();
   });
 
-  it('stays on the scanner in batch mode and supports undo', async () => {
-    useProfileStore.setState({
-      preferences: { ...DEFAULT_PREFERENCES, onboardingCompleted: true, batchModeDefault: true },
-    });
+  it('stays on the scanner after adding a book and can open it', async () => {
     renderApp('/scan');
     await screen.findByTestId('mock-scanner');
     fireEvent.click(screen.getByRole('button', { name: 'scan-valid' }));
-    expect(await screen.findByText('Added. Ready for the next book.')).toBeInTheDocument();
-    expect(screen.getByText(/Batch mode: you'll stay on scanner/)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Scan another' })).toBeInTheDocument();
+    expect(screen.getAllByText('Added The Great Gatsby').length).toBeGreaterThan(0);
     expect(screen.getByTestId('mock-scanner')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
-    await waitFor(() => {
-      expect(useBookStore.getState().books).toHaveLength(0);
-    });
+    fireEvent.click(screen.getAllByRole('button', { name: 'View' })[0]);
+    expect(await screen.findByTestId('mock-library')).toBeInTheDocument();
+    expect(screen.getByText('open-isbn:9780141036144')).toBeInTheDocument();
+  });
+
+  it('clears the scan-another prompt without leaving the scanner', async () => {
+    renderApp('/scan');
+    await screen.findByTestId('mock-scanner');
+    fireEvent.click(screen.getByRole('button', { name: 'scan-valid' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Scan another' }));
+    expect(screen.queryByRole('button', { name: 'Scan another' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('mock-scanner')).toBeInTheDocument();
   });
 
   it('summarizes a batch session when leaving the scanner', async () => {
@@ -440,7 +445,7 @@ describe('App', () => {
     renderApp('/scan');
     await screen.findByTestId('mock-scanner');
     fireEvent.click(screen.getByRole('button', { name: 'scan-valid' }));
-    await screen.findByText('Added. Ready for the next book.');
+    await screen.findByRole('button', { name: 'Scan another' });
     fireEvent.click(screen.getByTestId(uiContracts.navTabTestId('profile')));
     expect(await screen.findByText(/Batch complete — you added 1 book this session/)).toBeInTheDocument();
   });

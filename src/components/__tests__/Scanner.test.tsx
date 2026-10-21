@@ -371,12 +371,13 @@ describe('Scanner', () => {
       expect(onScan).not.toHaveBeenCalled();
     }, 15000);
 
-    it('populates manual form when user clicks invalid ISBN suggestion', async () => {
+    it('sends an invalid ISBN suggestion to the ISBN field', async () => {
       // Use invalid ISBN with no valid checksum repair (tryFixChecksum returns null)
       ocrText = 'ISBN 1111111111111';
 
       const onScan = vi.fn();
-      renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
+      const onEditIsbn = vi.fn();
+      renderWithToast(<Scanner onScan={onScan} onEditIsbn={onEditIsbn} isScanning={false} />);
 
       const capture = screen.getByRole('button', { name: /scan book/i });
       await waitFor(() => expect(capture).not.toBeDisabled());
@@ -386,14 +387,8 @@ describe('Scanner', () => {
         expect(screen.getByText('111-1-11-111111-1')).toBeInTheDocument();
       }, { timeout: 10000 });
 
-      // Click the invalid suggestion - should populate manual form
-      const suggestionBtn = screen.getByRole('button', { name: /111-1-11-111111-1/ });
-      fireEvent.click(suggestionBtn);
-
-      await waitFor(() => {
-        const input = screen.getByRole('textbox', { name: /enter isbn/i });
-        expect(input).toHaveValue('1111111111111');
-      });
+      fireEvent.click(screen.getByRole('button', { name: /111-1-11-111111-1/ }));
+      expect(onEditIsbn).toHaveBeenCalledWith('1111111111111');
     }, 15000);
 
     it.skip('does not call onScan when OCR returns no ISBN candidates', async () => {
@@ -444,90 +439,7 @@ describe('Scanner', () => {
     }, 15000);
   });
 
-  /* ── Manual ISBN entry ─────────────────────────────────────── */
-  describe('manual ISBN entry', () => {
-    it('opens manual entry form', () => {
-      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
-      fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
-      expect(screen.getByPlaceholderText(/type isbn/i)).toBeInTheDocument();
-    });
-
-    it('submits valid manual ISBN', () => {
-      const onScan = vi.fn();
-      renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
-
-      fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
-      fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '9780141036144' } });
-      fireEvent.click(screen.getByRole('button', { name: /submit isbn/i }));
-
-      expect(onScan).toHaveBeenCalledWith('9780141036144', { source: 'manual' });
-    });
-
-    it('rejects ISBN with wrong length', () => {
-      const onScan = vi.fn();
-      renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
-
-      fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
-      fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '123456' } });
-      fireEvent.click(screen.getByRole('button', { name: /submit isbn/i }));
-
-      expect(onScan).not.toHaveBeenCalled();
-    });
-
-    it('disables manual submit while submission is in flight', async () => {
-      let resolveScan: (() => void) | undefined;
-      const onScan = vi.fn(() => new Promise<void>((resolve) => {
-        resolveScan = resolve;
-      }));
-
-      renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
-
-      fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
-      fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '9780141036144' } });
-
-      const submitButton = screen.getByRole('button', { name: /submit isbn/i });
-      expect(submitButton).not.toBeDisabled();
-
-      fireEvent.click(submitButton);
-
-      await waitFor(() => expect(submitButton).toBeDisabled());
-      expect(onScan).toHaveBeenCalledTimes(1);
-
-      await act(async () => {
-        resolveScan?.();
-      });
-    });
-    it('submits invalid manual ISBN for review when checksum repair fails', () => {
-      const onScan = vi.fn();
-      renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
-
-      fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
-      fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '1111111111111' } });
-      fireEvent.click(screen.getByRole('button', { name: /submit isbn/i }));
-
-      expect(onScan).toHaveBeenCalledWith('1111111111111', { allowReview: true, source: 'manual' });
-    });
-
-    it('accepts valid ISBN-10', () => {
-      const onScan = vi.fn();
-      renderWithToast(<Scanner onScan={onScan} isScanning={false} />);
-
-      fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
-      fireEvent.change(screen.getByPlaceholderText(/type isbn/i), { target: { value: '0743273567' } });
-      fireEvent.click(screen.getByRole('button', { name: /submit isbn/i }));
-
-      expect(onScan).toHaveBeenCalledWith('0743273567', { source: 'manual' });
-    });
-
-    it('closes manual form', () => {
-      renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
-      fireEvent.click(screen.getByRole('button', { name: /type isbn/i }));
-      expect(screen.getByPlaceholderText(/type isbn/i)).toBeInTheDocument();
-
-      fireEvent.click(screen.getByText(/back to scanning/i));
-      expect(screen.queryByPlaceholderText(/type isbn/i)).not.toBeInTheDocument();
-    });
-  });
+  /* ISBN entry lives beside the scanner. See ManualIsbnForm.test.tsx. */
 
   /* ── Debug log panel ───────────────────────────────────────── */
   describe('debug panel', () => {
@@ -649,8 +561,11 @@ describe('Scanner', () => {
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /take photo of isbn/i })).toBeInTheDocument();
       });
-      const manualEntryElements = screen.getAllByText(/Type ISBN manually/i);
-      expect(manualEntryElements.length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByRole('button', { name: /add from photo/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /add by photo/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /choose from gallery/i })).not.toBeInTheDocument();
+      expect(screen.getByText('Camera Unavailable')).toBeInTheDocument();
+      expect(screen.queryByText(/Center the barcode/i)).not.toBeInTheDocument();
     });
 
     it('hides scan button when camera fails', async () => {
@@ -738,7 +653,8 @@ describe('Scanner', () => {
   describe('shelf photo mode', () => {
     it('explains that each detected book is reviewed before import', async () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
-      const shelf = await screen.findByRole('radio', { name: 'Shelf' });
+      const shelf = await screen.findByRole('radio', { name: 'Shelf: Several books in one photo' });
+      expect(screen.getByRole('radio', { name: 'OCR: Read the title from a spine' })).toBeInTheDocument();
       fireEvent.click(shelf);
       expect(shelf).toHaveAttribute('aria-checked', 'true');
       expect(screen.getByRole('heading', { name: 'Scan a shelf' })).toBeInTheDocument();
