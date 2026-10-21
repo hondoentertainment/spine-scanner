@@ -42,9 +42,8 @@ test.describe('SpineScanner release smoke', () => {
 
   test('scanner view and manual ISBN entry work from the nav', async ({ page }) => {
     await page.getByTestId(uiContracts.navTabTestId('scan')).click();
-    await expect(page.getByRole('heading', { name: /three easy ways to capture a book/i })).toBeVisible();
-    await page.getByTestId(uiContracts.scannerTypeIsbnTestId).first().click();
     await expect(page.getByTestId(uiContracts.scannerManualInputTestId)).toBeVisible();
+    await expect(page.getByRole('heading', { name: /three easy ways to capture a book/i })).toBeVisible();
   });
 
   test('library view shows the empty-state flow', async ({ page }) => {

@@ -56,11 +56,12 @@ test.describe('OCR photo upload', () => {
     await fileInput.setInputFiles(FIXTURE_PATH);
 
     // OCR runs (15–45s first load, up to 2 min in CI); when ISBN found, onScan fires -> Google Books lookup -> "Added X to library"
-    await expect(page.getByText(new RegExp(`Added.*${mockTitle}.*library`, 'i'))).toBeVisible({
+    await expect(page.getByText(new RegExp(`Added.*${mockTitle}`, 'i'))).toBeVisible({
       timeout: process.env.CI ? 120000 : 60000,
     });
+    await expect(page.getByRole('button', { name: /scan another/i })).toBeVisible();
 
-    // Verify book appears in library
+    // The scanner stays put. Open the library to confirm the book was saved.
     await page.goto('./library');
     await expect(page.getByRole('heading', { name: /Your Library/i })).toBeVisible();
     await expect(page.getByText(mockTitle)).toBeVisible({ timeout: 5000 });

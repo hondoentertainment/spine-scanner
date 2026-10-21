@@ -7,8 +7,10 @@
   display: flex;
   gap: 1.25rem;
   width: 100%;
+  min-width: 0;
   min-height: 420px;
-  max-height: 80vh;
+  max-height: none;
+  overflow-x: clip;
 }
 
 /* ── Left panel: Controls ──────────────────────── */
@@ -18,12 +20,12 @@
   display: flex;
   flex-direction: column;
   padding: 1.5rem;
-  background: rgba(13, 17, 23, 0.92);
+  background: #0d1117;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 1.25rem;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  overflow-y: auto;
+  overflow: visible;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .systemStatus {
@@ -36,6 +38,10 @@
   text-transform: uppercase;
   color: #22c55e;
   margin-bottom: 0.75rem;
+}
+
+.systemStatusError {
+  color: var(--error, #f87171);
 }
 
 .systemDot {
@@ -74,28 +80,45 @@
 /* ── Scan mode selector ────────────────────── */
 
 .scanModeSelector {
-  display: flex;
-  gap: 0.25rem;
-  padding: 0.2rem;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0.75rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
   margin-bottom: 1rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .scanModeBtn {
-  flex: 1;
-  padding: 0.45rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.2rem;
+  min-width: 0;
+  min-height: 64px;
+  padding: 0.65rem 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: left;
+  color: #f8fafc;
   background: transparent;
-  border: none;
-  border-radius: 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 0.75rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
   -webkit-tap-highlight-color: transparent;
-  min-height: 36px;
+  white-space: normal;
+}
+
+.scanModeName {
+  font-weight: 700;
+}
+
+.scanModeDesc {
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: rgba(248, 250, 252, 0.78);
 }
 
 .scanModeBtn:hover {
@@ -105,9 +128,14 @@
 
 .scanModeBtnActive {
   color: #fff;
-  background: rgba(99, 102, 241, 0.3) !important;
-  border: 1px solid rgba(99, 102, 241, 0.4);
+  background: rgba(99, 102, 241, 0.35) !important;
+  border: 1px solid rgba(165, 180, 252, 0.7);
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
+}
+
+.scanModeBtn:focus-visible {
+  outline: 2px solid #c7d2fe;
+  outline-offset: 2px;
 }
 
 /* ── Status line (Ready to scan) ────────────── */
@@ -228,11 +256,14 @@
   flex-wrap: wrap;
   gap: 0.75rem;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   margin-bottom: 1rem;
 }
 
 .secondaryBtn {
-  flex: 1;
+  flex: 1 1 8rem;
+  min-width: 0;
   padding: 0.75rem 0.5rem;
   display: flex;
   flex-direction: column;
@@ -596,6 +627,16 @@
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
   text-align: center;
   letter-spacing: 0.01em;
+}
+
+.cameraUnavailable {
+  margin: 0;
+  max-width: 24ch;
+  text-align: center;
+  color: var(--error, #f87171);
+  font-weight: 700;
+  line-height: 1.4;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
 }
 
 .guideHintReady { color: #22c55e; }
@@ -1013,15 +1054,17 @@
 
   .controlsPanel {
     flex: none;
+    width: 100%;
     border-radius: 1rem;
     padding: 1.25rem;
   }
 
   .cameraPanel {
     flex: none;
-    height: 50vh;
-    min-height: 280px;
-    max-height: 400px;
+    width: 100%;
+    height: min(42vh, 320px);
+    min-height: 200px;
+    max-height: 320px;
     border-radius: 1rem;
   }
 

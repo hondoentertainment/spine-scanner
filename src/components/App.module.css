@@ -419,6 +419,55 @@
 
 .scanView {
   animation: fadeIn 0.5s ease-out;
+  min-width: 0;
+}
+
+.scanCapture {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  min-width: 0;
+}
+
+.scanAnother {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  background: var(--surface-solid);
+  border: 1px solid var(--glass-border);
+  color: var(--text-main);
+}
+
+.scanAnother p {
+  margin: 0.2rem 0 0;
+  color: var(--text-muted);
+}
+
+.scanAnotherActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.scanBelow {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  min-width: 0;
+}
+
+@media (min-width: 720px) {
+  .scanCapture {
+    flex-direction: row;
+    align-items: flex-end;
+  }
 }
 
 .scanHeader {

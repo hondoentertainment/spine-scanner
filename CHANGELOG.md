@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Faster scanning
+
+- **Add a book.** The scanner and an ISBN field are at the top of Add. The explainer sits below them.
+- **Stay and scan another.** Adding a book keeps you on the scanner, with a toast (`Added` plus the title and View) and a Scan another action.
+- **No camera.** The scan line and “Center the barcode” hint stop. The unavailable badge is red. Gallery and photo-only upload are one “Add from photo” action. Scan modes explain what they do.
+
 ### Trust and layout fixes
 
 - **Books you don't own yet.** Home and Suggestions leave out copies you already own, including alternate titles (Nineteen Eighty-Four and 1984), the same Open Library work, omnibuses and study guides, and editions in another language.

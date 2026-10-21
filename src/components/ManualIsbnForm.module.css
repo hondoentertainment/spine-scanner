@@ -1,0 +1,86 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+.label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.row {
+  display: flex;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.14));
+  background: var(--surface-solid, #1e293b);
+  color: var(--text-main, #fff);
+  font: inherit;
+  font-size: 1rem;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--accent-blue, #818cf8);
+  outline-offset: 2px;
+}
+
+.submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-width: 5.5rem;
+  min-height: 48px;
+  padding: 0.7rem 0.9rem;
+  border: none;
+  border-radius: 0.85rem;
+  background: linear-gradient(135deg, var(--accent-blue, #6366f1), var(--primary, #7c3aed));
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.submit:focus-visible,
+.miss:focus-visible {
+  outline: 2px solid var(--accent-blue, #818cf8);
+  outline-offset: 2px;
+}
+
+.misses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.miss {
+  min-height: 44px;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.14));
+  background: var(--surface-solid, #1e293b);
+  color: var(--text-main, #fff);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
