@@ -12,6 +12,13 @@ import { useAnalyticsStore } from '../../store/useAnalyticsStore';
 import { DEFAULT_PREFERENCES } from '../../types';
 import type { BookEntry } from '../../types';
 
+const supabaseConfig = vi.hoisted(() => ({ configured: false }));
+
+vi.mock('../../lib/supabase.ts', () => ({
+  supabase: null,
+  isSupabaseConfigured: () => supabaseConfig.configured,
+}));
+
 const navigate = vi.fn();
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
@@ -53,6 +60,7 @@ describe('ProfileSettings', () => {
 
   beforeEach(() => {
     navigate.mockReset();
+    supabaseConfig.configured = false;
     localStorage.clear();
     useBookStore.setState({ books: [], shelves: [] });
     useAuthStore.setState({
@@ -92,7 +100,28 @@ describe('ProfileSettings', () => {
     expect(screen.getByText('Local reader')).toBeInTheDocument();
     expect(screen.getByText('Saved locally on this device')).toBeInTheDocument();
     expect(screen.getByText(/Scan a few books to build your profile/)).toBeInTheDocument();
-    expect(screen.getByText(/Local profile - sign in to sync/)).toBeInTheDocument();
+    expect(screen.getByText(/Cloud sign-in isn't set up for this install/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Continue with Google' })).not.toBeInTheDocument();
+  });
+
+  it('offers Continue with Google when cloud sign-in is configured', () => {
+    supabaseConfig.configured = true;
+    renderProfile();
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Use email instead' })).toBeInTheDocument();
+    expect(screen.queryByText(/isn't set up for this install/)).not.toBeInTheDocument();
+  });
+
+  it('signs out from the profile account controls', () => {
+    const signOut = vi.fn();
+    useAuthStore.setState({
+      user: { id: 'u1', email: 'reader@example.com', user_metadata: { full_name: 'Reader' } } as never,
+      profile: null,
+      signOut,
+    });
+    renderProfile();
+    fireEvent.click(screen.getByRole('button', { name: /sign out/i }));
+    expect(signOut).toHaveBeenCalledOnce();
   });
 
   it('uses profile, avatar, and joined date when a user is signed in', () => {
@@ -117,6 +146,7 @@ describe('ProfileSettings', () => {
     expect(screen.getByText('hondo')).toBeInTheDocument();
     expect(screen.getByText('reader@example.com')).toBeInTheDocument();
     expect(screen.getByText(/Since March 2024/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
     expect(document.querySelector('img')?.getAttribute('src')).toBe('https://example.com/me.png');
   });
 

@@ -1,7 +1,15 @@
 import { create } from 'zustand';
+import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase.ts';
 import { getProfile, upsertProfile } from '../lib/profiles.ts';
-import type { User, Session } from '@supabase/supabase-js';
+import { e2eHooksEnabled, readE2EAuthSeed } from '../lib/e2eHooks.ts';
+import {
+  getOAuthRedirectUrl,
+  hasOAuthCode,
+  readOAuthReturnError,
+  redirectBrowser,
+  stripOAuthErrorParams,
+} from '../lib/googleAuth.ts';
 
 export interface AuthProfile {
   username: string | null;
@@ -19,6 +27,8 @@ interface AuthStore {
   magicLinkSent: boolean;
   confirmationPending: boolean;
   recoveryMode: boolean;
+  /** True after a new sign-in (not a restored session) so the app can offer a merge. */
+  pendingCloudLink: boolean;
   initialize: () => Promise<void>;
   signUp: (email: string, password: string, username?: string) => Promise<string | undefined>;
   signIn: (email: string, password: string) => Promise<void>;
@@ -34,6 +44,22 @@ interface AuthStore {
   clearConfirmation: () => void;
 }
 
+let stopAuthListener: (() => void) | null = null;
+
+function seededUser(seed: { id?: string; email: string; name: string; avatarUrl?: string }): User {
+  return {
+    id: seed.id || 'e2e-user',
+    email: seed.email,
+    aud: 'authenticated',
+    app_metadata: {},
+    user_metadata: {
+      full_name: seed.name,
+      avatar_url: seed.avatarUrl ?? '',
+    },
+    created_at: '2024-03-01T00:00:00.000Z',
+  } as User;
+}
+
 export const useAuthStore = create<AuthStore>((set, get) => ({
   user: null,
   session: null,
@@ -43,37 +69,103 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   magicLinkSent: false,
   confirmationPending: false,
   recoveryMode: false,
+  pendingCloudLink: false,
 
   initialize: async () => {
+    stopAuthListener?.();
+    stopAuthListener = null;
+
+    if (e2eHooksEnabled()) {
+      const seed = readE2EAuthSeed(true);
+      if (seed) {
+        const user = seededUser(seed);
+        set({
+          user,
+          session: { user, access_token: 'e2e-token' } as Session,
+          profile: {
+            username: null,
+            displayName: seed.name,
+            avatarUrl: seed.avatarUrl ?? null,
+          },
+          loading: false,
+          error: null,
+          pendingCloudLink: false,
+        });
+        return;
+      }
+    }
+
     if (!supabase) {
       set({ loading: false });
       return;
     }
 
+    const oauthError = typeof window !== 'undefined' ? readOAuthReturnError(window.location.search) : null;
+    if (oauthError && typeof window !== 'undefined') {
+      const next = stripOAuthErrorParams(window.location.href);
+      window.history.replaceState(window.history.state, '', next);
+      set({ error: oauthError.message, loading: false });
+    }
+
     try {
+      const hadCode = typeof window !== 'undefined' && hasOAuthCode(window.location.search);
       const { data: { session } } = await supabase.auth.getSession();
       set({
         session,
         user: session?.user ?? null,
         loading: false,
+        pendingCloudLink: Boolean(session && hadCode),
       });
       if (session?.user?.id) {
         get().loadProfile();
       }
 
-      supabase.auth.onAuthStateChange((event, session) => {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
         const isRecovery = event === 'PASSWORD_RECOVERY';
         set({
-          session,
-          user: session?.user ?? null,
+          session: nextSession,
+          user: nextSession?.user ?? null,
           profile: isRecovery ? get().profile : null,
           recoveryMode: isRecovery || get().recoveryMode,
+          pendingCloudLink: event === 'SIGNED_IN'
+            ? true
+            : event === 'SIGNED_OUT'
+              ? false
+              : get().pendingCloudLink,
+          loading: false,
         });
 
-        if (event === 'SIGNED_IN' && session?.user?.id) {
+        if (event === 'SIGNED_IN' && nextSession?.user?.id) {
           get().loadProfile();
         }
       });
+
+      const onResume = () => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+        const client = supabase;
+        if (!client) return;
+        void client.auth.getSession().then(({ data }) => {
+          const next = data.session;
+          if (!next?.user || next.user.id === get().user?.id) return;
+          set({
+            session: next,
+            user: next.user,
+            loading: false,
+            pendingCloudLink: true,
+          });
+          void get().loadProfile();
+        }).catch(() => undefined);
+      };
+      document.addEventListener('visibilitychange', onResume);
+      const onPageShow = (event: PageTransitionEvent) => {
+        if (event.persisted) onResume();
+      };
+      window.addEventListener('pageshow', onPageShow);
+      stopAuthListener = () => {
+        subscription.unsubscribe();
+        document.removeEventListener('visibilitychange', onResume);
+        window.removeEventListener('pageshow', onPageShow);
+      };
     } catch {
       set({ loading: false });
     }
@@ -109,6 +201,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       user: data.user,
       loading: false,
       error: null,
+      pendingCloudLink: true,
     });
     if (data.user?.id) {
       get().loadProfile();
@@ -135,6 +228,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         loading: false,
         error: null,
         confirmationPending: false,
+        pendingCloudLink: true,
       });
       if (data.user?.id) {
         get().loadProfile();
@@ -146,7 +240,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (!supabase) return;
     set({ loading: true, error: null, magicLinkSent: false });
 
-    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '') || window.location.origin;
+    const redirectTo = getOAuthRedirectUrl();
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: redirectTo },
@@ -160,17 +254,38 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   signInWithGoogle: async () => {
-    if (!supabase) return;
+    if (!supabase) {
+      set({ error: 'Google sign-in is not set up for this install.', loading: false });
+      return;
+    }
     set({ loading: true, error: null });
 
-    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '') || window.location.origin;
-    const { error } = await supabase.auth.signInWithOAuth({
+    const redirectTo = getOAuthRedirectUrl();
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo },
+      options: {
+        redirectTo,
+        skipBrowserRedirect: true,
+        queryParams: { prompt: 'select_account' },
+      },
     });
 
     if (error) {
       set({ error: error.message, loading: false });
+      return;
+    }
+    if (!data?.url) {
+      set({ error: 'Google did not return a sign-in link. Try again.', loading: false });
+      return;
+    }
+
+    try {
+      redirectBrowser(data.url);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      // jsdom refuses navigation. A real browser leaves this page with the PKCE verifier stored.
+      if (/not implemented/i.test(message)) return;
+      set({ error: 'Could not open Google sign-in. Try again.', loading: false });
     }
   },
 
@@ -183,7 +298,16 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (error) {
       set({ error: error.message, loading: false });
     } else {
-      set({ user: null, session: null, profile: null, loading: false, error: null, confirmationPending: false, recoveryMode: false });
+      set({
+        user: null,
+        session: null,
+        profile: null,
+        loading: false,
+        error: null,
+        confirmationPending: false,
+        recoveryMode: false,
+        pendingCloudLink: false,
+      });
     }
   },
 
@@ -191,12 +315,13 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     const user = get().user;
     if (!user?.id || !supabase) return;
     let p = await getProfile(user.id);
-    const meta = user.user_metadata;
-    const fromOAuth = meta?.avatar_url ?? meta?.full_name;
-    if (fromOAuth && (!p || !p.displayName)) {
+    const meta = user.user_metadata as { avatar_url?: string; picture?: string; full_name?: string; name?: string };
+    const avatarUrl = meta?.avatar_url ?? meta?.picture ?? null;
+    const displayName = meta?.full_name ?? meta?.name ?? null;
+    if ((avatarUrl || displayName) && (!p?.displayName || !p?.avatarUrl)) {
       await upsertProfile(user.id, {
-        displayName: meta.full_name ?? null,
-        avatarUrl: meta.avatar_url ?? null,
+        displayName: p?.displayName || displayName || undefined,
+        avatarUrl: p?.avatarUrl || avatarUrl || undefined,
       });
       p = await getProfile(user.id);
     }
@@ -211,7 +336,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (!supabase) return false;
     set({ loading: true, error: null });
 
-    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '') || window.location.origin;
+    const redirectTo = getOAuthRedirectUrl();
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
 
     if (error) {

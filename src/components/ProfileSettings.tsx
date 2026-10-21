@@ -9,10 +9,14 @@ import { useTheme } from '../hooks/useTheme.ts';
 import { useFocusTrap } from '../hooks/useFocusTrap.ts';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
 import { isMvpMode } from '../lib/appMode.ts';
+import { accountIdentity } from '../lib/accountIdentity.ts';
+import { INSTALLED_PWA_HINT, isInstalledPwa } from '../lib/googleAuth.ts';
+import { useOnlineStatus } from '../hooks/useOnlineStatus.ts';
+import GoogleSignInButton from './GoogleSignInButton.tsx';
 import {
   X, User, Sun, Moon, Monitor, Contrast, LayoutGrid, List, ArrowUpDown, Columns2,
   CheckCircle, Layers, BarChart3, Tag, BookOpen, Clock3, Bookmark, Flame, ScanLine,
-  Database, Share2, Target, Download, Eraser, ScrollText, Bug, ShieldCheck, Trash2,
+  Database, Share2, Target, Download, Eraser, ScrollText, Bug, ShieldCheck, Trash2, LogOut,
 } from 'lucide-react';
 import type { ProfilePreferences } from '../types.ts';
 import { formatLocaleDate, formatLocaleDateTime } from '../utils/formatDate.ts';
@@ -73,7 +77,8 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
   const [changelogOpen, setChangelogOpen] = useState(false);
   const navigate = useNavigate();
   const { toast, confirm } = useToast();
-  const { user, profile } = useAuthStore();
+  const { user, profile, loading, error, signInWithGoogle, signOut } = useAuthStore();
+  const { online } = useOnlineStatus();
   const { books, shelves, updateBook } = useBookStore();
   const { preferences, updatePreferences } = useProfileStore();
   const { setTheme } = useTheme();
@@ -93,8 +98,9 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
         .filter((b): b is import('../types.ts').BookEntry => Boolean(b)),
     [lastConflictBookIds, books],
   );
-  const displayName = profile?.username ?? profile?.displayName ?? user?.user_metadata?.full_name ?? user?.email ?? 'Local reader';
-  const avatarUrl = profile?.avatarUrl ?? user?.user_metadata?.avatar_url ?? null;
+  const identity = accountIdentity(user, profile);
+  const displayName = user ? identity.name : 'Local reader';
+  const avatarUrl = user ? identity.avatarUrl : null;
   const joinedLabel = user?.created_at
     ? formatLocaleDate(user.created_at, { month: 'long', year: 'numeric' })
     : 'This device';
@@ -129,6 +135,37 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
     };
   }, [books, shelves]);
 
+  const accountControls = !user && !isSupabaseConfigured() ? (
+    <div className={s.localBadge} role="status">
+      <User size={16} /> Cloud sign-in isn&apos;t set up for this install. Your library stays on this device.
+    </div>
+  ) : !user ? (
+    <div className={s.accountActions}>
+      <GoogleSignInButton
+        fullWidth
+        disabled={!online || loading}
+        busy={loading}
+        onClick={() => void signInWithGoogle()}
+      />
+      {isInstalledPwa() && <p className={s.sectionHint}>{INSTALLED_PWA_HINT}</p>}
+      {!online && (
+        <p className={s.sectionHint}>You&apos;re offline. Continue with Google when you&apos;re connected.</p>
+      )}
+      {error && <p className={s.authError} role="alert">{error}</p>}
+      <button
+        type="button"
+        className={s.textLink}
+        onClick={() => document.getElementById('account-email-sign-in')?.click()}
+      >
+        Use email instead
+      </button>
+    </div>
+  ) : (
+    <button type="button" className={s.optBtn} onClick={() => void signOut()}>
+      <LogOut size={16} aria-hidden /> Sign out
+    </button>
+  );
+
   const content = (
     <div
       ref={inline ? undefined : focusTrapRef}
@@ -157,6 +194,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           ? 'Essentials only: theme, data, and export. Use the full build for the home feed and advanced preferences.'
           : 'Your preferences are saved locally and synced when you sign in.'}
       </p>
+      <div className={s.accountSlot}>{accountControls}</div>
       <nav className={s.sectionNav} aria-label="On this page">
         {!isMvpMode() && <a href="#reading-activity">Reading activity</a>}
         {!isMvpMode() && <a href="#reading-goals">Goals</a>}
@@ -184,7 +222,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
             <div className={s.profileEyebrow}>Reader profile</div>
             <div className={s.profileDisplayName}>{displayName}</div>
             <div className={s.profileSubline}>
-              {user?.email ?? 'Saved locally on this device'}
+              {user ? (identity.email || 'Signed in') : 'Saved locally on this device'}
             </div>
             <div className={s.profileBadges}>
               <span className={s.profileBadge}>
@@ -200,15 +238,6 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
                 {user?.created_at ? `Since ${joinedLabel}` : 'On this device'}
               </span>
             </div>
-            {!user && (
-              <button
-                type="button"
-                className={s.optBtn}
-                onClick={() => document.getElementById('account-sign-in')?.click()}
-              >
-                Sign in
-              </button>
-            )}
           </div>
         </div>
         <div className={s.profileSpotlight}>
@@ -374,12 +403,6 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
         </div>
       )}
       </>
-      )}
-
-      {!isSupabaseConfigured() && (
-        <div className={s.localBadge}>
-          <User size={16} /> Local profile - sign in to sync preferences across devices
-        </div>
       )}
 
       {user !== null && (
@@ -552,7 +575,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       <div className={s.section}>
         <h3 className={s.sectionTitle}>Cloud account & deletion</h3>
         <p className={s.sectionHint}>
-          Use Sign out in the account menu to stop syncing on this device. Deleting your auth account and server-side library data is not available inside the app; contact
+          Use Sign out on this page to stop syncing on this device. Deleting your auth account and server-side library data is not available inside the app; contact
           {SUPPORT_EMAIL_ENV ? (
             <>
               {' '}

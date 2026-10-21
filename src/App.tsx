@@ -31,6 +31,8 @@ import OnboardingModal from './components/OnboardingModal.tsx';
 import { DEFAULT_ONBOARDING_STEPS } from './components/onboardingContent.tsx';
 import { addBreadcrumb, captureException, isEnabled as isMonitoringEnabled, setTag, setUser as setMonitoringUser } from './lib/errorMonitoring.ts';
 import { isSupabaseConfigured } from './lib/supabase.ts';
+import { getCloudLinkDecision, setCloudLinkDecision, shouldOfferLocalMerge } from './lib/cloudLink.ts';
+import CloudMergePrompt from './components/CloudMergePrompt.tsx';
 import { isMvpMode } from './lib/appMode.ts';
 import { readClientAppMeta } from './lib/appRelease.ts';
 import { APP_DESCRIPTION, APP_TITLE } from './lib/productionMetadata.ts';
@@ -199,6 +201,8 @@ function App() {
   const { track } = useAnalyticsStore();
   const [srAnnouncement, setSrAnnouncement] = useState('');
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [mergeOffer, setMergeOffer] = useState<{ count: number } | null>(null);
+  const [mergeError, setMergeError] = useState<string | null>(null);
   const [recentAdd, setRecentAdd] = useState<{ title: string; isbn: string } | null>(null);
   const [isbnEntryActive, setIsbnEntryActive] = useState(false);
   const isbnFormRef = useRef<ManualIsbnFormHandle>(null);
@@ -321,30 +325,60 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) {
+    const userId = user?.id;
+    if (!userId) {
       initialSyncDone.current = false;
+      setMergeOffer(null);
       return;
     }
     let cancelled = false;
+    const localBooks = useBookStore.getState().books;
+    const localShelves = useBookStore.getState().shelves;
+    const decision = getCloudLinkDecision(userId);
+    const action = shouldOfferLocalMerge({
+      localBookCount: localBooks.length,
+      pendingCloudLink: useAuthStore.getState().pendingCloudLink,
+      decision,
+    });
+
+    if (action === 'offer') {
+      if (decision == null) setCloudLinkDecision(userId, 'offer');
+      setMergeOffer({ count: localBooks.length });
+      initialSyncDone.current = true;
+      prevBooksRef.current = localBooks;
+      prevShelvesRef.current = localShelves;
+      return;
+    }
+
+    if (action === 'hold') {
+      setMergeOffer(null);
+      initialSyncDone.current = true;
+      prevBooksRef.current = localBooks;
+      prevShelvesRef.current = localShelves;
+      return;
+    }
 
     const doInitialSync = async () => {
       setFlushing(true);
-      const merged = await mergeSync(user.id, books, shelves);
+      const merged = await mergeSync(userId, localBooks, localShelves);
       if (!cancelled && merged) {
         setBooks(merged.books);
         setShelves(merged.shelves);
         markSynced();
+        setCloudLinkDecision(userId, 'merged');
+        useAuthStore.setState({ pendingCloudLink: false });
       }
       if (!cancelled) {
         setFlushing(false);
         initialSyncDone.current = true;
-        prevBooksRef.current = merged?.books ?? books;
-        prevShelvesRef.current = merged?.shelves ?? shelves;
+        prevBooksRef.current = merged?.books ?? localBooks;
+        prevShelvesRef.current = merged?.shelves ?? localShelves;
       }
     };
 
     void doInitialSync();
     return () => { cancelled = true; };
+    // Books are read at sign-in so a later edit does not retrigger the first merge.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
@@ -373,6 +407,11 @@ function App() {
         markSynced();
         prevBooksRef.current = merged.books;
         prevShelvesRef.current = merged.shelves;
+        if (user?.id) {
+          setCloudLinkDecision(user.id, 'merged');
+          useAuthStore.setState({ pendingCloudLink: false });
+          setMergeOffer(null);
+        }
         addBreadcrumb('sync', 'Queue flush succeeded', {
           books: merged.books.length,
           shelves: merged.shelves.length,
@@ -399,12 +438,45 @@ function App() {
     if (!justReconnected) return;
     const wasReconnect = true;
     clearReconnected();
-    if (user && pendingChanges > 0 && !flushing) {
+    const linkDecision = user?.id ? getCloudLinkDecision(user.id) : null;
+    if (user && pendingChanges > 0 && !flushing && linkDecision !== 'later' && linkDecision !== 'offer') {
       void flushQueue().then((ok) => {
         if (ok && wasReconnect) toast('Back online – changes synced', 'success');
       });
     }
   }, [justReconnected, user, pendingChanges, flushing, clearReconnected, flushQueue, toast]);
+
+  const acceptCloudMerge = useCallback(async () => {
+    if (!user?.id) return;
+    setMergeError(null);
+    setFlushing(true);
+    try {
+      const merged = await mergeSync(user.id, useBookStore.getState().books, useBookStore.getState().shelves);
+      if (!merged) {
+        setMergeError('Could not reach your account. Your books are still only on this device.');
+        return;
+      }
+      setBooks(merged.books);
+      setShelves(merged.shelves);
+      markSynced();
+      prevBooksRef.current = merged.books;
+      prevShelvesRef.current = merged.shelves;
+      setCloudLinkDecision(user.id, 'merged');
+      useAuthStore.setState({ pendingCloudLink: false });
+      setMergeOffer(null);
+      toast('Merged this device into your account. Nothing was deleted.', 'success');
+    } finally {
+      setFlushing(false);
+    }
+  }, [user, setBooks, setShelves, markSynced, setFlushing, toast]);
+
+  const declineCloudMerge = useCallback(() => {
+    if (user?.id) setCloudLinkDecision(user.id, 'later');
+    useAuthStore.setState({ pendingCloudLink: false });
+    setMergeOffer(null);
+    setMergeError(null);
+    toast('Your books stay on this device. Use Sync when you want them in your account.', 'info');
+  }, [user, toast]);
 
   const handleSyncNow = useCallback(async () => {
     if (!user) return;
@@ -1131,6 +1203,16 @@ function App() {
             )}
           </nav>
         </footer>
+      )}
+
+      {mergeOffer && (
+        <CloudMergePrompt
+          bookCount={mergeOffer.count}
+          busy={flushing}
+          error={mergeError}
+          onMerge={() => void acceptCloudMerge()}
+          onLater={declineCloudMerge}
+        />
       )}
 
       {recoveryMode && (

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useAuthStore } from '../useAuthStore';
 
 /* ================================================================
@@ -8,6 +8,13 @@ import { useAuthStore } from '../useAuthStore';
  *  We mock `../lib/supabase` to provide a controllable fake client.
  *  Each test can configure what the auth methods return.
  */
+
+const redirectBrowser = vi.hoisted(() => vi.fn());
+
+vi.mock('../../lib/googleAuth.ts', async () => {
+  const actual = await vi.importActual<typeof import('../../lib/googleAuth')>('../../lib/googleAuth.ts');
+  return { ...actual, redirectBrowser };
+});
 
 const mockGetSession = vi.fn();
 const mockSignUp = vi.fn();
@@ -57,6 +64,7 @@ describe('useAuthStore', () => {
       magicLinkSent: false,
       confirmationPending: false,
       recoveryMode: false,
+      pendingCloudLink: false,
     });
 
     vi.clearAllMocks();
@@ -217,27 +225,75 @@ describe('useAuthStore', () => {
 
   /* ── signInWithGoogle ────────────────────────────────────── */
   describe('signInWithGoogle', () => {
-    it('calls supabase.auth.signInWithOAuth with google provider', async () => {
-      mockSignInWithOAuth.mockResolvedValue({ error: null });
+    it('starts a PKCE redirect and does not use a popup', async () => {
+      mockSignInWithOAuth.mockResolvedValue({ data: { url: 'https://accounts.google.com/o/oauth2/auth?code=1' }, error: null });
 
       await useAuthStore.getState().signInWithGoogle();
 
-      expect(mockSignInWithOAuth).toHaveBeenCalledWith(
-        expect.objectContaining({
-          provider: 'google',
-          options: expect.objectContaining({ redirectTo: expect.any(String) }),
-        })
-      );
+      expect(mockSignInWithOAuth).toHaveBeenCalledWith({
+        provider: 'google',
+        options: {
+          redirectTo: expect.stringMatching(/^https?:\/\/.+\/$/),
+          skipBrowserRedirect: true,
+          queryParams: { prompt: 'select_account' },
+        },
+      });
+      expect(redirectBrowser).toHaveBeenCalledWith('https://accounts.google.com/o/oauth2/auth?code=1');
     });
 
     it('sets error on signInWithOAuth failure', async () => {
-      mockSignInWithOAuth.mockResolvedValue({ error: { message: 'OAuth failed' } });
+      mockSignInWithOAuth.mockResolvedValue({ data: null, error: { message: 'OAuth failed' } });
 
       await useAuthStore.getState().signInWithGoogle();
 
       const state = useAuthStore.getState();
       expect(state.error).toBe('OAuth failed');
       expect(state.loading).toBe(false);
+    });
+
+    it('sets an error when Google returns no URL', async () => {
+      mockSignInWithOAuth.mockResolvedValue({ data: {}, error: null });
+
+      await useAuthStore.getState().signInWithGoogle();
+
+      expect(useAuthStore.getState().error).toMatch(/did not return/i);
+      expect(useAuthStore.getState().loading).toBe(false);
+    });
+
+    it('marks a fresh sign-in so local books can be merged', async () => {
+      mockSignInWithPassword.mockResolvedValue({
+        data: { session: fakeSession, user: fakeUser },
+        error: null,
+      });
+      await useAuthStore.getState().signIn('test@test.com', 'password123');
+      expect(useAuthStore.getState().pendingCloudLink).toBe(true);
+    });
+  });
+
+  describe('oauth return', () => {
+    afterEach(() => {
+      window.history.replaceState({}, '', '/');
+    });
+
+    it('treats access_denied as a cancellation and clears the query', async () => {
+      window.history.replaceState({}, '', '/?error=access_denied&error_description=access_denied');
+      mockGetSession.mockResolvedValue({ data: { session: null } });
+
+      await useAuthStore.getState().initialize();
+
+      expect(useAuthStore.getState().error).toMatch(/cancelled/i);
+      expect(useAuthStore.getState().loading).toBe(false);
+      expect(window.location.search).not.toContain('error');
+    });
+
+    it('marks pendingCloudLink when a code returns with a session', async () => {
+      window.history.replaceState({}, '', '/?code=auth-code');
+      mockGetSession.mockResolvedValue({ data: { session: fakeSession } });
+
+      await useAuthStore.getState().initialize();
+
+      expect(useAuthStore.getState().pendingCloudLink).toBe(true);
+      expect(useAuthStore.getState().user).toEqual(fakeUser);
     });
   });
 

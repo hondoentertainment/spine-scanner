@@ -196,6 +196,7 @@ function resetStores() {
     magicLinkSent: false,
     confirmationPending: false,
     recoveryMode: false,
+    pendingCloudLink: false,
     initialize: vi.fn().mockResolvedValue(undefined),
   });
   useProfileStore.setState({
@@ -544,6 +545,51 @@ describe('App', () => {
   it('redirects / to home in full mode', async () => {
     renderApp('/');
     expect(await screen.findByTestId('mock-home')).toBeInTheDocument();
+  });
+
+  it('offers to merge local books on first sign-in and keeps them if declined', async () => {
+    useBookStore.setState({ books: [makeBook({ title: 'Local only' })], shelves: [] });
+    useAuthStore.setState({ user: fakeUser as never, pendingCloudLink: true });
+    renderApp('/home');
+    expect(await screen.findByRole('dialog', { name: /add this device/i })).toBeInTheDocument();
+    expect(mergeSync).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /not now/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /add this device/i })).not.toBeInTheDocument();
+    });
+    expect(useBookStore.getState().books[0]?.title).toBe('Local only');
+    expect(mergeSync).not.toHaveBeenCalled();
+  });
+
+  it('merges local books into the account and keeps both copies', async () => {
+    useBookStore.setState({ books: [makeBook({ id: 'local', title: 'Local only' })], shelves: [] });
+    useAuthStore.setState({ user: fakeUser as never, pendingCloudLink: true });
+    mergeSync.mockResolvedValue({
+      books: [
+        makeBook({ id: 'local', title: 'Local only' }),
+        makeBook({ id: 'cloud', title: 'From cloud', isbn: '9780441172719' }),
+      ],
+      shelves: [],
+    });
+    renderApp('/home');
+    fireEvent.click(await screen.findByRole('button', { name: /merge and sync/i }));
+    await waitFor(() => {
+      expect(useBookStore.getState().books.map((book) => book.title)).toEqual(['Local only', 'From cloud']);
+    });
+    expect(mergeSync).toHaveBeenCalledWith('user-1', expect.any(Array), expect.any(Array));
+  });
+
+  it('pulls the account when first sign-in has no local books', async () => {
+    mergeSync.mockResolvedValueOnce({
+      books: [makeBook({ title: 'From cloud' })],
+      shelves: [],
+    });
+    useAuthStore.setState({ user: fakeUser as never, pendingCloudLink: true });
+    renderApp('/home');
+    await waitFor(() => {
+      expect(useBookStore.getState().books[0]?.title).toBe('From cloud');
+    });
+    expect(screen.queryByRole('dialog', { name: /add this device/i })).not.toBeInTheDocument();
   });
 
   it('runs an initial cloud sync when a user is present', async () => {

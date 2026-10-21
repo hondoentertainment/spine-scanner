@@ -4,6 +4,8 @@
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL?: string;
   readonly VITE_SUPABASE_ANON_KEY?: string;
+  /** Test builds only. Must stay unset for production. Enables Playwright auth hooks. */
+  readonly VITE_E2E_HOOKS?: string;
   readonly VITE_SITE_URL?: string;
   readonly VITE_BASE_PATH?: string;
   readonly VITE_SUPPORT_EMAIL?: string;
