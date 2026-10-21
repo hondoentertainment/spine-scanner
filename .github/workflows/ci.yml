@@ -101,6 +101,31 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  mobile:
+    name: Mobile typecheck & lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Install mobile dependencies
+        working-directory: apps/mobile
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: apps/mobile
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: apps/mobile
+        run: npm run lint
+
   # Deploy to GitHub Pages. Runs only on push to main, after verify passes.
   # Uses the Pages artifact uploaded by `verify`.
   deploy-pages:

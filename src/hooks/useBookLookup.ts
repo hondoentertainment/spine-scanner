@@ -1,19 +1,14 @@
 import { useState, useRef } from 'react';
-import { isbn13To10, isbn10To13 } from '../utils/isbnValidation.ts';
+import { isbn10To13, isbn13To10 } from '../utils/isbnValidation.ts';
 import { addBreadcrumb, captureException } from '../lib/errorMonitoring.ts';
 import { useAnalyticsStore } from '../store/useAnalyticsStore.ts';
-import type { BookEntry, MetadataSource, MetadataConflict } from '../types.ts';
+import {
+  fetchBookMetadata as fetchSharedBookMetadata,
+  type IsbnLookupResult,
+} from '../../packages/shared/src/fetchBookMetadata.ts';
+import type { BookEntry } from '../types.ts';
 
-export interface BookMetadata {
-    title: string;
-    authors: string[];
-    pageCount: number;
-    thumbnail: string;
-    isbn: string;
-    /** Provider that returned this metadata. Phase 26 attribution. */
-    source: MetadataSource;
-    metadataConflicts?: MetadataConflict[];
-}
+export type BookMetadata = IsbnLookupResult;
 
 const cache = new Map<string, BookMetadata>();
 
@@ -22,126 +17,16 @@ export const clearLookupCache = () => cache.clear();
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-const fetchWithRetry = async (url: string, retries = 2): Promise<Response> => {
-    for (let attempt = 0; attempt <= retries; attempt++) {
-        try {
-            const response = await fetch(url);
-            if (response.ok) return response;
-            if (response.status >= 500 && attempt < retries) {
-                await delay(1000 * 2 ** attempt);
-                continue;
-            }
-            return response;
-        } catch (err) {
-            if (attempt < retries) {
-                await delay(1000 * 2 ** attempt);
-                continue;
-            }
-            throw err;
-        }
-    }
-    throw new Error('Max retries exceeded');
-};
-
-interface RawBookMetadata {
-    title: string;
-    authors: string[];
-    pageCount: number;
-    thumbnail: string;
-    isbn: string;
-    source: MetadataSource;
-}
-
-const lookupGoogleBooks = async (isbn: string): Promise<RawBookMetadata | null> => {
-    const response = await fetchWithRetry(
-        `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`
-    );
-    const data = await response.json();
-    if (!data.items || data.totalItems === 0) return null;
-
-    const volumeInfo = data.items[0].volumeInfo;
-    return {
-        title: volumeInfo.title || 'Unknown Title',
-        authors: volumeInfo.authors || ['Unknown Author'],
-        pageCount: volumeInfo.pageCount || 0,
-        thumbnail: volumeInfo.imageLinks?.thumbnail || '',
-        isbn,
-        source: 'google_books',
-    };
-};
-
-const lookupOpenLibrary = async (isbn: string): Promise<RawBookMetadata | null> => {
-    const response = await fetchWithRetry(
-        `https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`
-    );
-    const data = await response.json();
-    const entry = data[`ISBN:${isbn}`];
-    if (!entry) return null;
-
-    return {
-        title: entry.title || 'Unknown Title',
-        authors: entry.authors?.map((a: { name: string }) => a.name) || ['Unknown Author'],
-        pageCount: entry.number_of_pages || 0,
-        thumbnail: entry.cover?.medium || entry.cover?.small || '',
-        isbn,
-        source: 'open_library',
-    };
-};
-
-const CONFLICT_PAGE_THRESHOLD = 5;
-
-const detectConflicts = (google: RawBookMetadata, openLib: RawBookMetadata): MetadataConflict[] => {
-    const conflicts: MetadataConflict[] = [];
-
-    const gTitle = google.title?.toLowerCase().trim();
-    const olTitle = openLib.title?.toLowerCase().trim();
-    if (gTitle && olTitle && gTitle !== olTitle) {
-        conflicts.push({ field: 'title', googleBooks: google.title, openLibrary: openLib.title });
-    }
-
-    const gAuthor = (google.authors[0] ?? '').toLowerCase().trim();
-    const olAuthor = (openLib.authors[0] ?? '').toLowerCase().trim();
-    if (gAuthor && olAuthor && gAuthor !== olAuthor) {
-        conflicts.push({ field: 'author', googleBooks: google.authors[0], openLibrary: openLib.authors[0] });
-    }
-
-    if (google.pageCount > 0 && openLib.pageCount > 0 &&
-        Math.abs(google.pageCount - openLib.pageCount) > CONFLICT_PAGE_THRESHOLD) {
-        conflicts.push({ field: 'pageCount', googleBooks: google.pageCount, openLibrary: openLib.pageCount });
-    }
-
-    return conflicts;
-};
-
 /** Fetch fresh metadata for an ISBN, querying both sources for conflict detection. */
 export const fetchBookMetadata = async (isbn: string): Promise<BookMetadata | null> => {
-    const [googleSettled, openLibSettled] = await Promise.allSettled([
-        lookupGoogleBooks(isbn),
-        lookupOpenLibrary(isbn),
-    ]);
-
-    const google = googleSettled.status === 'fulfilled' ? googleSettled.value : null;
-    const openLib = openLibSettled.status === 'fulfilled' ? openLibSettled.value : null;
-
-    // Both APIs rejected (network-level failure) — propagate so callers can show the right error
-    if (googleSettled.status === 'rejected' && openLibSettled.status === 'rejected') {
-        throw new Error('Failed to fetch book metadata');
-    }
-
-    if (!google && !openLib) return null;
-
-    const primary = google ?? openLib!;
-    const source: MetadataSource = google ? 'google_books' : 'open_library';
-    const conflicts = google && openLib ? detectConflicts(google, openLib) : undefined;
-
-    if (conflicts && conflicts.length > 0) {
-        useAnalyticsStore.getState().track('metadata_conflict', {
-            isbnLength: isbn.length,
-            conflictCount: conflicts.length,
-        });
-    }
-
-    return { ...primary, source, metadataConflicts: conflicts?.length ? conflicts : undefined };
+  const result = await fetchSharedBookMetadata(isbn);
+  if (result?.metadataConflicts && result.metadataConflicts.length > 0) {
+    useAnalyticsStore.getState().track('metadata_conflict', {
+      isbnLength: isbn.length,
+      conflictCount: result.metadataConflicts.length,
+    });
+  }
+  return result;
 };
 
 export const useBookLookup = () => {

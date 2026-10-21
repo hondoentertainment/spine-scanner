@@ -8,11 +8,11 @@ export default defineConfig({
     ...(process.env.CI ? { testTimeout: 180000 } : {}),
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
-    exclude: ['e2e/**', 'node_modules/**', 'scripts/**', '.claude/**'],
+    exclude: ['e2e/**', 'node_modules/**', 'scripts/**', '.claude/**', 'apps/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary', 'html', 'json-summary'],
-      include: ['src/**/*.{ts,tsx}'],
+      include: ['src/**/*.{ts,tsx}', 'packages/shared/src/**/*.ts'],
       exclude: [
         'src/**/*.d.ts',
         'src/**/__tests__/**',
