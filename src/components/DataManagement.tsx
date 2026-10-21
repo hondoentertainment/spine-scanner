@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useBookLookup } from '../hooks/useBookLookup.ts';
 import { useToast } from './Toast.tsx';
@@ -32,6 +32,11 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
     const [goodreadsMsg, setGoodreadsMsg] = useState<string | null>(null);
     const [storygraphMsg, setStorygraphMsg] = useState<string | null>(null);
     const storygraphInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (window.location.hash !== '#goodreads-import') return;
+        document.getElementById('goodreads-import')?.scrollIntoView?.({ block: 'start' });
+    }, []);
 
     // Bulk metadata refresh state
     const [refreshRunning, setRefreshRunning] = useState(false);
@@ -482,7 +487,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
             </section>
 
             {/* Goodreads CSV import */}
-            <section className={s.sectionBorder}>
+            <section className={s.sectionBorder} id="goodreads-import">
                 <h3 className={s.sectionTitle}>
                     <Upload size={20} style={{ color: '#22c55e' }} /> Import Goodreads CSV
                 </h3>

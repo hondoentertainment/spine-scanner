@@ -32,6 +32,7 @@ import { DEFAULT_ONBOARDING_STEPS } from './components/onboardingContent.tsx';
 import { addBreadcrumb, captureException, isEnabled as isMonitoringEnabled, setTag, setUser as setMonitoringUser } from './lib/errorMonitoring.ts';
 import { isSupabaseConfigured } from './lib/supabase.ts';
 import { isMvpMode } from './lib/appMode.ts';
+import { readClientAppMeta } from './lib/appRelease.ts';
 import { APP_DESCRIPTION, APP_TITLE } from './lib/productionMetadata.ts';
 import { buildSupportDiagnostics } from './utils/supportDiagnostics.ts';
 import styles from './components/App.module.css';
@@ -59,8 +60,7 @@ type AppView = 'home' | 'scan' | 'library' | 'profile';
 
 const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL as string | undefined;
 const SITE_URL = (import.meta.env.VITE_SITE_URL as string | undefined)?.replace(/\/$/, '');
-const APP_RELEASE = import.meta.env.VITE_APP_RELEASE || 'dev-local';
-const APP_ENV = import.meta.env.VITE_APP_ENV || import.meta.env.MODE;
+const { release: APP_RELEASE, environment: APP_ENV } = readClientAppMeta();
 
 const PUBLIC_PAGE_META: Record<PublicPage, { title: string; description: string; label: string }> = {
   about: {
@@ -183,6 +183,7 @@ function App() {
   const location = useLocation();
   const publicPage = getPublicPageFromPath(location.pathname);
   const showMarketingHero = location.pathname === '/scan' && !isMvpMode();
+  const showLegalFooter = publicPage != null || location.pathname === '/profile';
   const brandingSubtitle = getBrandingSubtitle(location.pathname, publicPage);
   const { lookupByIsbn, loading, error } = useBookLookup();
   const { addBook, books, setBooks, shelves, setShelves } = useBookStore();
@@ -505,6 +506,16 @@ function App() {
   }, [preferences.onboardingCompleted, books.length, publicPage]);
 
   useEffect(() => {
+    if (location.pathname !== '/scan') return;
+    const params = new URLSearchParams(location.search);
+    if (params.get('focus') !== 'isbn') return;
+    isbnFormRef.current?.focus();
+    params.delete('focus');
+    const search = params.toString();
+    navigate({ pathname: '/scan', search: search ? `?${search}` : '' }, { replace: true });
+  }, [location.pathname, location.search, navigate]);
+
+  useEffect(() => {
     if (!batchMode) batchBooksAddedRef.current = 0;
   }, [batchMode]);
 
@@ -687,12 +698,12 @@ function App() {
     });
   }, [publicPage, location.pathname, location.search]);
 
-  const navItems: Array<{ key: AppView; label: string; shortLabel: string; icon: ReactNode; fab?: boolean }> = [
+  const navItems: Array<{ key: AppView; label: string; shortLabel: string; icon: ReactNode }> = [
     ...(isMvpMode()
       ? []
       : [{ key: 'home' as const, label: 'Home', shortLabel: 'Home', icon: <Home size={20} strokeWidth={2} aria-hidden /> }]),
     { key: 'library', label: 'Library', shortLabel: 'Library', icon: <Library size={20} strokeWidth={2} aria-hidden /> },
-    { key: 'scan', label: 'Add books', shortLabel: 'Add', icon: <Scan size={22} strokeWidth={2} aria-hidden />, fab: true },
+    { key: 'scan', label: 'Scan', shortLabel: 'Scan', icon: <Scan size={22} strokeWidth={2} aria-hidden /> },
     { key: 'profile', label: 'Profile', shortLabel: 'Profile', icon: <User size={20} strokeWidth={2} aria-hidden /> },
   ];
 
@@ -765,7 +776,7 @@ function App() {
         </div>
 
         <nav className={`glass ${styles.nav}`} aria-label="Main navigation">
-          {navItems.map(({ key, label, shortLabel, icon, fab }) => {
+          {navItems.map(({ key, shortLabel, icon }) => {
             const to = `/${key}`;
             const announcements: Record<AppView, string> = {
               home: 'Home feed',
@@ -778,7 +789,6 @@ function App() {
                 key={key}
                 to={to}
                 end
-                aria-label={fab ? label : undefined}
                 onClick={() => { setSrAnnouncement(announcements[key]); addBreadcrumb('navigation', 'Route changed', { path: to }); }}
                 onMouseEnter={() => {
                   if (key === 'home') void preloadHome();
@@ -793,10 +803,10 @@ function App() {
                   if (key === 'profile') void preloadProfile();
                 }}
                 className={({ isActive }) =>
-                  `${styles.navBtn} ${fab ? styles.navBtnFab : ''} ${isActive ? styles.navBtnActive : ''}`.trim()}
+                  `${styles.navBtn} ${key === 'scan' ? styles.navBtnScan : ''} ${isActive ? styles.navBtnActive : ''}`.trim()}
                 data-testid={uiContracts.navTabTestId(key)}
               >
-                <span className={fab ? styles.navFabIcon : styles.navIcon}>{icon}</span>
+                <span className={styles.navIcon}>{icon}</span>
                 <span className={styles.navLabel}>{shortLabel}</span>
               </NavLink>
             );
@@ -804,7 +814,12 @@ function App() {
         </nav>
       </header>
 
-      <main ref={mainRef} id="main-content" className={styles.mainContent} tabIndex={-1}>
+      <main
+        ref={mainRef}
+        id="main-content"
+        className={`${styles.mainContent} ${showLegalFooter ? '' : styles.mainClearsTabBar}`.trim()}
+        tabIndex={-1}
+      >
         <PwaInstallPrompt />
         <Routes>
           <Route path="/" element={<Navigate to={isMvpMode() ? '/scan' : '/home'} replace />} />
@@ -1091,24 +1106,31 @@ function App() {
         onClose={completeOnboarding}
       />
 
-      <footer className={`glass ${styles.siteFooter}`}>
-        <div>
-          <strong>SpineScanner</strong>
-          <p className={styles.footerNote}>Offline-first book tracking with optional sync, exports, and readable trust pages for public visitors.</p>
-          {import.meta.env.DEV && (
-            <p className={styles.footerNote}>Release {APP_RELEASE} · {APP_ENV}</p>
-          )}
-        </div>
-        <div className={styles.footerLinks}>
-          <button type="button" className={styles.footerButton} onClick={() => openPublicPage('about')}>About</button>
-          <button type="button" className={styles.footerButton} onClick={() => openPublicPage('privacy')}>Privacy</button>
-          <button type="button" className={styles.footerButton} onClick={() => openPublicPage('terms')}>Terms</button>
-          <button type="button" className={styles.footerButton} onClick={() => openPublicPage('support')}>Support</button>
-          {SUPPORT_EMAIL && (
-            <a className={styles.footerButton} href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
-          )}
-        </div>
-      </footer>
+      {showLegalFooter && (
+        <footer className={styles.legalFooter}>
+          <nav className={styles.legalLinks} aria-label="About SpineScanner">
+            {([
+              ['about', 'About'],
+              ['privacy', 'Privacy'],
+              ['terms', 'Terms'],
+              ['support', 'Support'],
+            ] as const).map(([page, label], index) => (
+              <span key={page} className={styles.legalItem}>
+                {index > 0 && <span className={styles.legalDot} aria-hidden="true">·</span>}
+                <button type="button" className={styles.legalLink} onClick={() => openPublicPage(page)}>
+                  {label}
+                </button>
+              </span>
+            ))}
+            {SUPPORT_EMAIL && (
+              <span className={styles.legalItem}>
+                <span className={styles.legalDot} aria-hidden="true">·</span>
+                <a className={styles.legalLink} href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+              </span>
+            )}
+          </nav>
+        </footer>
+      )}
 
       {recoveryMode && (
         <Suspense fallback={null}>

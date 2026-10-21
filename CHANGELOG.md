@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Home on a phone
+
+- **Release line.** Production was labeled `Release dev-local · production` because Vercel sets `VITE_APP_ENV` and does not set `VITE_APP_RELEASE`, so the client fell back to `dev-local`. The dev-server check did not belong on the home footer. The release and environment now show only in Profile diagnostics, and a Vercel or GitHub commit fills the release when the env var is missing.
+- **Empty shelf.** Home opens with a short welcome, Start scanning, Type an ISBN, and Import from Goodreads. The app-info card is a single row of text links on Profile and the public pages.
+- **Tab bar.** Home, Library, Scan, and Profile share one even row. Scan has a label and stays inside the bar, with room for the home indicator and the notch.
+- **Profile on a phone.** The reader card and library summary stack in one column so they stay on screen.
+
 ### Library, navigation, and settings
 
 - **Library.** The marketing hero is gone. One stats strip sits above the books, and Needs review explains that a title, author, or ISBN still needs a check. For you, Shelves, and All books switch views. Shelves is a room, case, and shelf map with the books on each shelf.

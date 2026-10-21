@@ -42,6 +42,11 @@ describe('DataManagement — missing-cover recovery', () => {
     refreshMetadata.mockReset();
   });
 
+  it('exposes the Goodreads import section for deep links', () => {
+    renderPanel();
+    expect(document.getElementById('goodreads-import')).toBeTruthy();
+  });
+
   it('shows how many books are missing covers on the recovery button', () => {
     useBookStore.setState({
       books: [

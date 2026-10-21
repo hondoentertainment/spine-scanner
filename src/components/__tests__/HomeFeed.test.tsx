@@ -66,12 +66,22 @@ describe('HomeFeed', () => {
   it('renders the empty state and starts scanning', () => {
     renderFeed();
     expect(screen.getByRole('heading', { name: 'Home' })).toBeInTheDocument();
-    expect(screen.getByText(/No books yet/)).toBeInTheDocument();
+    expect(screen.getByText('Your shelf is empty.')).toBeInTheDocument();
+    expect(screen.queryByText(/No books yet/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Start scanning/ }));
     expect(navigate).toHaveBeenCalledWith('/scan');
   });
 
+  it('offers an ISBN field and a Goodreads import from the empty shelf', () => {
+    renderFeed();
+    fireEvent.click(screen.getByRole('button', { name: 'Type an ISBN' }));
+    expect(navigate).toHaveBeenCalledWith('/scan?focus=isbn');
+    fireEvent.click(screen.getByRole('button', { name: 'Import from Goodreads' }));
+    expect(navigate).toHaveBeenCalledWith('/data#goodreads-import');
+  });
+
   it('navigates from hero actions', () => {
+    useBookStore.setState({ books: [makeBook()] });
     renderFeed();
     fireEvent.click(screen.getByRole('button', { name: /Add books/ }));
     expect(navigate).toHaveBeenCalledWith('/scan');
@@ -134,6 +144,7 @@ describe('HomeFeed', () => {
   });
 
   it('shows a streak and the longer best-streak note', () => {
+    useBookStore.setState({ books: [makeBook()] });
     useProfileStore.setState({
       preferences: {
         ...DEFAULT_PREFERENCES,
@@ -148,6 +159,7 @@ describe('HomeFeed', () => {
   });
 
   it('omits the best-streak note when it is not higher', () => {
+    useBookStore.setState({ books: [makeBook()] });
     useProfileStore.setState({
       preferences: {
         ...DEFAULT_PREFERENCES,

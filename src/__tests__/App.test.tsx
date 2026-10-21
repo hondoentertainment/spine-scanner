@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import App from '../App';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -176,6 +176,13 @@ function renderApp(initialPath = '/home') {
   );
 }
 
+async function clickAndSettle(element: HTMLElement) {
+  await act(async () => {
+    fireEvent.click(element);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+}
+
 function resetStores() {
   localStorage.clear();
   sessionStorage.clear();
@@ -279,14 +286,31 @@ describe('App', () => {
     });
   });
 
-  it('opens public pages from the footer and returns home', async () => {
+  it('keeps trust links off the home feed and opens them from profile', async () => {
     renderApp('/home');
+    expect(screen.queryByRole('button', { name: 'About' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Release /)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Offline-first book tracking/)).not.toBeInTheDocument();
+
+    const profile = screen.getByTestId(uiContracts.navTabTestId('profile'));
+    fireEvent.focus(profile);
+    await clickAndSettle(profile);
+    expect(screen.getByTestId('mock-profile')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'About' }));
     expect(await screen.findByRole('heading', { name: /A faster way to catalog real books/ })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Back to app/ }));
-    expect(await screen.findByTestId('mock-home')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Terms' }));
     expect(await screen.findByRole('heading', { name: /Simple rules for using the site/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Back to app/ }));
+    expect(await screen.findByTestId('mock-home')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'About' })).not.toBeInTheDocument();
+  });
+
+  it('focuses the ISBN field from the home empty-state link', async () => {
+    renderApp('/scan?focus=isbn');
+    const input = await screen.findByRole('textbox', { name: 'Enter ISBN manually' });
+    await waitFor(() => {
+      expect(input).toHaveFocus();
+    });
   });
 
   it('migrates hash public URLs and book deep links', async () => {
@@ -484,7 +508,7 @@ describe('App', () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
     const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-diagnostics');
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
-    renderApp('/home');
+    renderApp('/profile');
     fireEvent.click(screen.getByRole('button', { name: 'Support' }));
     expect(await screen.findByRole('heading', { name: /Help for scanning/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Copy diagnostics/ }));
@@ -500,8 +524,8 @@ describe('App', () => {
   it('closes data management back to profile', async () => {
     renderApp('/data');
     expect(await screen.findByTestId('mock-data')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'close-data' }));
-    expect(await screen.findByTestId('mock-profile')).toBeInTheDocument();
+    await clickAndSettle(screen.getByRole('button', { name: 'close-data' }));
+    expect(screen.getByTestId('mock-profile')).toBeInTheDocument();
   });
 
   it('redirects unknown routes to home', async () => {
@@ -598,8 +622,8 @@ describe('App', () => {
     const profile = screen.getByTestId(uiContracts.navTabTestId('profile'));
     fireEvent.mouseEnter(library);
     fireEvent.focus(profile);
-    fireEvent.click(profile);
-    expect(await screen.findByTestId('mock-profile')).toBeInTheDocument();
+    await clickAndSettle(profile);
+    expect(screen.getByTestId('mock-profile')).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Quick links' })).not.toBeInTheDocument();
   });
 
