@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { BookEntry } from '../../types';
+import { formatLocaleDate, localDateKey } from '../formatDate';
 import { formatLentSince, formatLoanDue, isLoanDueSoon, isOnLoan, lendBook, loanBadgeText, mergeLoanLedgers, returnBook } from '../loans';
 
 const book = (overrides: Partial<BookEntry> = {}): BookEntry => ({
@@ -59,13 +60,13 @@ describe('loans', () => {
     expect(twice.returnedAt).toBe('');
     expect(twice.loanLedger).toHaveLength(2);
     expect(twice.loanLedger?.[0].returnedAt).toBe('2026-10-05T00:00:00.000Z');
-    expect(formatLentSince(twice)).toBe('Lent to Grace since 2026-10-06');
+    expect(formatLentSince(twice)).toBe(`Lent to Grace since ${formatLocaleDate('2026-10-06T00:00:00.000Z')}`);
   });
 
   it('labels overdue copies and ignores returned ones', () => {
     const overdue = lendBook(book(), { borrowerName: 'Lin', dueAt: '2026-10-01', lentAt: '2026-09-01T00:00:00.000Z' });
     expect(loanBadgeText(overdue, now)).toBe('Overdue');
-    expect(formatLentSince(overdue)).toBe('Lent to Lin since 2026-09-01');
+    expect(formatLentSince(overdue)).toBe(`Lent to Lin since ${formatLocaleDate('2026-09-01T00:00:00.000Z')}`);
     expect(loanBadgeText(returnBook(overdue, '2026-10-09T00:00:00.000Z'), now)).toBeNull();
     expect(loanBadgeText(lendBook(book({ id: 'open' }), { borrowerName: 'Sam' }), now)).toBe('Lent out');
   });
@@ -105,5 +106,17 @@ describe('loans', () => {
     expect(isLoanDueSoon(open, now)).toBe(false);
     expect(formatLoanDue(overdue, now)).toMatch(/Overdue by/);
     expect(formatLoanDue(open, now)).toBe('No due date');
+  });
+
+  it('stores the local calendar day when a loan starts or comes back', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 20, 22, 30, 0));
+    const lent = lendBook(book(), { lentTo: 'Ada' });
+    expect(lent.lentAt).toBe('2026-10-20');
+    expect(lent.lentAt).toBe(localDateKey());
+    expect(formatLentSince(lent)).toBe(`Lent to Ada since ${formatLocaleDate('2026-10-20')}`);
+    const returned = returnBook(lent);
+    expect(returned.returnedAt).toBe('2026-10-20');
+    vi.useRealTimers();
   });
 });

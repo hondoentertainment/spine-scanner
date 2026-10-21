@@ -1,17 +1,16 @@
 .bar {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px));
-  z-index: 95;
+  position: relative;
+  z-index: 20;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.65rem;
-  max-width: min(32rem, calc(100vw - 1.5rem));
+  width: min(40rem, calc(100% - 1.5rem));
+  margin: 0.75rem auto 0;
   padding: 0.75rem 1rem;
   border-radius: var(--radius-md, 12px);
   border: 1px solid var(--glass-border);
+  background: var(--surface-solid);
   box-shadow: 0 12px 40px rgba(15, 23, 42, 0.35);
 }
 
@@ -58,8 +57,3 @@
   color: var(--text-muted);
 }
 
-@media (min-width: 900px) {
-  .bar {
-    bottom: 1.5rem;
-  }
-}

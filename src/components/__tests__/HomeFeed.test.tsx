@@ -9,8 +9,20 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { useSyncQueue } from '../../store/useSyncQueue';
 import { DEFAULT_PREFERENCES } from '../../types';
 import type { BookEntry } from '../../types';
+import { clearRecommendationCache, writeRecommendationCache } from '../../recommendations/cache';
+import { libraryFingerprint } from '../../recommendations/rank';
 
 const navigate = vi.fn();
+
+vi.mock('../../recommendations/engine.ts', async () => {
+  const actual = await vi.importActual<typeof import('../../recommendations/engine.ts')>('../../recommendations/engine.ts');
+  return {
+    ...actual,
+    loadRecommendations: vi.fn(async (books: BookEntry[]) => (
+      actual.peekRecommendations(books) ?? { recommendations: [], origin: 'empty' as const, notice: '' }
+    )),
+  };
+});
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
   return { ...actual, useNavigate: () => navigate };
@@ -48,6 +60,7 @@ describe('HomeFeed', () => {
     useProfileStore.setState({ preferences: { ...DEFAULT_PREFERENCES, onboardingCompleted: true } });
     useAuthStore.setState({ user: null, recoveryMode: false });
     useSyncQueue.setState({ pendingChanges: 0, lastSyncedAt: null, lastSyncFailedAt: null, flushing: false });
+    clearRecommendationCache();
   });
 
   it('renders the empty state and starts scanning', () => {
@@ -232,7 +245,7 @@ describe('HomeFeed', () => {
       books: [makeBook({ id: 'r1', needsReview: true, title: 'Needs review' })],
     });
     renderFeed();
-    expect(screen.getByText('1 book need a quick metadata check.')).toBeInTheDocument();
+    expect(screen.getByText('1 book needs a quick metadata check.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Open queue/ }));
     expect(navigate).toHaveBeenCalledWith('/library?review=1');
   });
@@ -255,19 +268,50 @@ describe('HomeFeed', () => {
     expect(navigate).toHaveBeenCalledWith('/recommendations');
   });
 
-  it('lists suggestions and opens the chosen book', () => {
-    useBookStore.setState({
-      books: [
-        makeBook({ id: 'reading', title: 'Dune', status: 'reading', dateAdded: isoDaysAgo(1) }),
-        makeBook({ id: 'want', title: 'Neuromancer', status: 'to-read', isbn: '9780441569595', dateAdded: isoDaysAgo(2) }),
+  it('lists unowned suggestions and leaves owned want-to-read books off that list', () => {
+    const books = [
+      makeBook({ id: 'reading', title: 'Dune', author: 'Frank Herbert', status: 'reading', isbn: '9780441172719', dateAdded: isoDaysAgo(1) }),
+      makeBook({ id: 'want', title: 'Neuromancer', author: 'William Gibson', status: 'to-read', isbn: '9780441569595', dateAdded: isoDaysAgo(2) }),
+    ];
+    writeRecommendationCache({
+      fingerprint: libraryFingerprint(books),
+      fetchedAt: Date.now(),
+      recommendations: [
+        {
+          id: 'isbn:9780441013593',
+          title: 'Dune Messiah',
+          author: 'Frank Herbert',
+          isbn: '9780441013593',
+          isbns: ['9780441013593'],
+          pageCount: 336,
+          coverImg: '',
+          reason: 'Because you own Dune',
+          becauseTitles: ['Dune'],
+          source: 'open_library',
+        },
+        {
+          id: 'owned-want',
+          title: 'Neuromancer',
+          author: 'William Gibson',
+          isbn: '9780441569595',
+          isbns: ['9780441569595'],
+          pageCount: 271,
+          coverImg: '',
+          reason: 'Because you own Dune',
+          becauseTitles: ['Dune'],
+          source: 'open_library',
+        },
       ],
     });
+    useBookStore.setState({ books });
     renderFeed();
-    expect(screen.getByLabelText('Suggestions')).toBeInTheDocument();
-    expect(screen.getByText('Continue reading')).toBeInTheDocument();
-    expect(screen.getByText('From your want-to-read list')).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole('button', { name: /Dune/ })[0]);
-    expect(navigate).toHaveBeenCalledWith(`/library?isbn=${encodeURIComponent('9780141036144')}`);
+    const unowned = screen.getByLabelText("Books you don't own yet");
+    expect(unowned).toHaveTextContent('Dune Messiah');
+    expect(unowned).toHaveTextContent('Because you own Dune');
+    expect(unowned).not.toHaveTextContent('Neuromancer');
+    expect(screen.queryByText('From your want-to-read list')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Dune Messiah/ }));
+    expect(navigate).toHaveBeenCalledWith('/recommendations');
   });
 
   it('renders recently-added stories and activity cards with relative dates', () => {

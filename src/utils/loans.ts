@@ -1,4 +1,5 @@
 import type { BookEntry, BookLoan, LoanLedgerEntry } from '../types.ts';
+import { formatLocaleDate, localDateKey } from './formatDate.ts';
 
 const DAY_MS = 86_400_000;
 
@@ -177,8 +178,8 @@ export function loanBadgeText(book: BookEntry, now = new Date()): string | null 
 export function formatLentSince(book: BookEntry): string {
   const open = openLoan(book);
   if (!open) return '';
-  const day = open.lentAt.slice(0, 10);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(day)) return `Lent to ${open.lentTo} since ${day}`;
+  const day = formatLocaleDate(open.lentAt);
+  if (day) return `Lent to ${open.lentTo} since ${day}`;
   return `Lent to ${open.lentTo}`;
 }
 
@@ -191,7 +192,7 @@ export function lendBook(
   if (!lentTo || current.loan) {
     return { ...book, ...current };
   }
-  const lentAt = cleanText(input.lentAt) || new Date().toISOString();
+  const lentAt = cleanText(input.lentAt) || localDateKey();
   const dueAt = cleanText(input.dueAt);
   const entry: LoanLedgerEntry = { lentTo, lentAt, dueAt, returnedAt: '' };
   return {
@@ -213,7 +214,7 @@ export function returnBook(book: BookEntry, returnedAt?: string): BookEntry {
   if (!current.loanLedger.some((entry) => !entry.returnedAt)) {
     return { ...book, ...current };
   }
-  const stamp = cleanText(returnedAt) || new Date().toISOString();
+  const stamp = cleanText(returnedAt) || localDateKey();
   let closed = false;
   const loanLedger = [...current.loanLedger].reverse().map((entry) => {
     if (!closed && !entry.returnedAt) {

@@ -8,6 +8,7 @@ import {
   isAlreadyInLibrary,
   isDistinctiveSubject,
   libraryFingerprint,
+  matchesReaderLanguage,
   normalizeSubject,
   rankRecommendations,
 } from '../rank.ts';
@@ -20,6 +21,8 @@ const owned = (overrides: Partial<OwnedBookSignal> = {}): OwnedBookSignal => ({
   subjects: overrides.subjects ?? [],
   seriesName: overrides.seriesName,
   isPhotoOnly: overrides.isPhotoOnly,
+  workKey: overrides.workKey,
+  alternateTitles: overrides.alternateTitles,
 });
 
 const candidate = (overrides: Partial<CatalogCandidate> = {}): CatalogCandidate => ({
@@ -33,6 +36,9 @@ const candidate = (overrides: Partial<CatalogCandidate> = {}): CatalogCandidate 
   seriesName: overrides.seriesName,
   source: overrides.source ?? 'open_library',
   reason: overrides.reason,
+  language: overrides.language,
+  workKey: overrides.workKey,
+  alternateTitles: overrides.alternateTitles,
 });
 
 describe('becauseYouOwn', () => {
@@ -79,6 +85,21 @@ describe('shelf identity', () => {
   it('treats ISBN-10 and ISBN-13 as the same copy', () => {
     const library = [owned({ isbn: '9780141036144', title: '1984', author: 'George Orwell' })];
     expect(isAlreadyInLibrary({ title: 'Nineteen Eighty-Four', author: 'Orwell, George', isbn: '0141036141' }, library)).toBe(true);
+  });
+
+  it('treats spelled-out titles, study guides, omnibuses, and the same work key as owned', () => {
+    const library = [owned({ isbn: '9780451524935', title: '1984', author: 'George Orwell', workKey: 'OL1168083W' })];
+    expect(isAlreadyInLibrary({ title: 'Nineteen Eighty-Four', author: 'George Orwell', isbn: '9780000000001' }, library)).toBe(true);
+    expect(isAlreadyInLibrary({ title: 'SparkNotes: 1984', author: 'SparkNotes Editors', isbn: '9780000000002' }, library)).toBe(true);
+    expect(isAlreadyInLibrary({ title: '1984 / Animal Farm', author: 'George Orwell', isbn: '9780000000003' }, library)).toBe(true);
+    expect(isAlreadyInLibrary({ title: 'Mille neuf cent quatre-vingt-quatre', author: 'George Orwell', isbn: '9780000000004', workKey: '/works/OL1168083W' }, library)).toBe(true);
+    expect(isAlreadyInLibrary({ title: 'Animal Farm', author: 'George Orwell', isbn: '9780451526342' }, library)).toBe(false);
+  });
+
+  it('maps language codes onto the reader language', () => {
+    expect(matchesReaderLanguage('eng', 'en-US')).toBe(true);
+    expect(matchesReaderLanguage('fr', 'en')).toBe(false);
+    expect(matchesReaderLanguage('', 'en')).toBe(true);
   });
 });
 
@@ -214,6 +235,14 @@ describe('rankRecommendations', () => {
     ], [dune, hyperion]);
     expect(ranked[0].reason).toBe('Because you own Dune and Hyperion');
     expect(ranked[0].source).toBe('llm');
+  });
+
+  it('drops foreign-language editions and keeps the reader language', () => {
+    const ranked = rankRecommendations([
+      candidate({ title: 'Le Messie de Dune', author: 'Frank Herbert', isbn: '9782253003648', language: 'fre', subjects: ['Science fiction'] }),
+      candidate({ title: 'Children of Dune', author: 'Frank Herbert', isbn: '9780441104024', language: 'en', subjects: ['Science fiction'] }),
+    ], [dune], 12, 'en');
+    expect(ranked.map((item) => item.title)).toEqual(['Children of Dune']);
   });
 
   it('builds the same fingerprint regardless of shelf order', () => {

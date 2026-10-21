@@ -2,8 +2,7 @@
   position: fixed;
   inset: 0;
   z-index: 5000;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(6px);
+  background: rgba(2, 6, 23, 0.72);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -13,9 +12,7 @@
 
 .modal {
   position: relative;
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: var(--surface-solid);
   border: 1px solid var(--glass-border);
   border-radius: 1.25rem;
   padding: 0;
@@ -104,9 +101,7 @@
   z-index: 4;
   margin: 0 -0.25rem;
   padding: 0.45rem 0.35rem;
-  background: color-mix(in srgb, var(--glass-bg) 94%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--surface-solid);
   border-radius: 0.85rem;
   border: 1px solid color-mix(in srgb, var(--glass-border) 70%, transparent);
 }
@@ -309,26 +304,25 @@
 .statusRow {
   display: flex;
   gap: 0.4rem;
-  overflow-x: auto;
-  flex-wrap: nowrap;
-  -webkit-overflow-scrolling: touch;
+  flex-wrap: wrap;
   padding-bottom: 0.1rem;
 }
 
 .statusBtn {
-  flex: 1 0 auto;
-  min-width: 3.1rem;
+  flex: 1 1 auto;
+  min-width: 4.5rem;
   min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  padding: 0.5rem 0.45rem;
+  padding: 0.5rem 0.55rem;
   border-radius: 0.75rem;
   background: rgba(255, 255, 255, 0.05);
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-muted);
+  white-space: nowrap;
   transition: background 0.2s, color 0.2s;
 }
 
@@ -337,19 +331,8 @@
 }
 
 .statusLabel {
-  display: none;
-}
-
-@media (min-width: 400px) {
-  .statusBtn {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .statusLabel {
-    display: inline;
-    font-size: 0.68rem;
-  }
+  display: inline;
+  font-size: 0.75rem;
 }
 
 .status_to_read { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }

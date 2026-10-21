@@ -84,6 +84,17 @@ vi.mock('../components/Scanner.tsx', () => ({
 }));
 
 vi.mock('@tanstack/react-virtual', () => ({
+  useWindowVirtualizer: ({ count }: { count: number }) => ({
+    options: { scrollMargin: 0 },
+    getTotalSize: () => count * 76,
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, i) => ({
+        index: i,
+        start: i * 76,
+        size: 76,
+        key: i,
+      })),
+  }),
   useVirtualizer: ({ count }: { count: number }) => ({
     getTotalSize: () => count * 76,
     getVirtualItems: () =>
@@ -630,6 +641,7 @@ describe('App', () => {
 
   it('shows marketing hero stats for an empty library and offline sync copy', async () => {
     onlineState.online = false;
+    useAuthStore.setState({ user: fakeUser as never });
     useSyncQueue.setState({ pendingChanges: 1, lastSyncedAt: null });
     renderApp('/scan');
     expect(await screen.findByText('Offline')).toBeInTheDocument();
@@ -638,15 +650,25 @@ describe('App', () => {
   });
 
   it('shows plural pending-change copy on the marketing hero', async () => {
+    useAuthStore.setState({ user: fakeUser as never });
     useSyncQueue.setState({ pendingChanges: 4, lastSyncedAt: null });
     renderApp('/scan');
     expect(await screen.findByText('4 changes to sync')).toBeInTheDocument();
   });
 
   it('shows last-synced copy on the marketing hero when everything is clean', async () => {
+    useAuthStore.setState({ user: fakeUser as never });
     useSyncQueue.setState({ pendingChanges: 0, lastSyncedAt: new Date().toISOString() });
     renderApp('/scan');
     expect(await screen.findByText(/Synced /)).toBeInTheDocument();
+  });
+
+  it('tells a guest the library is saved on this device', async () => {
+    useSyncQueue.setState({ pendingChanges: 0, lastSyncedAt: null });
+    renderApp('/scan');
+    expect(await screen.findByText('Saved on this device')).toBeInTheDocument();
+    expect(screen.queryByText('Everything is up to date.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sync status')).not.toBeInTheDocument();
   });
 
   it('shows currently-reading stats when a book is in progress', async () => {

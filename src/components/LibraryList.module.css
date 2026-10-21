@@ -1,5 +1,8 @@
 .container {
   margin-top: 2rem;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 .hero {
@@ -481,9 +484,11 @@
 
 .virtualContainer {
   position: relative;
-  overflow: auto;
+  overflow: visible;
   border-radius: 1rem;
-  max-height: min(72vh, 980px);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .virtualInner {
@@ -501,6 +506,9 @@
   gap: 1rem;
   padding: 0 0 1rem 0;
   flex-wrap: nowrap;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .selectToggle {
@@ -694,6 +702,8 @@
   .filterRow {
     flex-wrap: nowrap;
     overflow-x: auto;
+    max-width: 100%;
+    min-width: 0;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 0.35rem;
     margin-bottom: 0.85rem;

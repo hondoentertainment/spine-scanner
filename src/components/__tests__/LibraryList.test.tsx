@@ -10,6 +10,17 @@ import { DEFAULT_PREFERENCES } from '../../types';
 import type { BookEntry, Shelf } from '../../types';
 
 vi.mock('@tanstack/react-virtual', () => ({
+  useWindowVirtualizer: ({ count }: { count: number }) => ({
+    options: { scrollMargin: 0 },
+    getTotalSize: () => count * 76,
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, i) => ({
+        index: i,
+        start: i * 76,
+        size: 76,
+        key: i,
+      })),
+  }),
   useVirtualizer: ({ count }: { count: number }) => ({
     getTotalSize: () => count * 76,
     getVirtualItems: () =>

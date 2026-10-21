@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Trust and layout fixes
+
+- **Books you don't own yet.** Home and Suggestions leave out copies you already own, including alternate titles (Nineteen Eighty-Four and 1984), the same Open Library work, omnibuses and study guides, and editions in another language.
+- **Dates.** Loan start and return dates use the local calendar day. Dates across the app share one locale formatter.
+- **Library and chrome.** The book grid scrolls with the page. The book detail sheet and the mobile tab bar use an opaque surface. The install prompt sits in the page flow, can be dismissed, and stays dismissed.
+- **Copy.** Counts use the right plural. Refresh metadata no longer mentions internal phase numbers. Signed-out readers see "Saved on this device". The release footer is hidden in production builds.
+
 ### Shelf recommendations
 
 - **Books you don't own yet.** Home → See suggestions opens a list built from the authors, subjects, and series already on your shelves. Google Books and Open Library supply the metadata. Each card says why in plain language, for example "Because you own Dune and Hyperion".

@@ -4,7 +4,7 @@ import { BookmarkPlus, RefreshCw, ScanLine, Sparkles } from 'lucide-react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { getBookCoverSrc } from '../utils/bookPresentation.ts';
 import { loadRecommendations, peekRecommendations } from '../recommendations/engine.ts';
-import { isAlreadyInLibrary } from '../recommendations/rank.ts';
+import { isAlreadyInLibrary, matchesReaderLanguage } from '../recommendations/rank.ts';
 import { toWishlistBook } from '../recommendations/wishlist.ts';
 import type { BookRecommendation, RecommendationResult } from '../recommendations/types.ts';
 import s from './RecommendationsView.module.css';
@@ -45,7 +45,9 @@ export default function RecommendationsView() {
     };
   }, [books, refreshToken]);
 
-  const visible = (result?.recommendations ?? []).filter((recommendation) => !isAlreadyInLibrary(recommendation, books));
+  const visible = (result?.recommendations ?? []).filter((recommendation) => (
+    matchesReaderLanguage(recommendation.language) && !isAlreadyInLibrary(recommendation, books)
+  ));
 
   const addToWishlist = (recommendation: BookRecommendation) => {
     if (isAlreadyInLibrary(recommendation, books)) return;
