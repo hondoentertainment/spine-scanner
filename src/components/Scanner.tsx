@@ -874,7 +874,7 @@ const Scanner: React.FC<ScannerProps> = ({
             </div>
 
             {/* Right panel: camera feed */}
-            <div ref={cameraPanelRef} className={s.cameraPanel}>
+            <div ref={cameraPanelRef} className={s.cameraPanel} data-testid="scanner-camera">
                 <Webcam
                 audio={false}
                 ref={webcamRef}
@@ -983,7 +983,7 @@ const Scanner: React.FC<ScannerProps> = ({
 
                 {/* Zoom controls */}
                 {cameraReady && !cameraError && zoomRange && zoomRange.max > 1 && (
-                    <div className={s.zoomControls}>
+                    <div className={s.zoomControls} data-testid="scanner-zoom">
                         <button type="button" onClick={() => changeZoom(zoomLevel - (zoomRange.step * 2 || 0.5))}
                             disabled={zoomLevel <= zoomRange.min}
                             className={s.zoomBtn} aria-label="Zoom out">

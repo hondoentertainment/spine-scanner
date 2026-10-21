@@ -21,6 +21,17 @@ interface DataManagementProps {
 }
 
 type ExportFormat = 'json' | 'html' | 'goodreads' | 'librarything' | 'storygraph';
+type DataTab = 'export' | 'import' | 'maintain';
+
+function tabForHash(hash: string): DataTab {
+    if (hash === '#goodreads-import' || hash === '#import' || hash === '#storygraph-import' || hash === '#web-import') {
+        return 'import';
+    }
+    if (hash === '#maintain' || hash === '#refresh-metadata' || hash === '#duplicates') {
+        return 'maintain';
+    }
+    return 'export';
+}
 
 const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
     const { books, shelves, addBook, removeBook, setShelves, mergeBooks, updateBook } = useBookStore();
@@ -33,10 +44,28 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
     const [storygraphMsg, setStorygraphMsg] = useState<string | null>(null);
     const storygraphInputRef = useRef<HTMLInputElement>(null);
 
+    const [tab, setTab] = useState<DataTab>(() => tabForHash(window.location.hash));
+
     useEffect(() => {
-        if (window.location.hash !== '#goodreads-import') return;
-        document.getElementById('goodreads-import')?.scrollIntoView?.({ block: 'start' });
+        const sync = () => setTab(tabForHash(window.location.hash));
+        window.addEventListener('hashchange', sync);
+        return () => window.removeEventListener('hashchange', sync);
     }, []);
+
+    useEffect(() => {
+        if (tab !== 'import' || window.location.hash !== '#goodreads-import') return;
+        document.getElementById('goodreads-import')?.scrollIntoView?.({ block: 'start' });
+    }, [tab]);
+
+    const selectTab = (next: DataTab) => {
+        setTab(next);
+        const hash = next === 'import' && window.location.hash === '#goodreads-import'
+            ? '#goodreads-import'
+            : `#${next}`;
+        if (window.location.hash !== hash) {
+            window.history.replaceState(null, '', hash);
+        }
+    };
 
     // Bulk metadata refresh state
     const [refreshRunning, setRefreshRunning] = useState(false);
@@ -335,6 +364,29 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                 {onClose && <button onClick={onClose} aria-label="Close import and export" className={s.closeBtn}><X /></button>}
             </div>
 
+            <div className={s.tabs} role="tablist" aria-label="Import and export sections">
+                {([
+                    ['export', 'Export'],
+                    ['import', 'Import'],
+                    ['maintain', 'Maintain'],
+                ] as const).map(([id, label]) => (
+                    <button
+                        key={id}
+                        type="button"
+                        role="tab"
+                        id={`data-tab-${id}`}
+                        aria-selected={tab === id}
+                        aria-controls={`data-panel-${id}`}
+                        className={`${s.tab} ${tab === id ? s.tabActive : ''}`}
+                        onClick={() => selectTab(id)}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+
+            {tab === 'export' && (
+            <div role="tabpanel" id="data-panel-export" aria-labelledby="data-tab-export">
             {/* Export */}
             <section className={s.section}>
                 <h3 className={s.sectionTitle}>
@@ -345,11 +397,13 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                 </p>
                 <div className={s.formatRow}>
                     {([['json', 'JSON (Full Backup)'], ['html', 'HTML (Print-friendly)'], ['goodreads', 'Goodreads CSV'], ['librarything', 'LibraryThing TSV'], ['storygraph', 'StoryGraph CSV']] as [ExportFormat, string][]).map(([fmt, label]) => (
-                        <button key={fmt} onClick={() => setExportFormat(fmt)} className={`glass ${s.formatBtn}`}
-                            style={{
-                                color: exportFormat === fmt ? 'var(--accent-blue)' : 'var(--text-muted)',
-                                background: exportFormat === fmt ? 'rgba(56, 189, 248, 0.1)' : undefined,
-                            }}>
+                        <button
+                            key={fmt}
+                            type="button"
+                            onClick={() => setExportFormat(fmt)}
+                            className={`${s.formatBtn} ${exportFormat === fmt ? s.formatBtnActive : ''}`}
+                            aria-pressed={exportFormat === fmt}
+                        >
                             {label}
                         </button>
                     ))}
@@ -367,7 +421,11 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                     </button>
                 </div>
             </section>
+            </div>
+            )}
 
+            {tab === 'maintain' && (
+            <div role="tabpanel" id="data-panel-maintain" aria-labelledby="data-tab-maintain">
             {duplicateGroups.length > 0 && (
                 <section className={s.sectionBorder} aria-label="Duplicate ISBN entries">
                     <h3 className={s.sectionTitle}>
@@ -469,6 +527,75 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                 </section>
             )}
 
+            {/* Bulk metadata refresh */}
+            <section className={s.sectionBorder}>
+                <h3 className={s.sectionTitle}>
+                    <RefreshCw size={20} style={{ color: '#f59e0b' }} /> Refresh Metadata
+                </h3>
+                <p className={s.sectionDesc}>
+                    Fetch updated details for books that were saved without a source.
+                    Cover recovery only fills in a missing cover and leaves your edits alone.
+                </p>
+                {refreshRunning ? (
+                    <div className={s.refreshProgress}>
+                        <span>Refreshing {refreshProgress} / {pluralize(refreshTotal, 'book')}…</span>
+                        <button onClick={handleCancelRefresh} className={`glass ${s.refreshCancelBtn}`}>Cancel</button>
+                    </div>
+                ) : (
+                    <div className={s.refreshBtnStack}>
+                        <button onClick={handleBulkRefresh} className={`glass ${s.exportBtn}`}>
+                            Refresh all books without metadata source
+                        </button>
+                        <button onClick={handleRecoverCovers} className={`glass ${s.exportBtn}`}>
+                            Recover missing covers{missingCoverCount > 0 ? ` (${missingCoverCount})` : ''}
+                        </button>
+                    </div>
+                )}
+                {refreshResultMsg && !refreshRunning && (
+                    <p className={s.refreshResult}>{refreshResultMsg}</p>
+                )}
+            </section>
+
+
+            {/* Danger zone */}
+            <section className={s.dangerSection} aria-label="Danger zone: delete all">
+                {deleteConfirmStep === 'idle' ? (
+                    <button onClick={handleDeleteAllClick} className={s.dangerBtn}>
+                        <Trash2 size={16} /> Remove all books from library
+                    </button>
+                ) : (
+                    <div className={s.deleteConfirmBox}>
+                        <p className={s.deleteConfirmMsg}>This cannot be undone. Type <strong>DELETE</strong> to confirm.</p>
+                        <input
+                            type="text"
+                            value={deleteConfirmInput}
+                            onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                            placeholder="Type DELETE"
+                            className={`glass ${s.deleteConfirmInput}`}
+                            aria-label="Type DELETE to confirm permanent deletion"
+                            autoComplete="off"
+                        />
+                        <div className={s.deleteConfirmActions}>
+                            <button onClick={handleDeleteAllCancel} className={s.dangerCancelBtn}>
+                                Cancel
+                            </button>
+                            <button
+                                onClick={removeAllBooks}
+                                disabled={deleteConfirmInput !== 'DELETE'}
+                                className={s.dangerBtn}
+                                aria-label="Permanently delete all books"
+                            >
+                                <Trash2 size={16} /> Permanently delete all {pluralize(books.length, 'book')}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </section>
+            </div>
+            )}
+
+            {tab === 'import' && (
+            <div role="tabpanel" id="data-panel-import" aria-labelledby="data-tab-import">
             {/* File import */}
             <section className={s.sectionBorder}>
                 <h3 className={s.sectionTitle}>
@@ -532,35 +659,6 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                 )}
             </section>
 
-            {/* Bulk metadata refresh */}
-            <section className={s.sectionBorder}>
-                <h3 className={s.sectionTitle}>
-                    <RefreshCw size={20} style={{ color: '#f59e0b' }} /> Refresh Metadata
-                </h3>
-                <p className={s.sectionDesc}>
-                    Fetch updated details for books that were saved without a source.
-                    Cover recovery only fills in a missing cover and leaves your edits alone.
-                </p>
-                {refreshRunning ? (
-                    <div className={s.refreshProgress}>
-                        <span>Refreshing {refreshProgress} / {pluralize(refreshTotal, 'book')}…</span>
-                        <button onClick={handleCancelRefresh} className={`glass ${s.refreshCancelBtn}`}>Cancel</button>
-                    </div>
-                ) : (
-                    <div className={s.refreshBtnStack}>
-                        <button onClick={handleBulkRefresh} className={`glass ${s.exportBtn}`}>
-                            Refresh all books without metadata source
-                        </button>
-                        <button onClick={handleRecoverCovers} className={`glass ${s.exportBtn}`}>
-                            Recover missing covers{missingCoverCount > 0 ? ` (${missingCoverCount})` : ''}
-                        </button>
-                    </div>
-                )}
-                {refreshResultMsg && !refreshRunning && (
-                    <p className={s.refreshResult}>{refreshResultMsg}</p>
-                )}
-            </section>
-
             {/* Web import */}
             <section className={s.sectionBorder}>
                 <h3 className={s.sectionTitle}>
@@ -599,40 +697,9 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                 </div>
             )}
 
-            {/* Danger zone */}
-            <section className={s.dangerSection} aria-label="Danger zone: delete all">
-                {deleteConfirmStep === 'idle' ? (
-                    <button onClick={handleDeleteAllClick} className={s.dangerBtn}>
-                        <Trash2 size={16} /> Remove all books from library
-                    </button>
-                ) : (
-                    <div className={s.deleteConfirmBox}>
-                        <p className={s.deleteConfirmMsg}>This cannot be undone. Type <strong>DELETE</strong> to confirm.</p>
-                        <input
-                            type="text"
-                            value={deleteConfirmInput}
-                            onChange={(e) => setDeleteConfirmInput(e.target.value)}
-                            placeholder="Type DELETE"
-                            className={`glass ${s.deleteConfirmInput}`}
-                            aria-label="Type DELETE to confirm permanent deletion"
-                            autoComplete="off"
-                        />
-                        <div className={s.deleteConfirmActions}>
-                            <button onClick={handleDeleteAllCancel} className={s.dangerCancelBtn}>
-                                Cancel
-                            </button>
-                            <button
-                                onClick={removeAllBooks}
-                                disabled={deleteConfirmInput !== 'DELETE'}
-                                className={s.dangerBtn}
-                                aria-label="Permanently delete all books"
-                            >
-                                <Trash2 size={16} /> Permanently delete all {pluralize(books.length, 'book')}
-                            </button>
-                        </div>
-                    </div>
-                )}
-            </section>
+            </div>
+            )}
+
         </div>
     );
 };

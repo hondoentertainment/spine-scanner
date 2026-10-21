@@ -231,6 +231,165 @@ export default function HomeFeed() {
         </div>
       </header>
 
+      {user && (pendingChanges > 0 || lastSyncedAt) && (
+        <div className={`glass ${s.syncStrip}`} aria-live="polite">
+          <Cloud size={16} className={s.syncIcon} aria-hidden />
+          <span>
+            {pendingChanges > 0
+              ? `${pendingChanges} local change${pendingChanges === 1 ? '' : 's'} waiting to sync`
+              : lastSyncedAt
+                ? `Last synced ${formatRelativeTime(lastSyncedAt)}`
+                : 'Cloud sync ready'}
+          </span>
+        </div>
+      )}
+      {currentStreak >= 1 && (
+        <section className={`glass ${s.streak}`} aria-label="Reading streak">
+          <div className={s.streakMain}>
+            <span className={s.streakEmoji} aria-hidden>🔥</span>
+            <div className={s.streakInfo}>
+              <span className={s.streakValue}>{currentStreak}-day streak</span>
+              {longestStreak > currentStreak && (
+                <span className={s.streakBest}>Best: {longestStreak} days</span>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+      <section className={s.feedSection} aria-label="Activity">
+        <div className={s.sectionHead}>
+          <BookOpen size={16} aria-hidden />
+          <h2 className={s.sectionTitle}>Reading activity</h2>
+        </div>
+        <ul className={s.feedList}>
+          {activity.items.map((book) => (
+              <li key={book.id}>
+                <button
+                  type="button"
+                  className={`glass ${s.feedCard}`}
+                  onClick={() => navigate(`/library?isbn=${encodeURIComponent(book.isbn)}`)}
+                >
+                  <img
+                    src={getBookCoverSrc(book.coverImg)}
+                    alt=""
+                    className={s.feedCover}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <div className={s.feedBody}>
+                    <span className={`${s.badge} ${s[`badge_${book.status.replace('-', '_')}`]}`}>
+                      {statusLabel[book.status]}
+                    </span>
+                    <h3 className={s.feedTitle}>{book.title}</h3>
+                    <p className={s.feedAuthor}>{book.author}</p>
+                    <p className={s.feedMeta}>Added {formatAdded(book.dateAdded)}</p>
+                  </div>
+                </button>
+              </li>
+            ))}
+        </ul>
+        {activity.hidden > 0 && (
+          <button type="button" className={s.goalLink} onClick={() => navigate('/library')}>
+            See all {pluralize(books.length, 'book')} in your library
+          </button>
+        )}
+      </section>
+      {strip.length > 0 && (
+        <section className={s.storiesSection} aria-label="Recently added">
+          <div className={s.sectionHead}>
+            <Clock size={16} aria-hidden />
+            <h2 className={s.sectionTitle}>Recently added</h2>
+          </div>
+          <ul className={s.storiesRow}>
+            {strip.map((book) => (
+              <li key={book.id}>
+              <button
+                type="button"
+                className={s.storyRing}
+                onClick={() => navigate(`/library?isbn=${encodeURIComponent(book.isbn)}`)}
+              >
+                <span className={s.storyImgWrap}>
+                  <img
+                    src={getBookCoverSrc(book.coverImg)}
+                    alt=""
+                    className={s.storyImg}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </span>
+                <span className={s.storyCaption}>{book.title}</span>
+              </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {(dueLoans.length > 0 || lentCount > 0) && (
+        <section className={`glass ${s.seriesCard}`} aria-label="Lent out">
+          <div className={s.sectionHead}>
+            <h2 className={s.sectionTitle}>Lent out</h2>
+          </div>
+          <p className={s.lede}>
+            {pluralize(lentCount, 'book')} with someone else
+            {overdueCount > 0
+              ? `, ${overdueCount} overdue.`
+              : dueLoans.length > 0
+                ? `, ${dueLoans.length} due soon.`
+                : '.'}
+          </p>
+          {dueLoans.length > 0 && (
+            <ul className={s.suggestionList}>
+              {dueLoans.slice(0, 4).map((book) => (
+                <li key={book.id}>
+                  <button
+                    type="button"
+                    className={`glass ${s.suggestionCard}`}
+                    onClick={() => navigate(`/library?isbn=${encodeURIComponent(book.isbn)}`)}
+                  >
+                    <div>
+                      <span className={s.suggestionReason}>{formatLoanDue(book)} · {book.loan?.borrowerName || book.lentTo}</span>
+                      <span className={s.suggestionTitle}>{book.title}</span>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <button type="button" className={s.goalLink} onClick={() => navigate('/library?lent=1')}>
+            View lent books
+          </button>
+        </section>
+      )}
+      {insights.reviewCount > 0 && (
+        <div className={`glass ${s.reviewBanner}`}>
+          <Inbox size={18} aria-hidden />
+          <div className={s.reviewBannerBody}>
+            <strong>Review queue</strong>
+            <span>
+              {insights.reviewCount === 1
+                ? '1 book needs a quick metadata check.'
+                : `${pluralize(insights.reviewCount, 'book')} need a quick metadata check.`}
+            </span>
+          </div>
+          <button type="button" className={s.reviewBannerBtn} onClick={() => navigate('/library?review=1')}>
+            Open queue
+          </button>
+        </div>
+      )}
+      <section className={`glass ${s.stats}`} aria-label="Library snapshot">
+        <div className={s.stat}>
+          <span className={s.statValue}>{insights.totalBooks}</span>
+          <span className={s.statLabel}>Books</span>
+        </div>
+        <div className={s.stat}>
+          <span className={s.statValue}>{insights.readingCount}</span>
+          <span className={s.statLabel}>Reading</span>
+        </div>
+        <div className={s.stat}>
+          <span className={s.statValue}>{insights.completionRate}%</span>
+          <span className={s.statLabel}>Done</span>
+        </div>
+      </section>
       {books.length > 0 && (
         <section className={`glass ${s.discover}`} aria-label="Books you don't own yet">
           <div className={s.discoverTop}>
@@ -264,35 +423,6 @@ export default function HomeFeed() {
           )}
         </section>
       )}
-
-      <section className={`glass ${s.stats}`} aria-label="Library snapshot">
-        <div className={s.stat}>
-          <span className={s.statValue}>{insights.totalBooks}</span>
-          <span className={s.statLabel}>Books</span>
-        </div>
-        <div className={s.stat}>
-          <span className={s.statValue}>{insights.readingCount}</span>
-          <span className={s.statLabel}>Reading</span>
-        </div>
-        <div className={s.stat}>
-          <span className={s.statValue}>{insights.completionRate}%</span>
-          <span className={s.statLabel}>Done</span>
-        </div>
-      </section>
-
-      {user && (pendingChanges > 0 || lastSyncedAt) && (
-        <div className={`glass ${s.syncStrip}`} aria-live="polite">
-          <Cloud size={16} className={s.syncIcon} aria-hidden />
-          <span>
-            {pendingChanges > 0
-              ? `${pendingChanges} local change${pendingChanges === 1 ? '' : 's'} waiting to sync`
-              : lastSyncedAt
-                ? `Last synced ${formatRelativeTime(lastSyncedAt)}`
-                : 'Cloud sync ready'}
-          </span>
-        </div>
-      )}
-
       {(showBookGoal || showPageGoal) && (
         <section className={`glass ${s.goals}`} aria-label="Reading goals this year">
           <div className={s.sectionHead}>
@@ -330,21 +460,6 @@ export default function HomeFeed() {
           </button>
         </section>
       )}
-
-      {currentStreak >= 1 && (
-        <section className={`glass ${s.streak}`} aria-label="Reading streak">
-          <div className={s.streakMain}>
-            <span className={s.streakEmoji} aria-hidden>🔥</span>
-            <div className={s.streakInfo}>
-              <span className={s.streakValue}>{currentStreak}-day streak</span>
-              {longestStreak > currentStreak && (
-                <span className={s.streakBest}>Best: {longestStreak} days</span>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
-
       {topSeries && (
         <section className={`glass ${s.seriesCard}`} aria-label="Continue a series">
           <div className={s.sectionHead}>
@@ -378,7 +493,6 @@ export default function HomeFeed() {
           </button>
         </section>
       )}
-
       {yearStats.booksRead > 0 && (
         <section className={`glass ${s.yearStats}`} aria-label="Your reading year">
           <div className={s.sectionHead}>
@@ -407,130 +521,6 @@ export default function HomeFeed() {
           </div>
         </section>
       )}
-
-      {(dueLoans.length > 0 || lentCount > 0) && (
-        <section className={`glass ${s.seriesCard}`} aria-label="Lent out">
-          <div className={s.sectionHead}>
-            <h2 className={s.sectionTitle}>Lent out</h2>
-          </div>
-          <p className={s.lede}>
-            {pluralize(lentCount, 'book')} with someone else
-            {overdueCount > 0
-              ? `, ${overdueCount} overdue.`
-              : dueLoans.length > 0
-                ? `, ${dueLoans.length} due soon.`
-                : '.'}
-          </p>
-          {dueLoans.length > 0 && (
-            <ul className={s.suggestionList}>
-              {dueLoans.slice(0, 4).map((book) => (
-                <li key={book.id}>
-                  <button
-                    type="button"
-                    className={`glass ${s.suggestionCard}`}
-                    onClick={() => navigate(`/library?isbn=${encodeURIComponent(book.isbn)}`)}
-                  >
-                    <div>
-                      <span className={s.suggestionReason}>{formatLoanDue(book)} · {book.loan?.borrowerName || book.lentTo}</span>
-                      <span className={s.suggestionTitle}>{book.title}</span>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <button type="button" className={s.goalLink} onClick={() => navigate('/library?lent=1')}>
-            View lent books
-          </button>
-        </section>
-      )}
-
-      {insights.reviewCount > 0 && (
-        <div className={`glass ${s.reviewBanner}`}>
-          <Inbox size={18} aria-hidden />
-          <div className={s.reviewBannerBody}>
-            <strong>Review queue</strong>
-            <span>
-              {insights.reviewCount === 1
-                ? '1 book needs a quick metadata check.'
-                : `${pluralize(insights.reviewCount, 'book')} need a quick metadata check.`}
-            </span>
-          </div>
-          <button type="button" className={s.reviewBannerBtn} onClick={() => navigate('/library?review=1')}>
-            Open queue
-          </button>
-        </div>
-      )}
-
-      {strip.length > 0 && (
-        <section className={s.storiesSection} aria-label="Recently added">
-          <div className={s.sectionHead}>
-            <Clock size={16} aria-hidden />
-            <h2 className={s.sectionTitle}>Recently added</h2>
-          </div>
-          <ul className={s.storiesRow}>
-            {strip.map((book) => (
-              <li key={book.id}>
-              <button
-                type="button"
-                className={s.storyRing}
-                onClick={() => navigate(`/library?isbn=${encodeURIComponent(book.isbn)}`)}
-              >
-                <span className={s.storyImgWrap}>
-                  <img
-                    src={getBookCoverSrc(book.coverImg)}
-                    alt=""
-                    className={s.storyImg}
-                    loading="lazy"
-                    decoding="async"
-                  />
-                </span>
-                <span className={s.storyCaption}>{book.title}</span>
-              </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <section className={s.feedSection} aria-label="Activity">
-        <div className={s.sectionHead}>
-          <BookOpen size={16} aria-hidden />
-          <h2 className={s.sectionTitle}>For you</h2>
-        </div>
-        <ul className={s.feedList}>
-          {activity.items.map((book) => (
-              <li key={book.id}>
-                <button
-                  type="button"
-                  className={`glass ${s.feedCard}`}
-                  onClick={() => navigate(`/library?isbn=${encodeURIComponent(book.isbn)}`)}
-                >
-                  <img
-                    src={getBookCoverSrc(book.coverImg)}
-                    alt=""
-                    className={s.feedCover}
-                    loading="lazy"
-                    decoding="async"
-                  />
-                  <div className={s.feedBody}>
-                    <span className={`${s.badge} ${s[`badge_${book.status.replace('-', '_')}`]}`}>
-                      {statusLabel[book.status]}
-                    </span>
-                    <h3 className={s.feedTitle}>{book.title}</h3>
-                    <p className={s.feedAuthor}>{book.author}</p>
-                    <p className={s.feedMeta}>Added {formatAdded(book.dateAdded)}</p>
-                  </div>
-                </button>
-              </li>
-            ))}
-        </ul>
-        {activity.hidden > 0 && (
-          <button type="button" className={s.goalLink} onClick={() => navigate('/library')}>
-            See all {pluralize(books.length, 'book')} in your library
-          </button>
-        )}
-      </section>
     </div>
   );
 }

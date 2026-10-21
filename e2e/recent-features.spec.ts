@@ -187,6 +187,7 @@ test.describe('Recent feature waves', () => {
     await page.goto('./data');
     await dismissOnboardingIfPresent(page);
     await expect(page.getByRole('heading', { name: /import & export/i })).toBeVisible();
+    await page.getByRole('tab', { name: 'Import' }).click();
 
     // The dedicated Goodreads CSV file input is hidden; setInputFiles works on hidden inputs.
     const fileInput = page.locator('input[type="file"][aria-label="Import Goodreads CSV export"]');

@@ -36,6 +36,19 @@ describe('BookCard', () => {
     useBookStore.setState({ books: [], shelves: [] });
   });
 
+  it('keeps status and lend targets visible and tucks notes behind a disclosure', () => {
+    const book = makeBook({ notes: 'A quote' });
+    useBookStore.setState({ books: [book] });
+    renderWithToast(<BookCard book={book} />);
+    expect(screen.getByRole('button', { name: 'Set status to Read' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Lend 1984' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Edit 1984' })).toBeVisible();
+    const notes = screen.getByPlaceholderText('Add your notes or quotes...');
+    expect(notes).not.toBeVisible();
+    fireEvent.click(screen.getByText('Notes and links'));
+    expect(notes).toBeVisible();
+  });
+
   it('renders book title and author', () => {
     const book = makeBook();
     useBookStore.setState({ books: [book] });

@@ -277,6 +277,14 @@ describe('ProfileSettings', () => {
     expect(await screen.findByText('Failed to restore snapshot')).toBeInTheDocument();
   });
 
+  it('places the danger zone after every other settings section', () => {
+    renderProfile();
+    const headings = screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent?.trim() ?? '');
+    expect(headings.at(-1)).toBe('Danger zone');
+    expect(headings.indexOf('Library shortcuts')).toBeGreaterThanOrEqual(0);
+    expect(headings.indexOf('Library shortcuts')).toBeLessThan(headings.length - 1);
+  });
+
   it('cancels clearing local data and also completes the confirm path', async () => {
     renderProfile();
     fireEvent.click(screen.getByRole('button', { name: /Clear all local data/ }));

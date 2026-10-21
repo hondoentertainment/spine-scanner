@@ -28,23 +28,30 @@ const makeBook = (overrides: Partial<BookEntry> = {}): BookEntry => ({
   ...overrides,
 });
 
-const renderPanel = () =>
-  render(
+const renderPanel = (tab?: 'Import' | 'Maintain') => {
+  const view = render(
     <ToastProvider>
       <DataManagement />
     </ToastProvider>,
   );
+  if (tab) fireEvent.click(screen.getByRole('tab', { name: tab }));
+  return view;
+};
 
 describe('DataManagement — missing-cover recovery', () => {
   beforeEach(() => {
+    window.location.hash = '';
     useBookStore.setState({ books: [], shelves: [] });
     lookupByIsbn.mockReset();
     refreshMetadata.mockReset();
   });
 
   it('exposes the Goodreads import section for deep links', () => {
+    window.location.hash = '#goodreads-import';
     renderPanel();
     expect(document.getElementById('goodreads-import')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Import' })).toHaveAttribute('aria-selected', 'true');
+    window.location.hash = '';
   });
 
   it('shows how many books are missing covers on the recovery button', () => {
@@ -54,7 +61,7 @@ describe('DataManagement — missing-cover recovery', () => {
         makeBook({ id: 'has-cover' }),
       ],
     });
-    renderPanel();
+    renderPanel('Maintain');
 
     expect(screen.getByRole('button', { name: /Recover missing covers \(1\)/ })).toBeInTheDocument();
   });
@@ -70,7 +77,7 @@ describe('DataManagement — missing-cover recovery', () => {
       title: 'Refreshed Title',
       coverImg: 'https://covers.example.com/found.jpg',
     });
-    renderPanel();
+    renderPanel('Maintain');
 
     fireEvent.click(screen.getByRole('button', { name: /Recover missing covers/ }));
 
@@ -89,7 +96,7 @@ describe('DataManagement — missing-cover recovery', () => {
   it('reports when the lookup finds no usable cover', async () => {
     useBookStore.setState({ books: [makeBook({ id: 'no-cover', coverImg: '' })] });
     refreshMetadata.mockResolvedValue(null);
-    renderPanel();
+    renderPanel('Maintain');
 
     fireEvent.click(screen.getByRole('button', { name: /Recover missing covers/ }));
 
@@ -102,7 +109,7 @@ describe('DataManagement — missing-cover recovery', () => {
 
   it('short-circuits when no books are missing covers', () => {
     useBookStore.setState({ books: [makeBook()] });
-    renderPanel();
+    renderPanel('Maintain');
 
     fireEvent.click(screen.getByRole('button', { name: /Recover missing covers/ }));
 
@@ -118,6 +125,7 @@ describe('DataManagement — import, export, merge, and danger zone', () => {
   let clickSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    window.location.hash = '';
     useBookStore.setState({ books: [], shelves: [] });
     lookupByIsbn.mockReset();
     refreshMetadata.mockReset();
@@ -182,7 +190,7 @@ describe('DataManagement — import, export, merge, and danger zone', () => {
         { id: 's2', name: 'Fantasy', color: '#22c55e' },
       ],
     });
-    renderPanel();
+    renderPanel('Import');
     const input = screen.getByLabelText('Import books from file');
     fireEvent.change(input, {
       target: { files: [new File([payload], 'backup.json', { type: 'application/json' })] },
@@ -197,7 +205,7 @@ describe('DataManagement — import, export, merge, and danger zone', () => {
   });
 
   it('falls through invalid JSON into ISBN extraction', async () => {
-    renderPanel();
+    renderPanel('Import');
     const input = screen.getByLabelText('Import books from file');
     lookupByIsbn.mockResolvedValue({
       title: 'Extracted',
@@ -226,7 +234,7 @@ describe('DataManagement — import, export, merge, and danger zone', () => {
         source: 'open_library',
       })
       .mockResolvedValueOnce(null);
-    renderPanel();
+    renderPanel('Import');
     const csv = 'ISBN,Title\n9780141036144,One\n9780544003415,Two';
     fireEvent.change(screen.getByLabelText('Import books from file'), {
       target: { files: [new File([csv], 'books.csv', { type: 'text/csv' })] },
@@ -238,13 +246,13 @@ describe('DataManagement — import, export, merge, and danger zone', () => {
   });
 
   it('ignores a file input change with no file selected', () => {
-    renderPanel();
+    renderPanel('Import');
     fireEvent.change(screen.getByLabelText('Import books from file'), { target: { files: [] } });
     expect(screen.queryByText(/Import Summary/)).not.toBeInTheDocument();
   });
 
   it('imports a Goodreads CSV and a StoryGraph CSV', async () => {
-    renderPanel();
+    renderPanel('Import');
     const goodreads = [
       'Book Id,Title,Author,Author l-f,Additional Authors,ISBN,ISBN13,My Rating,Average Rating,Publisher,Binding,Number of Pages,Year Published,Original Publication Year,Date Read,Date Added,Bookshelves,Bookshelves with positions,Exclusive Shelf,My Review,Spoiler,Private Notes,Read Count,Owned Copies',
       '1,GR Book,GR Author,,,,,,="9780141036144",,,,,200,,,,2023-01-01,,,read,,,,,,,',
@@ -270,7 +278,7 @@ describe('DataManagement — import, export, merge, and danger zone', () => {
   });
 
   it('does nothing when Goodreads or StoryGraph inputs are empty', () => {
-    renderPanel();
+    renderPanel('Import');
     fireEvent.change(screen.getByLabelText('Import Goodreads CSV export'), { target: { files: [] } });
     fireEvent.change(screen.getByLabelText('Import StoryGraph CSV export'), { target: { files: [] } });
     expect(screen.queryByText(/Imported/)).not.toBeInTheDocument();
@@ -288,7 +296,7 @@ describe('DataManagement — import, export, merge, and danger zone', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       text: () => Promise.resolve('ISBN: 9780141036144'),
     }));
-    renderPanel();
+    renderPanel('Import');
     fireEvent.change(screen.getByLabelText('URL to import books from'), {
       target: { value: 'https://example.com/list' },
     });
@@ -302,7 +310,7 @@ describe('DataManagement — import, export, merge, and danger zone', () => {
 
   it('falls back to sample ISBNs for Amazon URLs when fetch fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('blocked')));
-    renderPanel();
+    renderPanel('Import');
     fireEvent.change(screen.getByLabelText('URL to import books from'), {
       target: { value: 'https://www.amazon.com/wishlist' },
     });
@@ -311,7 +319,7 @@ describe('DataManagement — import, export, merge, and danger zone', () => {
   });
 
   it('does not fetch when the URL field is empty', () => {
-    renderPanel();
+    renderPanel('Import');
     fireEvent.click(screen.getByRole('button', { name: 'Fetch' }));
     expect(screen.queryByText(/Found/)).not.toBeInTheDocument();
   });
@@ -323,7 +331,7 @@ describe('DataManagement — import, export, merge, and danger zone', () => {
         makeBook({ id: 'drop', title: 'Drop me', notes: 'extra' }),
       ],
     });
-    renderPanel();
+    renderPanel('Maintain');
     expect(screen.getByLabelText('Duplicate ISBN entries')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(/Drop me/));
     fireEvent.click(screen.getByRole('button', { name: /Merge into selected/ }));
@@ -339,7 +347,7 @@ describe('DataManagement — import, export, merge, and danger zone', () => {
         makeBook({ id: 'pb', title: 'Dune', author: 'Frank Herbert', isbn: '9780441013593', status: 'reading', pageCount: 0 }),
       ],
     });
-    renderPanel();
+    renderPanel('Maintain');
     expect(screen.getByLabelText('Possible duplicate editions')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Merge into "Dune"/ }));
     await waitFor(() => {
@@ -357,7 +365,7 @@ describe('DataManagement — import, export, merge, and danger zone', () => {
     refreshMetadata.mockImplementation(() => new Promise((resolve) => {
       setTimeout(() => resolve({ title: 'Refreshed' }), 20);
     }));
-    renderPanel();
+    renderPanel('Maintain');
     fireEvent.click(screen.getByRole('button', { name: /Refresh all books without metadata source/ }));
     expect(await screen.findByText(/Refreshing/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
@@ -368,7 +376,7 @@ describe('DataManagement — import, export, merge, and danger zone', () => {
 
   it('short-circuits bulk refresh when every book already has a source', () => {
     useBookStore.setState({ books: [makeBook()] });
-    renderPanel();
+    renderPanel('Maintain');
     fireEvent.click(screen.getByRole('button', { name: /Refresh all books without metadata source/ }));
     expect(screen.getByText('No books without a metadata source found.')).toBeInTheDocument();
   });
@@ -381,6 +389,7 @@ describe('DataManagement — import, export, merge, and danger zone', () => {
         <DataManagement onClose={onClose} />
       </ToastProvider>,
     );
+    fireEvent.click(screen.getByRole('tab', { name: 'Maintain' }));
     fireEvent.click(screen.getByRole('button', { name: /Remove all books from library/ }));
     expect(screen.getByText(/cannot be undone/)).toBeInTheDocument();
     const confirm = screen.getByRole('button', { name: /Permanently delete all/ });

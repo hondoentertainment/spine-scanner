@@ -67,6 +67,30 @@
   outline-offset: 2px;
 }
 
+@media (max-width: 640px) {
+  .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .form {
+    position: relative;
+  }
+
+  .input,
+  .submit {
+    min-height: 44px;
+    padding: 0.45rem 0.75rem;
+  }
+}
+
 .misses {
   display: flex;
   flex-wrap: wrap;

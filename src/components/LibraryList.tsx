@@ -112,7 +112,6 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     books,
     shelves,
     updateBookStatus,
-    markNeedsReview,
     bulkUpdateStatus,
     bulkAssignShelf,
     bulkAssignLocation,
@@ -730,11 +729,11 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
 
       {librarySegment === 'foryou' && !emptyLibrary && (
         <p className={s.segmentHint}>
-          Newest titles first. Use{' '}
+          A short look at what you added. Use{' '}
           <button type="button" className={s.segmentLink} onClick={() => setLibrarySegment('all')}>
             All books
           </button>
-          {' '}for saved views, smart shelves, and every sort option.
+          {' '}for saved views, filters, and every sort.
         </p>
       )}
 
@@ -809,16 +808,13 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
       {librarySegment === 'foryou' && !emptyLibrary && filterChips.length === 0 && insights.recentlyAdded.length > 0 && (
         <div className={s.recentSection}>
           <div className={s.recentHeader}>
-            <div>
-              <span className={s.sectionLabel}>
-                <Clock size={14} />
-                Recently added
-              </span>
-              <p className={s.recentHint}>Jump back into the books you just scanned.</p>
-            </div>
+            <span className={s.sectionLabel}>
+              <Clock size={14} />
+              Recently added
+            </span>
           </div>
-          <div className={s.recentGrid}>
-            {insights.recentlyAdded.map((book) => (
+          <div className={s.recentRail}>
+            {insights.recentlyAdded.slice(0, 8).map((book) => (
               <button
                 key={book.id}
                 type="button"
@@ -827,7 +823,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
               >
                 <img
                   src={getBookCoverSrc(book.coverImg)}
-                  alt={book.title}
+                  alt=""
                   className={s.recentCover}
                   loading="lazy"
                   decoding="async"
@@ -844,39 +840,19 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
       )}
 
       {librarySegment === 'foryou' && !emptyLibrary && reviewBooks.length > 0 && (
-        <div className={s.reviewSection}>
-          <div className={s.recentHeader}>
-            <div>
-              <span className={s.sectionLabel}>
-                <Inbox size={14} />
-                Needs review
-              </span>
-              <p className={s.recentHint}>Keep scanning now and clean up the tricky ones when you have a minute.</p>
-            </div>
-          </div>
-          <div className={s.reviewGrid}>
-            {reviewBooks.slice(0, 4).map((book) => (
-              <div key={book.id} className={`glass ${s.reviewCard}`}>
-                <div className={s.reviewMeta}>
-                  <strong>{book.title}</strong>
-                  <span>{book.author}</span>
-                  <span>{book.reviewReason || 'Metadata needs a quick look.'}</span>
-                </div>
-                <div className={s.headerActions}>
-                  <button type="button" className={`glass ${s.clearBtn}`} onClick={() => setSelectedBook(book)}>
-                    Review
-                  </button>
-                  <button
-                    type="button"
-                    className={`glass ${s.secondaryAction}`}
-                    onClick={() => markNeedsReview(book.id, false)}
-                  >
-                    Resolve
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className={`glass ${s.reviewBanner}`}>
+          <Inbox size={16} aria-hidden />
+          <p>{pluralize(reviewBooks.length, 'book')} still need a title, author, or ISBN check.</p>
+          <button
+            type="button"
+            className={`glass ${s.clearBtn}`}
+            onClick={() => {
+              setReviewOnly(true);
+              setLibrarySegment('all');
+            }}
+          >
+            Review
+          </button>
         </div>
       )}
 
@@ -887,20 +863,26 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
             `${filteredAndSorted.length} book${filteredAndSorted.length === 1 ? '' : 's'} match your filters.`}
         </div>
         <div>
-          <span className={s.sectionLabel}>
-            <LibraryBig size={14} />
-            Library explorer
-          </span>
-          <h2 className={s.heading}>{pluralize(filteredAndSorted.length, 'book')} ready to browse</h2>
-          <p className={s.resultsSummary}>
-            {seriesFilter
-              ? `Showing ${pluralize(filteredAndSorted.length, 'book')} in ${seriesFilter}.`
-              : lentOnly
-                ? `Showing ${pluralize(filteredAndSorted.length, 'book')} that ${filteredAndSorted.length === 1 ? 'is' : 'are'} with someone else.`
-                : reviewOnly
-                  ? `Showing ${pluralize(filteredAndSorted.length, 'book')} that still ${filteredAndSorted.length === 1 ? 'needs' : 'need'} a metadata check.`
-                  : 'Tune the view, save the filters you reuse, and tidy batches in one place.'}
-          </p>
+          {librarySegment !== 'foryou' && (
+            <span className={s.sectionLabel}>
+              <LibraryBig size={14} />
+              Library explorer
+            </span>
+          )}
+          <h2 className={s.heading}>
+            {librarySegment === 'foryou' ? 'Your books' : `${pluralize(filteredAndSorted.length, 'book')} ready to browse`}
+          </h2>
+          {librarySegment !== 'foryou' && (
+            <p className={s.resultsSummary}>
+              {seriesFilter
+                ? `Showing ${pluralize(filteredAndSorted.length, 'book')} in ${seriesFilter}.`
+                : lentOnly
+                  ? `Showing ${pluralize(filteredAndSorted.length, 'book')} that ${filteredAndSorted.length === 1 ? 'is' : 'are'} with someone else.`
+                  : reviewOnly
+                    ? `Showing ${pluralize(filteredAndSorted.length, 'book')} that still ${filteredAndSorted.length === 1 ? 'needs' : 'need'} a metadata check.`
+                    : 'Tune the view, save the filters you reuse, and tidy batches in one place.'}
+            </p>
+          )}
         </div>
         <div className={s.headerActions}>
           <button
@@ -912,14 +894,16 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
             <CheckSquare size={16} />
             {selectionMode ? 'Done selecting' : 'Select books'}
           </button>
-          <button
-            type="button"
-            className={`glass ${s.manageBtn}`}
-            onClick={() => navigate('/data')}
-          >
-            <Settings size={16} />
-            Import & export
-          </button>
+          {mvp && !emptyLibrary && (
+            <button
+              type="button"
+              className={`glass ${s.manageBtn}`}
+              onClick={() => navigate('/data')}
+            >
+              <Settings size={16} />
+              Import & export
+            </button>
+          )}
         </div>
       </div>
       )}
@@ -1284,30 +1268,36 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
 
           <div className={s.sortRow}>
             <span className={s.sectionLabel}>View</span>
-            <div className={s.viewToggle}>
+            <div className={s.viewToggle} role="group" aria-label="Library layout">
               <button
                 type="button"
                 className={`${s.viewBtn} ${viewMode === 'grid' ? s.viewBtnActive : ''}`}
                 onClick={() => setViewMode('grid')}
                 aria-label="Show grid view"
+                title="Grid"
               >
-                <LayoutGrid size={16} />
+                <LayoutGrid size={16} aria-hidden />
+                <span>Grid</span>
               </button>
               <button
                 type="button"
                 className={`${s.viewBtn} ${viewMode === 'masonry' ? s.viewBtnActive : ''}`}
                 onClick={() => setViewMode('masonry')}
                 aria-label="Show cover columns view"
+                title="Covers"
               >
-                <Columns2 size={16} />
+                <Columns2 size={16} aria-hidden />
+                <span>Covers</span>
               </button>
               <button
                 type="button"
                 className={`${s.viewBtn} ${viewMode === 'list' ? s.viewBtnActive : ''}`}
                 onClick={() => setViewMode('list')}
                 aria-label="Show list view"
+                title="List"
               >
-                <List size={16} />
+                <List size={16} aria-hidden />
+                <span>List</span>
               </button>
             </div>
           </div>
@@ -1414,10 +1404,12 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
               <ScanLine size={16} />
               Add your first book
             </button>
-            <button type="button" className={`glass ${s.secondaryAction}`} onClick={() => navigate('/data')}>
-              <Settings size={16} />
-              Import & export
-            </button>
+            {mvp && (
+              <button type="button" className={`glass ${s.secondaryAction}`} onClick={() => navigate('/data')}>
+                <Settings size={16} />
+                Import & export
+              </button>
+            )}
           </div>
         </div>
       )}
