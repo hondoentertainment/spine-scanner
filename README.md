@@ -163,9 +163,55 @@ alter table books
 
 Empty string means that part of the location is unset. Sync still uploads the rest of each book when these columns are missing; the location stays on this device until the migration is applied.
 
-7. Restart the dev server. A "Sign in to sync" button will appear in the header.
+7. Restart the dev server. When both Supabase variables are set, Profile and the header show **Continue with Google**. Email sign-in stays available as "Use email instead". If either variable is missing, the app stays local-only and explains that cloud sign-in isn't set up.
 
-**Auth flow:** Sign-up collects email, password, and optional username. Username is stored in profiles and shown in the UI when available. Sign-in uses email + password only (not username).
+## Google sign-in
+
+Google sign-in goes through Supabase Auth (`signInWithOAuth` provider `google`, PKCE, same-window redirect back to the app). The Google client secret never goes in this repo or in Vite env. The browser only needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+
+The production Vercel project `spine-scanner` does not have those two variables yet (nothing is hidden in production env either). Until they are set for Production and Preview, https://spine-scanner.vercel.app stays local-only. GitHub Pages builds do not receive Vercel project env, so Pages stays local-only unless the same two variables are added to the Actions build.
+
+Full click-path, including the iOS "Skip nonce check" toggle: [SUPABASE_AUTH_SETUP.md](SUPABASE_AUTH_SETUP.md).
+
+### Google Cloud OAuth client
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials → Create credentials → OAuth client ID.
+2. Application type: **Web application**.
+3. Authorized JavaScript origins (Google does not allow wildcards):
+   - `https://spine-scanner.vercel.app`
+   - `http://localhost:5173`
+   - `http://127.0.0.1:5173`
+   - Each Vercel preview origin you will actually sign in from, copied from that deployment (for example `https://spine-scanner-git-<branch>-<team>.vercel.app`).
+4. Authorized redirect URI — this is the Supabase callback, not the app URL:
+   - `https://<PROJECT_REF>.supabase.co/auth/v1/callback`
+5. Copy the client ID and client secret into Supabase only.
+
+### Supabase
+
+1. Authentication → Providers → Google → enable.
+2. Paste the client ID and client secret.
+3. Turn on **Skip nonce check**. Installed iOS PWAs otherwise fail the Google nonce check after the redirect.
+4. Authentication → URL Configuration:
+   - Site URL: `https://spine-scanner.vercel.app`
+   - Redirect URLs:
+     - `https://spine-scanner.vercel.app/**`
+     - `https://*.vercel.app/**` (preview deployments)
+     - `http://localhost:5173/**`
+     - `http://127.0.0.1:5173/**`
+5. The app sends `redirectTo` as the current origin plus the Vite base path, with a trailing slash (`https://spine-scanner.vercel.app/` on Vercel).
+
+### Vercel env
+
+Project **spine-scanner** (`prj_OFj2k0ujYeJxumlVP8JUJbte4yaj`), Production and Preview:
+
+| Name | Value |
+| --- | --- |
+| `VITE_SUPABASE_URL` | `https://<PROJECT_REF>.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | The anon public key from Supabase → Project Settings → API |
+
+Do not set `VITE_E2E_HOOKS`. Redeploy after saving. The anon key is public by design; the Google client secret stays in Supabase.
+
+**Auth flow:** Continue with Google is the primary sign-in. Email and password remain as a fallback. On the first sign-in that finds books already on the device, the app asks before merging. Merge keeps every local book and every cloud book (the device copy wins when the same id exists). Not now leaves the library on the device. Signing out, or running without Supabase env, does not delete local books.
 
 ## Scripts
 

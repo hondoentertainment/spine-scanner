@@ -65,27 +65,27 @@ describe('AuthPanel', () => {
     };
   });
 
-  it('shows sign-in button when not authenticated', () => {
+  it('shows Continue with Google when not authenticated', () => {
     render(<AuthPanel {...defaultProps} />);
-    expect(screen.getByText('Sign in to sync')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeEnabled();
   });
 
-  it('shows sign-in form when button is clicked', async () => {
+  it('shows sign-in form when email is chosen', async () => {
     render(<AuthPanel {...defaultProps} />);
-    await userEvent.click(screen.getByText('Sign in to sync'));
+    await userEvent.click(screen.getByRole('button', { name: 'Use email instead' }));
     expect(screen.getByPlaceholderText('Email')).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Password/)).toBeInTheDocument();
   });
 
   it('has a forgot password link', async () => {
     render(<AuthPanel {...defaultProps} />);
-    await userEvent.click(screen.getByText('Sign in to sync'));
+    await userEvent.click(screen.getByRole('button', { name: 'Use email instead' }));
     expect(screen.getByText('Forgot password?')).toBeInTheDocument();
   });
 
   it('shows forgot password form', async () => {
     render(<AuthPanel {...defaultProps} />);
-    await userEvent.click(screen.getByText('Sign in to sync'));
+    await userEvent.click(screen.getByRole('button', { name: 'Use email instead' }));
     await userEvent.click(screen.getByText('Forgot password?'));
     expect(screen.getByText('Reset Password')).toBeInTheDocument();
     expect(screen.getByText('Send Reset Link')).toBeInTheDocument();
@@ -93,7 +93,7 @@ describe('AuthPanel', () => {
 
   it('shows sign-up form with username field', async () => {
     render(<AuthPanel {...defaultProps} />);
-    await userEvent.click(screen.getByText('Sign in to sync'));
+    await userEvent.click(screen.getByRole('button', { name: 'Use email instead' }));
     await userEvent.click(screen.getByText('Need an account? Sign up'));
     expect(screen.getByPlaceholderText('Username (optional)')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Email')).toBeInTheDocument();
@@ -102,7 +102,20 @@ describe('AuthPanel', () => {
   it('shows user badge when authenticated', () => {
     storeState.user = { id: 'u1', email: 'test@test.com', user_metadata: {} };
     render(<AuthPanel {...defaultProps} />);
+    expect(screen.getByText('Signed in')).toBeInTheDocument();
     expect(screen.getByText('test@test.com')).toBeInTheDocument();
+  });
+
+  it('shows the Google name, email, and avatar when present', () => {
+    storeState.user = {
+      id: 'u1',
+      email: 'ada@example.com',
+      user_metadata: { full_name: 'Ada Lovelace', avatar_url: 'https://example.com/ada.png' },
+    };
+    render(<AuthPanel {...defaultProps} />);
+    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
+    expect(screen.getByText('ada@example.com')).toBeInTheDocument();
+    expect(document.querySelector('img')?.getAttribute('src')).toBe('https://example.com/ada.png');
   });
 
   it('calls signOut when sign out button clicked', async () => {
@@ -112,9 +125,22 @@ describe('AuthPanel', () => {
     expect(mockSignOut).toHaveBeenCalled();
   });
 
-  it('shows Google sign-in button', async () => {
+  it('starts Google sign-in from the header button', async () => {
     render(<AuthPanel {...defaultProps} />);
-    await userEvent.click(screen.getByText('Sign in to sync'));
-    expect(screen.getByText('Sign in with Google')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+    expect(mockSignInWithGoogle).toHaveBeenCalledOnce();
+  });
+
+  it('disables Continue with Google while offline', () => {
+    render(<AuthPanel {...defaultProps} online={false} />);
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeDisabled();
+    expect(screen.getByText(/offline/i)).toBeInTheDocument();
+  });
+
+  it('shows a Google error without leaving the signed-out state', () => {
+    storeState.error = 'Google sign-in was cancelled. Your library is still on this device.';
+    render(<AuthPanel {...defaultProps} />);
+    expect(screen.getByRole('alert')).toHaveTextContent(/cancelled/i);
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeInTheDocument();
   });
 });

@@ -109,6 +109,12 @@ function validateRelease(rawValue) {
   }
 }
 
+function validateE2EHooks(rawValue) {
+  if (rawValue === 'true') {
+    addError('VITE_E2E_HOOKS must not be set for production builds.');
+  }
+}
+
 function validateAppMode(rawValue) {
   if (!rawValue) return;
   const allowed = new Set(['mvp', 'full']);
@@ -125,6 +131,7 @@ const sentryDsn = readEnv('VITE_SENTRY_DSN');
 const appEnvironment = readEnv('VITE_APP_ENV');
 const appRelease = readEnv('VITE_APP_RELEASE');
 const appMode = readEnv('VITE_APP_MODE');
+const e2eHooks = readEnv('VITE_E2E_HOOKS');
 
 validateSiteUrl(siteUrl);
 validateBasePath(basePath);
@@ -134,6 +141,7 @@ validateMonitoring(sentryDsn);
 validateAppEnvironment(appEnvironment);
 validateRelease(appRelease);
 validateAppMode(appMode);
+validateE2EHooks(e2eHooks);
 
 if (errors.length > 0) {
   console.error('Production readiness check failed:\n');

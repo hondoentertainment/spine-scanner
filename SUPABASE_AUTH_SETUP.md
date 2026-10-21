@@ -1,73 +1,83 @@
 # Supabase Auth Setup
 
-This guide covers configuring Supabase Authentication for Spine Scanner, including Google OAuth.
+Spine Scanner stays local-only until Supabase is configured. Google sign-in uses Supabase Auth: `signInWithOAuth({ provider: 'google' })` with the PKCE flow and a same-window redirect back to the app. That path works in a desktop tab and in the installed PWA (iOS opens Google in Safari, then the app reads the session when you return). The Google client secret is stored only in Supabase.
 
-## Environment Variables
+## What the Vercel project already has
 
-Add these to your `.env` (or `.env.local`):
+Checked project `spine-scanner` (`prj_OFj2k0ujYeJxumlVP8JUJbte4yaj`) on team `team_CAcqm20HCv68FPpjwpyKEJou`:
 
-```
-VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-VITE_SUPABASE_ANON_KEY=your_anon_key
-```
+Already set for Production and Preview:
 
-You can find these values in: Supabase Dashboard → Project Settings → API.
+- `VITE_SITE_URL` = `https://spine-scanner.vercel.app`
+- `VITE_BASE_PATH` = `/`
+- `VITE_ENABLE_SCANNER_DEBUG` = `false`
+- `VITE_APP_ENV` = `production` on Production, `preview` on Preview
 
----
+Not set (and no hidden production secrets):
 
-## Google OAuth
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
 
-### 1. Enable Google in Supabase
+`spine-scanner-1` has no env vars. https://spine-scanner.vercel.app stays local-only until the two Supabase variables exist on `spine-scanner` and the app is redeployed.
 
-1. Go to **Supabase Dashboard** → **Authentication** → **Providers**
-2. Enable the **Google** provider
-3. You will need a Google OAuth Client ID and Secret from Google Cloud Console (see step 3)
+GitHub Pages is built in Actions without those variables, so that deploy stays local-only too.
 
-### 2. Configure Redirect URLs in Supabase
+## 1. Google Cloud OAuth client
 
-In **Authentication** → **URL Configuration**, add:
-
-- **Site URL**: Your production app URL (e.g. `https://your-app.vercel.app`)
-- **Redirect URLs** (allow list):
-  - `{SUPABASE_URL}/auth/v1/callback` (Supabase handles OAuth callback here; this is often pre-configured)
-  - Your app origin(s), for example:
-    - `http://localhost:5173` (Vite dev server)
-    - `http://localhost:5173/spine-scanner` (if using subpath)
-    - `https://your-app.vercel.app` (production)
-
-The app uses `redirectTo` when calling `signInWithOAuth`, so the URL you add must match where users land after Google signs them in.
-
-### 3. Create Google OAuth Client
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create or select a project
-3. Go to **APIs & Services** → **Credentials**
-4. Click **Create Credentials** → **OAuth client ID**
-5. Application type: **Web application**
-6. Add **Authorized JavaScript origins**:
+1. Open [Google Cloud Console](https://console.cloud.google.com/) and create or select a project.
+2. APIs & Services → OAuth consent screen. Configure it if this project has never asked for one. Scopes `openid`, `email`, and `profile` are enough.
+3. APIs & Services → Credentials → Create credentials → **OAuth client ID**.
+4. Application type: **Web application**.
+5. Authorized JavaScript origins. Google Cloud does **not** accept wildcard origins. Add each origin that will start sign-in:
+   - `https://spine-scanner.vercel.app`
    - `http://localhost:5173`
-   - Your production origin (e.g. `https://your-app.vercel.app`)
-7. Add **Authorized redirect URIs**:
-   - `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback`
-   - Replace `YOUR_PROJECT_REF` with your Supabase project reference (from your Supabase URL)
+   - `http://127.0.0.1:5173`
+   - Every Vercel preview origin you will test, copied from that deployment's URL. Preview hosts look like `https://spine-scanner-git-<branch>-<team>.vercel.app` or `https://spine-scanner-<hash>-<team>.vercel.app`.
+6. Authorized redirect URIs. Add only the Supabase callback. The app URL is not a Google redirect URI:
+   - `https://<PROJECT_REF>.supabase.co/auth/v1/callback`
+   - `<PROJECT_REF>` is the subdomain of your Supabase URL (`https://<PROJECT_REF>.supabase.co`).
+7. Copy the client ID and client secret. Do not commit them and do not put them in Vite or Vercel.
 
-8. Copy the **Client ID** and **Client Secret**
-9. Paste them into Supabase: **Authentication** → **Providers** → **Google**
+## 2. Enable Google in Supabase
 
----
+1. Supabase Dashboard → Authentication → Providers → **Google**.
+2. Enable the provider.
+3. Paste the Google client ID and client secret.
+4. Enable **Skip nonce check**. Without this, Google sign-in from an installed iPhone PWA fails after the redirect with a nonce mismatch. The app still uses PKCE.
 
-## OAuth User Profile Data
+## 3. Supabase Site URL and redirect allow list
 
-After signing in with Google (or other OAuth providers), the user object includes:
+Authentication → URL Configuration:
 
-- `user.email`
-- `user.user_metadata.avatar_url` – profile picture
-- `user.user_metadata.full_name` – display name
+- **Site URL:** `https://spine-scanner.vercel.app`
+- **Redirect URLs:**
+  - `https://spine-scanner.vercel.app/**`
+  - `https://*.vercel.app/**` (Vercel preview deployments)
+  - `http://localhost:5173/**`
+  - `http://127.0.0.1:5173/**`
 
-These fields can be used to populate the user profile (e.g. avatar and display name in the auth badge).
+The app sets `redirectTo` to the current origin plus the Vite base path, with a trailing slash. On Vercel that is `https://spine-scanner.vercel.app/`. On the Vite dev server it is `http://localhost:5173/`.
 
----
+## 4. Vercel env vars
 
-## Email/Password Auth
+In the Vercel project **spine-scanner**, set both for **Production** and **Preview**, then redeploy:
 
-Email/password sign-up and sign-in work out of the box once Supabase is configured. No extra setup required beyond the env vars above.
+```
+VITE_SUPABASE_URL=https://<PROJECT_REF>.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon public key from Supabase → Project Settings → API>
+```
+
+The anon key is the public client key. The Google client secret stays in the Supabase Google provider. Do not set `VITE_E2E_HOOKS` (that flag is only for the Playwright build).
+
+Local `.env` uses the same two variables. See `.env.example`. Leave both empty to run local-only.
+
+## What you should see
+
+- Signed out, Supabase configured: a **Continue with Google** button on Profile and in the header, plus "Use email instead".
+- Signed in: avatar, name, and email, and Sign out.
+- Signed out, or Supabase not configured: no Google button. Profile says cloud sign-in isn't set up, and the library stays on the device.
+- First sign-in with books already on the device: a merge prompt. Merge keeps device books and cloud books. Not now leaves them on the device.
+
+## iOS installed app
+
+The button navigates this window to Google (`skipBrowserRedirect` so a popup cannot drop the PKCE verifier). iOS may open that page in Safari. Finish there, then return to the home-screen app. The app reads the session again when it becomes visible. localStorage holds the PKCE verifier so the code exchange can finish on this origin. If a future iOS version splits the installed app's storage from Safari, sign-in still completes in the browser tab that shares storage with the verifier.

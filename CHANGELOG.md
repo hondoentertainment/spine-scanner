@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Continue with Google
+
+- **Google sign-in.** Profile and the header offer Continue with Google when Supabase is configured. Sign-in uses Supabase Auth's Google provider with a PKCE redirect back to the app, including the installed iOS PWA. The signed-in header and profile show the avatar, name, and email, plus Sign out.
+- **Local-only.** With no Supabase env, or while signed out, the library stays on the device. The Google button is hidden and Profile says cloud sign-in isn't set up.
+- **First sign-in.** If this device already has books, the app asks before merging them into the account. Merge keeps every book on the device and every book already in the cloud. Not now leaves the device copy where it is.
+
 ### Phone tab bar and the deferred usability pass
 
 - **Scan tab.** The center control is a filled accent pill inside the bar, with a Scan label and an active ring. It lines up with Home, Library, and Profile and no longer covers the camera. Page content clears the bar plus the home-indicator inset in the browser and in the installed app. The Add header is shorter so the camera shows up sooner.
