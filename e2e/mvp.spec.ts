@@ -37,7 +37,7 @@ test.describe('MVP build shell', () => {
     await page.goto('./scan');
     await page.goto('./library');
     await dismissOnboardingIfPresent(page);
-    await expect(page.getByRole('heading', { name: /your library, built for browsing/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^Library$/ })).toBeVisible();
   });
 
   test('data management route shows import, export, or backup affordances', async ({ page }) => {

@@ -104,6 +104,7 @@ describe('buildPhysicalShelfMap', () => {
     expect(map[1].cases[0].label).toBe('Oak');
     expect(map[1].cases[0].shelves.map((shelf) => shelf.label)).toEqual(['Shelf 2', 'Shelf 10']);
     expect(map[1].cases[0].shelves[0].count).toBe(2);
+    expect(map[1].cases[0].shelves[0].books).toHaveLength(2);
     expect(map[0].cases[0].label).toBe('No case');
     expect(formatPhysicalLocation(makeBook({ locationRoom: 'Study', locationCase: 'Oak', locationShelf: '2' }))).toBe('Study · Oak · Shelf 2');
   });

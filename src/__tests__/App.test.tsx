@@ -592,13 +592,15 @@ describe('App', () => {
     });
   });
 
-  it('announces header quick-nav clicks and preloads on hover', async () => {
+  it('announces bottom-nav profile clicks and preloads on hover', async () => {
     renderApp('/home');
-    fireEvent.mouseEnter(screen.getByRole('link', { name: 'Book library' }));
-    fireEvent.mouseEnter(screen.getAllByRole('link', { name: 'Add books' })[0]);
-    fireEvent.focus(screen.getAllByRole('link', { name: 'Profile' })[0]);
-    fireEvent.click(screen.getAllByRole('link', { name: 'Profile' })[0]);
+    const library = screen.getByTestId(uiContracts.navTabTestId('library'));
+    const profile = screen.getByTestId(uiContracts.navTabTestId('profile'));
+    fireEvent.mouseEnter(library);
+    fireEvent.focus(profile);
+    fireEvent.click(profile);
     expect(await screen.findByTestId('mock-profile')).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Quick links' })).not.toBeInTheDocument();
   });
 
   it('preloads routes from bottom-nav hover and focus', async () => {

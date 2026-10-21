@@ -18,6 +18,10 @@ interface PhysicalShelfMapProps {
   onSelect: (next: PhysicalLocationFilter) => void;
 }
 
+function pluralLabel(count: number): string {
+  return count === 1 ? '1 book' : `${count} books`;
+}
+
 function sameFilter(current: PhysicalLocationFilter, next: PhysicalLocationFilter): boolean {
   return current.locationRoom === next.locationRoom
     && current.locationCase === next.locationCase
@@ -67,7 +71,7 @@ const PhysicalShelfMap: React.FC<PhysicalShelfMapProps> = ({
                   onClick={() => choose(roomFilter)}
                 >
                   {room.label}
-                  <span className={s.count}>{room.count}</span>
+                  <span className={s.count}>{pluralLabel(room.count)}</span>
                 </button>
                 {room.cases.map((bookcase) => {
                   const caseFilter = {
@@ -84,9 +88,9 @@ const PhysicalShelfMap: React.FC<PhysicalShelfMapProps> = ({
                         onClick={() => choose(caseFilter)}
                       >
                         {bookcase.label}
-                        <span className={s.count}>{bookcase.count}</span>
+                        <span className={s.count}>{pluralLabel(bookcase.count)}</span>
                       </button>
-                      <div className={s.shelfRow}>
+                      <div className={s.shelfStack}>
                         {bookcase.shelves.map((shelf) => {
                           const shelfFilter = {
                             locationRoom: room.locationRoom,
@@ -94,16 +98,25 @@ const PhysicalShelfMap: React.FC<PhysicalShelfMapProps> = ({
                             locationShelf: shelf.locationShelf,
                           };
                           return (
-                            <button
-                              key={`${room.locationRoom}::${bookcase.locationCase}::${shelf.locationShelf}`}
-                              type="button"
-                              className={`glass ${s.placeBtn} ${s.shelfBtn} ${sameFilter(current, shelfFilter) ? s.placeBtnActive : ''}`}
-                              aria-pressed={sameFilter(current, shelfFilter)}
-                              onClick={() => choose(shelfFilter)}
-                            >
-                              {shelf.label}
-                              <span className={s.count}>{shelf.count}</span>
-                            </button>
+                            <div key={`${room.locationRoom}::${bookcase.locationCase}::${shelf.locationShelf}`} className={s.shelfBlock}>
+                              <button
+                                type="button"
+                                className={`glass ${s.placeBtn} ${s.shelfBtn} ${sameFilter(current, shelfFilter) ? s.placeBtnActive : ''}`}
+                                aria-pressed={sameFilter(current, shelfFilter)}
+                                onClick={() => choose(shelfFilter)}
+                              >
+                                {shelf.label}
+                                <span className={s.count}>{pluralLabel(shelf.count)}</span>
+                              </button>
+                              <ul className={s.bookList}>
+                                {shelf.books.map((book) => (
+                                  <li key={book.id}>
+                                    <span className={s.bookTitle}>{book.title}</span>
+                                    <span className={s.bookAuthor}>{book.author}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
                           );
                         })}
                       </div>

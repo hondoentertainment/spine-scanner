@@ -71,7 +71,7 @@ test.describe('SpineScanner release smoke', () => {
   test('library review query loads without error', async ({ page }) => {
     await page.goto('./library?review=1');
     await dismissOnboardingIfPresent(page);
-    await expect(page.getByRole('heading', { name: /your library, built for browsing/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^Library$/ })).toBeVisible();
   });
 
   test('privacy page mentions local clear control', async ({ page }) => {

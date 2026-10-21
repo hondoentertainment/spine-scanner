@@ -380,6 +380,39 @@
   gap: 0.6rem;
 }
 
+.locationFields {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  min-width: 0;
+}
+
+.locationField {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.saveLocationBtn {
+  width: 100%;
+  min-height: 44px;
+  justify-content: center;
+  padding: 0.55rem 0.85rem;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
 .coverPreview {
   display: flex;
   justify-content: center;

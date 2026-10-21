@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Library, navigation, and settings
+
+- **Library.** The marketing hero is gone. One stats strip sits above the books, and Needs review explains that a title, author, or ISBN still needs a check. For you, Shelves, and All books switch views. Shelves is a room, case, and shelf map with the books on each shelf.
+- **Filters.** Page, place, and sort controls sit behind one Filters button. Status chips stay visible, with a fade when the row scrolls.
+- **Find the rest.** Suggestions, Wishlist, and Import & export are in the library. The header no longer repeats the tab bar. Export chips drive one export button, with calendar and Notion under Other exports. StoryGraph import uses the same drop zone as the other imports.
+- **Settings.** Clear local data and delete-all live in one Danger zone, with the difference spelled out. Want to read replaces Watchlist. Profile has a Sign in button and links to each section.
+
 ### Faster scanning
 
 - **Add a book.** The scanner and an ISBN field are at the top of Add. The explainer sits below them.

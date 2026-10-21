@@ -736,56 +736,6 @@ function App() {
           </div>
 
           <div className={styles.headerRight}>
-            <nav className={styles.headerQuickNav} aria-label="Quick links">
-              <NavLink
-                to="/library"
-                end
-                aria-label="Book library"
-                className={({ isActive }) =>
-                  `${styles.headerQuickLink} ${isActive ? styles.headerQuickLinkActive : ''}`.trim()}
-                onClick={() => {
-                  setSrAnnouncement('Library view');
-                  addBreadcrumb('navigation', 'Route changed', { path: '/library' });
-                }}
-                onMouseEnter={() => { void preloadLibrary(); }}
-                onFocus={() => { void preloadLibrary(); }}
-              >
-                <Library size={16} strokeWidth={2} aria-hidden />
-                <span className={styles.headerQuickLinkText}>Book library</span>
-              </NavLink>
-              <NavLink
-                to="/scan"
-                end
-                aria-label="Add books"
-                className={({ isActive }) =>
-                  `${styles.headerQuickLink} ${isActive ? styles.headerQuickLinkActive : ''}`.trim()}
-                onClick={() => {
-                  setSrAnnouncement('Scanner view');
-                  addBreadcrumb('navigation', 'Route changed', { path: '/scan' });
-                }}
-                onMouseEnter={() => { void preloadScanner(); }}
-                onFocus={() => { void preloadScanner(); }}
-              >
-                <Scan size={16} strokeWidth={2} aria-hidden />
-                <span className={styles.headerQuickLinkText}>Add</span>
-              </NavLink>
-              <NavLink
-                to="/profile"
-                end
-                aria-label="Profile"
-                className={({ isActive }) =>
-                  `${styles.headerQuickLink} ${isActive ? styles.headerQuickLinkActive : ''}`.trim()}
-                onClick={() => {
-                  setSrAnnouncement('Profile view');
-                  addBreadcrumb('navigation', 'Route changed', { path: '/profile' });
-                }}
-                onMouseEnter={() => { void preloadProfile(); }}
-                onFocus={() => { void preloadProfile(); }}
-              >
-                <User size={16} strokeWidth={2} aria-hidden />
-                <span className={styles.headerQuickLinkText}>Profile</span>
-              </NavLink>
-            </nav>
             {isSupabaseConfigured() && user && pendingChanges > 0 && (
               <button
                 type="button"

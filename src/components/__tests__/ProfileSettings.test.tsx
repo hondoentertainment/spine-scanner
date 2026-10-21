@@ -141,7 +141,7 @@ describe('ProfileSettings', () => {
     expect(useProfileStore.getState().preferences.theme).toBe('light');
     fireEvent.click(screen.getByRole('button', { name: 'Title' }));
     expect(useProfileStore.getState().preferences.librarySortBy).toBe('title');
-    fireEvent.click(screen.getByRole('button', { name: /Z -> A/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Z to A/ }));
     expect(useProfileStore.getState().preferences.librarySortAsc).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: /List/ }));
     expect(useProfileStore.getState().preferences.libraryViewMode).toBe('list');

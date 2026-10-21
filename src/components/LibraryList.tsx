@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import {
   ArrowUpDown,
-  BarChart3,
   BookOpen,
   BookmarkPlus,
   CheckCircle,
@@ -21,7 +20,6 @@ import {
   Layers,
   MapPin,
   Settings,
-  Sparkles,
   Trash2,
   WandSparkles,
   X,
@@ -148,20 +146,12 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
   const [newViewName, setNewViewName] = useState('');
   const [newSmartShelfName, setNewSmartShelfName] = useState('');
   const [librarySegment, setLibrarySegment] = useState<LibrarySegment>(() => (isMvpMode() ? 'all' : 'foryou'));
-  const [librarySessionReturn] = useState(() => {
-    try {
-      return sessionStorage.getItem('spine-library-session') === '1';
-    } catch {
-      return false;
-    }
-  });
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const sortBy = preferences.librarySortBy;
   const sortAsc = preferences.librarySortAsc;
   const statusFilter = preferences.libraryStatusFilter;
   const viewMode = preferences.libraryViewMode;
-  const showStats = preferences.showStatsDefault;
-  const showShelves = preferences.showShelvesDefault;
   const smartShelves = preferences.smartShelves;
   const savedViews = preferences.savedViews;
 
@@ -169,8 +159,19 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
   const setSortAsc = useCallback((value: boolean) => updatePreferences({ librarySortAsc: value }), [updatePreferences]);
   const setStatusFilter = useCallback((value: StatusFilter) => updatePreferences({ libraryStatusFilter: value }), [updatePreferences]);
   const setViewMode = useCallback((value: ViewMode) => updatePreferences({ libraryViewMode: value }), [updatePreferences]);
-  const setShowStats = useCallback((value: boolean) => updatePreferences({ showStatsDefault: value }), [updatePreferences]);
-  const setShowShelves = useCallback((value: boolean) => updatePreferences({ showShelvesDefault: value }), [updatePreferences]);
+
+  const advancedFilterCount = useMemo(() => {
+    let count = 0;
+    if (seriesFilter) count += 1;
+    if (locationRoom != null) count += 1;
+    if (locationCase != null) count += 1;
+    if (locationShelf != null) count += 1;
+    if (shelfFilter) count += 1;
+    if (minPages.trim()) count += 1;
+    if (maxPages.trim()) count += 1;
+    if (sortBy !== 'dateAdded' || sortAsc) count += 1;
+    return count;
+  }, [seriesFilter, locationRoom, locationCase, locationShelf, shelfFilter, minPages, maxPages, sortBy, sortAsc]);
 
   useEffect(() => {
     try {
@@ -181,20 +182,22 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
   }, []);
 
   useEffect(() => {
-    if (searchParams.get('review') !== '1' && searchParams.get('lent') !== '1') return;
-    if (searchParams.get('review') === '1') setReviewOnly(true);
-    if (searchParams.get('lent') === '1') setLentOnly(true);
+    const review = searchParams.get('review') === '1';
+    const lent = searchParams.get('lent') === '1';
+    const wishlist = searchParams.get('wishlist') === '1';
+    if (!review && !lent && !wishlist) return;
+    if (review) setReviewOnly(true);
+    if (lent) setLentOnly(true);
+    if (wishlist) {
+      setStatusFilter('to-read');
+      setLibrarySegment('all');
+    }
     const next = new URLSearchParams(searchParams);
     next.delete('review');
     next.delete('lent');
+    next.delete('wishlist');
     setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
-
-  useEffect(() => {
-    if (librarySegment === 'shelves') {
-      setShowShelves(true);
-    }
-  }, [librarySegment, setShowShelves]);
+  }, [searchParams, setSearchParams, setStatusFilter]);
 
   const resetActivePresets = useCallback(() => {
     setActiveSavedViewId(null);
@@ -384,13 +387,15 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     estimateSize: () => 110,
     overscan: 8,
     scrollMargin: listScrollMargin,
+    measureElement: (element) => element.getBoundingClientRect().height,
   });
 
   const gridVirtualizer = useWindowVirtualizer({
     count: viewMode === 'grid' || viewMode === 'masonry' ? gridRowCount : 0,
-    estimateSize: () => (viewMode === 'masonry' ? 400 : 360),
+    estimateSize: () => (viewMode === 'masonry' ? 520 : 460),
     overscan: 4,
     scrollMargin: gridScrollMargin,
+    measureElement: (element) => element.getBoundingClientRect().height,
   });
 
   useEffect(() => {
@@ -726,101 +731,49 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
         </p>
       )}
 
-      <div className={`glass ${s.hero} ${librarySessionReturn ? s.heroCompact : ''}`}>
-        <div className={s.heroCopy}>
-          <span className={s.eyebrow}>
-            <Sparkles size={14} />
-            Library workspace
-          </span>
-          <h1 className={s.title}>Your library, built for browsing not digging.</h1>
-          <p className={s.heroText}>Build a library that feels easy to use</p>
-          <p className={s.resultsSummary}>Scan fast, review edge cases later, and keep your shelves tidy without losing momentum.</p>
-          <div className={s.heroActions}>
-            <button type="button" className={`glass ${s.primaryAction}`} onClick={onStartScanning}>
-              <ScanLine size={16} />
-              {books.length === 0 ? 'Start scanning' : 'Scan another book'}
-            </button>
-            <button
-              type="button"
-              className={`glass ${s.secondaryAction}`}
-              onClick={() => setShowStats(!showStats)}
-            >
-              <BarChart3 size={16} />
-              {showStats ? 'Hide stats' : 'Show stats'}
-            </button>
-            <button
-              type="button"
-              className={`glass ${s.secondaryAction}`}
-              onClick={() => setShowShelves(!showShelves)}
-            >
-              <BookmarkPlus size={16} />
-              {showShelves ? 'Hide shelves' : 'Show shelves'}
-            </button>
-          </div>
+      <div className={s.compactStrip}>
+        <div className={s.compactHeading}>
+          <h1 className={s.title}>Library</h1>
+          <button type="button" className={`glass ${s.primaryAction}`} onClick={onStartScanning}>
+            <ScanLine size={16} />
+            {books.length === 0 ? 'Start scanning' : 'Scan another book'}
+          </button>
         </div>
-
-        {!mvp && (
-          <div className={s.highlightGrid}>
-            <button type="button" className={`glass ${s.highlightCard} ${s.highlightCardCta}`} onClick={() => setReviewOnly(true)}>
-              <span className={s.highlightLabel}>Needs review</span>
-              <strong>{insights.reviewCount}</strong>
-              <span>{insights.reviewCount === 1 ? 'Book' : 'Books'} waiting for cleanup</span>
-            </button>
-            <button
-              type="button"
-              className={`glass ${s.highlightCard} ${s.highlightCardCta}`}
-              onClick={() => setStatusFilter('reading')}
-            >
-              <span className={s.highlightLabel}>Currently reading</span>
-              <strong>{insights.readingCount}</strong>
-              <span>{insights.currentlyReading?.title ?? 'Nothing in progress yet'}</span>
-            </button>
-            <div className={`glass ${s.highlightCard}`}>
-              <span className={s.highlightLabel}>Completion rate</span>
-              <strong>{insights.completionRate}%</strong>
-              <span>{pluralize(insights.totalBooks, 'book')} in your library</span>
-            </div>
-            <div className={`glass ${s.highlightCard}`}>
-              <span className={s.highlightLabel}>Finished this year</span>
-              <strong>{insights.finishedThisYear}</strong>
-              <span>
-                Mark books as read with a finish date to track {new Date().getFullYear()} progress.
-              </span>
-            </div>
+        <dl className={s.compactStats}>
+          <div>
+            <dt>Books</dt>
+            <dd>{insights.totalBooks}</dd>
           </div>
+          <div>
+            <dt>Reading</dt>
+            <dd>{insights.readingCount}</dd>
+          </div>
+          <div>
+            <dt>Finished</dt>
+            <dd>{insights.readCount}</dd>
+          </div>
+          <div>
+            <dt>
+              <button type="button" className={s.statLink} onClick={() => { setReviewOnly(true); setLibrarySegment('all'); }}>
+                Needs review
+              </button>
+            </dt>
+            <dd>{insights.reviewCount}</dd>
+          </div>
+        </dl>
+        <p className={s.compactHint}>Needs review means a title, author, or ISBN still needs a quick check.</p>
+        {!mvp && (
+          <nav className={s.libraryTools} aria-label="Library sections">
+            <button type="button" onClick={() => navigate('/recommendations')}>Suggestions</button>
+            <button type="button" onClick={() => { setLibrarySegment('all'); setStatusFilter('to-read'); }}>
+              Wishlist
+            </button>
+            <button type="button" onClick={() => navigate('/data')}>Import & export</button>
+          </nav>
         )}
       </div>
 
-      {showStats && (
-        <div className={`glass ${s.stats}`}>
-          <div className={s.statItem}>
-            <div className={s.statValue}>{insights.totalBooks}</div>
-            <div className={s.statLabel}>Total Books</div>
-          </div>
-          <div className={s.statItem}>
-            <div className={s.statValue}>{insights.pagesRead}</div>
-            <div className={s.statLabel}>Pages Read</div>
-          </div>
-          <div className={s.statItem}>
-            <div className={s.statValue}>{insights.toReadCount}</div>
-            <div className={s.statLabel}>To Read</div>
-          </div>
-          <div className={s.statItem}>
-            <div className={s.statValue}>{insights.readingCount}</div>
-            <div className={s.statLabel}>Reading</div>
-          </div>
-          <div className={s.statItem}>
-            <div className={s.statValue}>{insights.readCount}</div>
-            <div className={s.statLabel}>Finished</div>
-          </div>
-          <div className={s.statItem}>
-            <div className={s.statValue}>{insights.finishedThisYear}</div>
-            <div className={s.statLabel}>Finished {new Date().getFullYear()}</div>
-          </div>
-        </div>
-      )}
-
-      {showShelves && (
+      {librarySegment === 'shelves' && !emptyLibrary && (
         <>
           <ShelfManager />
           <PhysicalShelfMap
@@ -833,12 +786,14 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
               setLocationCase(next.locationCase);
               setLocationShelf(next.locationShelf);
               resetActivePresets();
+              const picked = next.locationRoom != null || next.locationCase != null || next.locationShelf != null;
+              if (picked) setLibrarySegment('all');
             }}
           />
         </>
       )}
 
-      {!emptyLibrary && filterChips.length === 0 && insights.recentlyAdded.length > 0 && (
+      {librarySegment === 'foryou' && !emptyLibrary && filterChips.length === 0 && insights.recentlyAdded.length > 0 && (
         <div className={s.recentSection}>
           <div className={s.recentHeader}>
             <div>
@@ -875,7 +830,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
         </div>
       )}
 
-      {!emptyLibrary && reviewBooks.length > 0 && (
+      {librarySegment === 'foryou' && !emptyLibrary && reviewBooks.length > 0 && (
         <div className={s.reviewSection}>
           <div className={s.recentHeader}>
             <div>
@@ -912,6 +867,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
         </div>
       )}
 
+      {librarySegment !== 'shelves' && (
       <div className={s.header}>
         <div className="sr-only" aria-live="polite" aria-atomic="true">
           {!emptyLibrary &&
@@ -946,8 +902,9 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
           </button>
         </div>
       </div>
+      )}
 
-      {!emptyLibrary && (
+      {!emptyLibrary && librarySegment !== 'shelves' && (
         <>
           {!mvp && librarySegment !== 'foryou' && (
           <div className={s.savedTools}>
@@ -1094,45 +1051,67 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
             </div>
           )}
 
-          <div className={s.filterRow}>
-            {STATUS_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={`glass ${s.filterBtn} ${statusFilter === option.value ? s.viewBtnActive : ''}`}
-                onClick={() => {
-                  setStatusFilter(option.value);
-                  resetActivePresets();
-                }}
-              >
-                {option.icon}
-                {option.label}
-              </button>
-            ))}
+          <div className={s.filterTools}>
+            <div className={s.filterScroller}>
+              <div className={s.filterRow} role="group" aria-label="Status filters">
+                {STATUS_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`glass ${s.filterBtn} ${statusFilter === option.value ? s.viewBtnActive : ''}`}
+                    onClick={() => {
+                      setStatusFilter(option.value);
+                      resetActivePresets();
+                    }}
+                  >
+                    {option.icon}
+                    {option.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className={`glass ${s.filterBtn} ${reviewOnly ? s.viewBtnActive : ''}`}
+                  aria-pressed={reviewOnly}
+                  title="Books missing a title, author, or a confirmed ISBN"
+                  onClick={() => {
+                    setReviewOnly(!reviewOnly);
+                    resetActivePresets();
+                  }}
+                >
+                  <Inbox size={14} />
+                  Needs review
+                </button>
+                <button
+                  type="button"
+                  className={`glass ${s.filterBtn} ${lentOnly ? s.viewBtnActive : ''}`}
+                  aria-pressed={lentOnly}
+                  onClick={() => {
+                    setLentOnly(!lentOnly);
+                    resetActivePresets();
+                  }}
+                >
+                  <BookmarkPlus size={14} />
+                  Lent out
+                </button>
+              </div>
+            </div>
             <button
               type="button"
-              className={`glass ${s.filterBtn} ${reviewOnly ? s.viewBtnActive : ''}`}
-              aria-pressed={reviewOnly}
-              onClick={() => {
-                setReviewOnly(!reviewOnly);
-                resetActivePresets();
-              }}
+              className={`glass ${s.filterToggle}`}
+              aria-expanded={filtersOpen}
+              aria-controls="library-advanced-filters"
+              onClick={() => setFiltersOpen((open) => !open)}
             >
-              <Inbox size={14} />
-              Needs review
+              <Filter size={16} aria-hidden />
+              Filters
+              {advancedFilterCount > 0 && (
+                <span className={s.filterBadge}>{advancedFilterCount}</span>
+              )}
             </button>
-            <button
-              type="button"
-              className={`glass ${s.filterBtn} ${lentOnly ? s.viewBtnActive : ''}`}
-              aria-pressed={lentOnly}
-              onClick={() => {
-                setLentOnly(!lentOnly);
-                resetActivePresets();
-              }}
-            >
-              <BookmarkPlus size={14} />
-              Lent out
-            </button>
+          </div>
+
+          {filtersOpen && (
+          <div id="library-advanced-filters" className={s.filterPanel}>
             {seriesNames.length > 0 && (
               <label className={`glass ${s.filterBtn}`} style={{ padding: '0.35rem 0.65rem', gap: '0.35rem' }}>
                 <Layers size={14} aria-hidden />
@@ -1260,27 +1239,31 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
               placeholder="Max pages"
               aria-label="Maximum page count"
             />
+            <div className={s.sortRow}>
+              <span className={s.sectionLabel}>
+                <Filter size={14} />
+                Sort
+              </span>
+              {SORT_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`glass ${s.sortBtn} ${sortBy === option.value ? s.viewBtnActive : ''}`}
+                  onClick={() => setSortBy(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+              <button type="button" className={`glass ${s.sortBtn}`} onClick={() => setSortAsc(!sortAsc)}>
+                <ArrowUpDown size={14} />
+                {sortAsc ? 'Ascending' : 'Descending'}
+              </button>
+            </div>
           </div>
+          )}
 
           <div className={s.sortRow}>
-            <span className={s.sectionLabel}>
-              <Filter size={14} />
-              Sort & view
-            </span>
-            {SORT_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={`glass ${s.sortBtn} ${sortBy === option.value ? s.viewBtnActive : ''}`}
-                onClick={() => setSortBy(option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
-            <button type="button" className={`glass ${s.sortBtn}`} onClick={() => setSortAsc(!sortAsc)}>
-              <ArrowUpDown size={14} />
-              {sortAsc ? 'Ascending' : 'Descending'}
-            </button>
+            <span className={s.sectionLabel}>View</span>
             <div className={s.viewToggle}>
               <button
                 type="button"
@@ -1311,7 +1294,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
         </>
       )}
 
-      {selectionMode && !emptyLibrary && (
+      {selectionMode && !emptyLibrary && librarySegment !== 'shelves' && (
         <div className={`glass ${s.bulkBar}`}>
           <div className={s.bulkSummary}>
             <strong>{selectedIds.length}</strong>
@@ -1419,7 +1402,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
         </div>
       )}
 
-      {emptyFilteredResults && (
+      {librarySegment !== 'shelves' && emptyFilteredResults && (
         <div className={`glass ${s.emptyState}`}>
           <div className={s.emptyIcon}>
             <Filter size={28} />
@@ -1433,7 +1416,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
         </div>
       )}
 
-      {!emptyLibrary && !emptyFilteredResults && (viewMode === 'grid' || viewMode === 'masonry') && (
+      {librarySegment !== 'shelves' && !emptyLibrary && !emptyFilteredResults && (viewMode === 'grid' || viewMode === 'masonry') && (
         <div
           ref={gridParentRef}
           className={`glass ${s.virtualContainer} ${viewMode === 'masonry' ? s.virtualContainerMasonry : ''}`}
@@ -1447,6 +1430,8 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
               return (
                 <div
                   key={virtualRow.key}
+                  data-index={virtualRow.index}
+                  ref={gridVirtualizer.measureElement}
                   className={s.gridRow}
                   style={{
                     position: 'absolute',
@@ -1478,7 +1463,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
         </div>
       )}
 
-      {!emptyLibrary && !emptyFilteredResults && viewMode === 'list' && (
+      {librarySegment !== 'shelves' && !emptyLibrary && !emptyFilteredResults && viewMode === 'list' && (
         <div ref={listParentRef} className={`glass ${s.virtualContainer}`}>
           <div className={s.virtualInner} style={{ height: `${virtualizer.getTotalSize()}px` }}>
             {virtualizer.getVirtualItems().map((virtualItem) => {
@@ -1488,6 +1473,8 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
               return (
                 <div
                   key={virtualItem.key}
+                  data-index={virtualItem.index}
+                  ref={virtualizer.measureElement}
                   className={s.listRow}
                   style={{
                     position: 'absolute',
