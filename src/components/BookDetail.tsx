@@ -12,6 +12,7 @@ import { getBookCoverSrc } from '../utils/bookPresentation.ts';
 import { shareBook } from '../utils/shareBook.ts';
 import { isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
+import { formatLocaleDate } from '../utils/formatDate.ts';
 import { formatLentSince, formatLoanDue, isLoanOverdue, isOnLoan, returnedLoans } from '../utils/loans.ts';
 import { formatPhysicalLocation } from '../utils/physicalLocation.ts';
 import {
@@ -30,6 +31,13 @@ const statusLabels: Record<BookEntry['status'], string> = {
   reading: 'Reading',
   read: 'Read',
   dnf: 'Did Not Finish',
+};
+
+const statusShort: Record<BookEntry['status'], string> = {
+  'to-read': 'To Read',
+  reading: 'Reading',
+  read: 'Read',
+  dnf: 'DNF',
 };
 
 const statusIcons: Record<BookEntry['status'], React.ReactNode> = {
@@ -434,9 +442,9 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                 <div className={styles.details}>
                   {!isBookPhotoOnly(book) && <span>ISBN: {book.isbn}</span>}
                   {book.pageCount > 0 && <span>{book.pageCount} pages</span>}
-                  <span>Added {new Date(book.dateAdded).toLocaleDateString()}</span>
-                  {book.startedAt && <span>Started {new Date(book.startedAt).toLocaleDateString()}</span>}
-                  {book.finishedAt && <span>Finished {new Date(book.finishedAt).toLocaleDateString()}</span>}
+                  <span>Added {formatLocaleDate(book.dateAdded)}</span>
+                  {book.startedAt && <span>Started {formatLocaleDate(book.startedAt)}</span>}
+                  {book.finishedAt && <span>Finished {formatLocaleDate(book.finishedAt)}</span>}
                   {book.metadataSource && (
                     <span className={styles.sourceBadge}>
                       via {sourceLabels[book.metadataSource] ?? book.metadataSource}
@@ -514,7 +522,7 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                   aria-label={`Set status to ${statusLabels[st]}`}
                 >
                   {statusIcons[st]}
-                  <span className={styles.statusLabel}>{statusLabels[st]}</span>
+                  <span className={styles.statusLabel}>{statusShort[st]}</span>
                 </button>
               ))}
             </div>
@@ -559,7 +567,7 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
             <ul className={styles.loanHistory}>
               {pastLoans.map((entry) => (
                 <li key={`${entry.lentAt}-${entry.returnedAt}-${entry.lentTo}`}>
-                  Returned from {entry.lentTo} on {entry.returnedAt.slice(0, 10) || 'an unknown date'}
+                  Returned from {entry.lentTo} on {formatLocaleDate(entry.returnedAt) || 'an unknown date'}
                 </li>
               ))}
             </ul>
@@ -576,7 +584,7 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
           </div>
           <div className={styles.progressMeta}>
             <span>{book.pageCount > 0 ? `${progressValue} / ${book.pageCount} complete` : `${progressValue} logged`}</span>
-            {book.lastProgressAt && <span>Updated {new Date(book.lastProgressAt).toLocaleDateString()}</span>}
+            {book.lastProgressAt && <span>Updated {formatLocaleDate(book.lastProgressAt)}</span>}
           </div>
           <div className={styles.progressActions}>
             <button type="button" className={styles.quickBtn} onClick={() => updateBookStatus(book.id, 'reading')}>

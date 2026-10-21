@@ -843,9 +843,17 @@ function App() {
                   <span>{insights.currentlyReading?.author ?? 'Mark a title as reading to keep it visible.'}</span>
                 </div>
                 <div className={`glass ${styles.statCard}`}>
-                  <span className={styles.statLabel}>Sync status</span>
-                  <strong>{online ? 'Online' : 'Offline'}</strong>
-                  <span>{pendingChanges > 0 ? `${pendingChanges} change${pendingChanges === 1 ? '' : 's'} to sync` : lastSyncedAt ? `Synced ${formatRelativeTime(lastSyncedAt)}` : 'Everything is up to date.'}</span>
+                  <span className={styles.statLabel}>{user ? 'Sync status' : 'Library'}</span>
+                  <strong>{user ? (online ? 'Online' : 'Offline') : 'On this device'}</strong>
+                  <span>
+                    {user
+                      ? pendingChanges > 0
+                        ? `${pendingChanges} change${pendingChanges === 1 ? '' : 's'} to sync`
+                        : lastSyncedAt
+                          ? `Synced ${formatRelativeTime(lastSyncedAt)}`
+                          : 'Everything is up to date.'
+                      : 'Saved on this device'}
+                  </span>
                 </div>
               </div>
             </section>
@@ -917,6 +925,7 @@ function App() {
       </header>
 
       <main ref={mainRef} id="main-content" className={styles.mainContent} tabIndex={-1}>
+        <PwaInstallPrompt />
         <Routes>
           <Route path="/" element={<Navigate to={isMvpMode() ? '/scan' : '/home'} replace />} />
           <Route
@@ -1099,14 +1108,13 @@ function App() {
         onClose={completeOnboarding}
       />
 
-
-      <PwaInstallPrompt />
-
       <footer className={`glass ${styles.siteFooter}`}>
         <div>
           <strong>SpineScanner</strong>
           <p className={styles.footerNote}>Offline-first book tracking with optional sync, exports, and readable trust pages for public visitors.</p>
-          <p className={styles.footerNote}>Release {APP_RELEASE} · {APP_ENV}</p>
+          {import.meta.env.DEV && (
+            <p className={styles.footerNote}>Release {APP_RELEASE} · {APP_ENV}</p>
+          )}
         </div>
         <div className={styles.footerLinks}>
           <button type="button" className={styles.footerButton} onClick={() => openPublicPage('about')}>About</button>

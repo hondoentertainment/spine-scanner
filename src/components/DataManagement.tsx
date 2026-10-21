@@ -11,6 +11,7 @@ import { exportToJSON, importFromJSON, exportToLibraryThingTSV, exportToStoryGra
 import { findDuplicateIsbnGroups } from '../utils/libraryDuplicates.ts';
 import { findEditionDuplicateGroups } from '../utils/editionDuplicates.ts';
 import { findBooksMissingCovers, extractCoverUpdate } from '../utils/missingCovers.ts';
+import { pluralize } from '../utils/plural.ts';
 import { Download, Upload, Trash2, Globe, CheckCircle, Loader2, X, GitMerge, RefreshCw, Layers } from 'lucide-react';
 import type { BookEntry } from '../types.ts';
 import s from './DataManagement.module.css';
@@ -109,7 +110,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                     }
                     setResult(res);
                     setImporting(false);
-                    toast(`Imported ${res.added} books`, 'success');
+                    toast(`Imported ${pluralize(res.added, 'book')}`, 'success');
                     return;
                 } catch { /* fall through */ }
             }
@@ -531,12 +532,12 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                     <RefreshCw size={20} style={{ color: '#f59e0b' }} /> Refresh Metadata
                 </h3>
                 <p className={s.sectionDesc}>
-                    Fetch updated metadata from APIs for books that have no metadata source recorded (added before Phase 26).
-                    Cover recovery re-queries only books missing a cover image and updates just the cover — manual edits are never overwritten.
+                    Fetch updated details for books that were saved without a source.
+                    Cover recovery only fills in a missing cover and leaves your edits alone.
                 </p>
                 {refreshRunning ? (
                     <div className={s.refreshProgress}>
-                        <span>Refreshing {refreshProgress} / {refreshTotal} books…</span>
+                        <span>Refreshing {refreshProgress} / {pluralize(refreshTotal, 'book')}…</span>
                         <button onClick={handleCancelRefresh} className={`glass ${s.refreshCancelBtn}`}>Cancel</button>
                     </div>
                 ) : (
@@ -620,7 +621,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                                 className={s.dangerBtn}
                                 aria-label="Permanently delete all books"
                             >
-                                <Trash2 size={16} /> Permanently delete all {books.length} books
+                                <Trash2 size={16} /> Permanently delete all {pluralize(books.length, 'book')}
                             </button>
                         </div>
                     </div>

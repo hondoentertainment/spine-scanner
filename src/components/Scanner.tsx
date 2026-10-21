@@ -289,7 +289,7 @@ const Scanner: React.FC<ScannerProps> = ({
             }
             hapticSuccess();
             setShelfItems(items);
-            setStatus(`Found ${items.length} books. Review them before adding.`);
+            setStatus(`Found ${items.length === 1 ? '1 book' : `${items.length} books`}. Review them before adding.`);
         } catch (err: unknown) {
             if (signal?.aborted) {
                 setStatus('Shelf scan cancelled');

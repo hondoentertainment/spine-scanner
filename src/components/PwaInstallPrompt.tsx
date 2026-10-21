@@ -4,15 +4,17 @@ import s from './PwaInstallPrompt.module.css';
 
 const DISMISS_KEY = 'spine-pwa-install-dismissed';
 
+function readDismissed(): boolean {
+  try {
+    return localStorage.getItem(DISMISS_KEY) === '1' || sessionStorage.getItem(DISMISS_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export default function PwaInstallPrompt() {
   const [event, setEvent] = useState<BeforeInstallPromptEvent | null>(null);
-  const [dismissed, setDismissed] = useState(() => {
-    try {
-      return sessionStorage.getItem(DISMISS_KEY) === '1';
-    } catch {
-      return false;
-    }
-  });
+  const [dismissed, setDismissed] = useState(readDismissed);
 
   useEffect(() => {
     const onPrompt = (e: Event) => {
@@ -25,7 +27,7 @@ export default function PwaInstallPrompt() {
 
   const dismiss = useCallback(() => {
     try {
-      sessionStorage.setItem(DISMISS_KEY, '1');
+      localStorage.setItem(DISMISS_KEY, '1');
     } catch {
       /* ignore */
     }

@@ -1,7 +1,7 @@
 import { canonicalIsbn, distinctiveSubjects } from './rank.ts';
 import type { CatalogCandidate } from './types.ts';
 
-const OL_FIELDS = 'title,author_name,isbn,subject,cover_i,number_of_pages_median';
+const OL_FIELDS = 'title,author_name,isbn,subject,cover_i,number_of_pages_median,key,language,alternative_title';
 const REQUEST_TIMEOUT_MS = 8000;
 
 export interface FetchOutcome<T> {
@@ -27,6 +27,16 @@ function asCount(value: unknown): number {
 
 function firstString(value: unknown): string {
   return asStrings(value)[0] ?? '';
+}
+
+export function normalizeCatalogWorkKey(raw: unknown): string {
+  const value = typeof raw === 'string' ? raw : '';
+  const match = value.match(/OL\d+W/i);
+  return match ? match[0].toUpperCase() : '';
+}
+
+function catalogLanguage(raw: unknown): string {
+  return firstString(raw);
 }
 
 function collectIsbns(raw: string[]): { isbn: string; isbns: string[] } {
@@ -79,6 +89,9 @@ export function parseOpenLibrarySearch(data: unknown, source: CatalogCandidate['
         ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg`
         : '',
       subjects: asStrings(row.subject).slice(0, 20),
+      workKey: normalizeCatalogWorkKey(row.key),
+      language: catalogLanguage(row.language),
+      alternateTitles: asStrings(row.alternative_title).slice(0, 8),
       source,
     });
   }
@@ -118,6 +131,7 @@ export function parseGoogleVolumes(data: unknown): CatalogCandidate[] {
       pageCount: asCount(volume.pageCount),
       coverImg: thumbnail ? httpsUrl(thumbnail) : '',
       subjects: categories.slice(0, 20),
+      language: typeof volume.language === 'string' ? volume.language : '',
       source: 'google_books',
     });
   }
@@ -161,27 +175,49 @@ export async function searchGoogleBooks(
   return { ok: true, value: parseGoogleVolumes(data) };
 }
 
-/** Subjects for one owned ISBN. Open Library first, then Google Books categories. */
-export async function lookupSubjects(
+export interface OwnedEditionFacts {
+  subjects: string[];
+  workKey: string;
+}
+
+function workKeyFromSearch(data: unknown): string {
+  if (!data || typeof data !== 'object') return '';
+  const docs = (data as { docs?: unknown }).docs;
+  if (!Array.isArray(docs) || !docs[0] || typeof docs[0] !== 'object') return '';
+  return normalizeCatalogWorkKey((docs[0] as { key?: unknown }).key);
+}
+
+/** Subjects and Open Library work id for one owned ISBN. */
+export async function lookupOwnedEdition(
   isbn: string,
   fetchImpl: typeof fetch,
-): Promise<FetchOutcome<string[]>> {
+): Promise<FetchOutcome<OwnedEditionFacts>> {
   const canonical = canonicalIsbn(isbn);
-  if (!canonical) return { ok: false, value: [] };
+  if (!canonical) return { ok: false, value: { subjects: [], workKey: '' } };
   const openLibrary = await fetchJson(
-    `https://openlibrary.org/search.json?isbn=${encodeURIComponent(canonical)}&limit=1&fields=subject`,
+    `https://openlibrary.org/search.json?isbn=${encodeURIComponent(canonical)}&limit=1&fields=subject,key`,
     fetchImpl,
   );
+  const workKey = workKeyFromSearch(openLibrary);
   const fromOpenLibrary = openLibrary ? distinctiveSubjects(openLibrarySubjects(openLibrary)) : [];
   if (openLibrary && fromOpenLibrary.length > 0) {
-    return { ok: true, value: fromOpenLibrary };
+    return { ok: true, value: { subjects: fromOpenLibrary, workKey } };
   }
   const google = await fetchJson(
     `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(`isbn:${canonical}`)}&maxResults=1&printType=books`,
     fetchImpl,
   );
   const fromGoogle = google ? distinctiveSubjects(googleSubjects(google)) : [];
-  if (google && fromGoogle.length > 0) return { ok: true, value: fromGoogle };
-  if (openLibrary || google) return { ok: true, value: fromOpenLibrary };
-  return { ok: false, value: [] };
+  if (google && fromGoogle.length > 0) return { ok: true, value: { subjects: fromGoogle, workKey } };
+  if (openLibrary || google) return { ok: true, value: { subjects: fromOpenLibrary, workKey } };
+  return { ok: false, value: { subjects: [], workKey } };
+}
+
+/** Subjects for one owned ISBN. Open Library first, then Google Books categories. */
+export async function lookupSubjects(
+  isbn: string,
+  fetchImpl: typeof fetch,
+): Promise<FetchOutcome<string[]>> {
+  const outcome = await lookupOwnedEdition(isbn, fetchImpl);
+  return { ok: outcome.ok, value: outcome.value.subjects };
 }

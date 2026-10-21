@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import BookCard from '../BookCard';
 import { ToastProvider } from '../Toast';
 import { useBookStore } from '../../store/useBookStore';
+import { formatLocaleDate } from '../../utils/formatDate';
 import type { BookEntry, Shelf } from '../../types';
 
 const makeBook = (overrides: Partial<BookEntry> = {}): BookEntry => ({
@@ -198,7 +199,7 @@ describe('BookCard', () => {
     useBookStore.setState({ books: [book] });
     renderWithToast(<BookCard book={book} />);
     expect(screen.getByText('Overdue')).toBeInTheDocument();
-    expect(screen.getByText('Lent to Ada since 2020-01-01')).toBeInTheDocument();
+    expect(screen.getByText(`Lent to Ada since ${formatLocaleDate('2020-01-01T00:00:00.000Z')}`)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Mark 1984 returned' }));
     const returned = useBookStore.getState().books[0];

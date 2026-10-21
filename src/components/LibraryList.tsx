@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import {
   ArrowUpDown,
   BarChart3,
@@ -37,6 +37,7 @@ import ShelfManager from './ShelfManager.tsx';
 import { useToast } from './Toast.tsx';
 import { isMvpMode } from '../lib/appMode.ts';
 import { getReadingProgressPercent } from '../utils/bookState.ts';
+import { pluralize } from '../utils/plural.ts';
 import { getBookCoverSrc, getLibraryInsights } from '../utils/bookPresentation.ts';
 import { filterLibraryBooks } from '../utils/libraryFilter.ts';
 import { isLoanOverdue, isOnLoan } from '../utils/loans.ts';
@@ -363,20 +364,33 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
     return () => observer.disconnect();
   }, [viewMode]);
 
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const virtualizer = useVirtualizer({
-    count: filteredAndSorted.length,
-    getScrollElement: () => listParentRef.current,
+  const [listScrollMargin, setListScrollMargin] = useState(0);
+  const [gridScrollMargin, setGridScrollMargin] = useState(0);
+  const gridRowCount = Math.ceil(filteredAndSorted.length / effectiveGridColumns);
+
+  useEffect(() => {
+    const measure = () => {
+      setListScrollMargin(listParentRef.current?.offsetTop ?? 0);
+      setGridScrollMargin(gridParentRef.current?.offsetTop ?? 0);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [viewMode, filteredAndSorted.length]);
+
+  // Window scroll keeps the grid in the page instead of a nested scroller.
+  const virtualizer = useWindowVirtualizer({
+    count: viewMode === 'list' ? filteredAndSorted.length : 0,
     estimateSize: () => 110,
     overscan: 8,
+    scrollMargin: listScrollMargin,
   });
 
-  const gridRowCount = Math.ceil(filteredAndSorted.length / effectiveGridColumns);
-  const gridVirtualizer = useVirtualizer({
-    count: gridRowCount,
-    getScrollElement: () => gridParentRef.current,
-    estimateSize: () => (viewMode === 'masonry' ? 400 : 350),
+  const gridVirtualizer = useWindowVirtualizer({
+    count: viewMode === 'grid' || viewMode === 'masonry' ? gridRowCount : 0,
+    estimateSize: () => (viewMode === 'masonry' ? 400 : 360),
     overscan: 4,
+    scrollMargin: gridScrollMargin,
   });
 
   useEffect(() => {
@@ -764,7 +778,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
             <div className={`glass ${s.highlightCard}`}>
               <span className={s.highlightLabel}>Completion rate</span>
               <strong>{insights.completionRate}%</strong>
-              <span>{insights.totalBooks} books in your library</span>
+              <span>{pluralize(insights.totalBooks, 'book')} in your library</span>
             </div>
             <div className={`glass ${s.highlightCard}`}>
               <span className={s.highlightLabel}>Finished this year</span>
@@ -908,7 +922,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
             <LibraryBig size={14} />
             Library explorer
           </span>
-          <h2 className={s.heading}>{filteredAndSorted.length} books ready to browse</h2>
+          <h2 className={s.heading}>{pluralize(filteredAndSorted.length, 'book')} ready to browse</h2>
           <p className={s.resultsSummary}>Tune the view, save the filters you reuse, and tidy batches in one place.</p>
         </div>
         <div className={s.headerActions}>
@@ -1439,7 +1453,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
                     top: 0,
                     left: 0,
                     width: '100%',
-                    transform: `translateY(${virtualRow.start}px)`,
+                    transform: `translateY(${virtualRow.start - gridScrollMargin}px)`,
                   }}
                 >
                   {rowBooks.map((book) => (
@@ -1480,7 +1494,7 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
                     top: 0,
                     left: 0,
                     width: '100%',
-                    transform: `translateY(${virtualItem.start}px)`,
+                    transform: `translateY(${virtualItem.start - listScrollMargin}px)`,
                   }}
                   onClick={() => handleBookOpen(book)}
                 >

@@ -3,6 +3,7 @@ import { isOnline } from '../utils/network.ts';
 import {
   RECOMMENDATION_FRESH_MS,
   readCachedSubjects,
+  readCachedWorkKey,
   readRecommendationCache,
   writeCachedSubjects,
   writeRecommendationCache,
@@ -20,7 +21,7 @@ import {
   seriesSeeds,
   subjectSeeds,
 } from './rank.ts';
-import { lookupSubjects, searchGoogleBooks, searchOpenLibrary, type FetchOutcome } from './sources.ts';
+import { lookupOwnedEdition, searchGoogleBooks, searchOpenLibrary, type FetchOutcome } from './sources.ts';
 import type { CatalogCandidate, OwnedBookSignal, RecommendationResult } from './types.ts';
 
 export interface LoadRecommendationOptions {
@@ -101,6 +102,7 @@ async function attachSubjects(
 ): Promise<OwnedBookSignal[]> {
   const targets = new Set(booksForSubjectLookup(books).map((book) => book.id));
   const subjectsById = new Map<string, string[]>();
+  const workKeyById = new Map<string, string>();
   const tasks: Array<() => Promise<void>> = [];
 
   for (const book of books) {
@@ -110,18 +112,21 @@ async function attachSubjects(
     const cached = readCachedSubjects(isbn, now);
     if (cached) {
       subjectsById.set(book.id, cached);
+      const workKey = readCachedWorkKey(isbn, now);
+      if (workKey) workKeyById.set(book.id, workKey);
       continue;
     }
     tasks.push(async () => {
-      const outcome = await lookupSubjects(isbn, fetchImpl);
-      const subjects = note(tally, outcome);
-      if (outcome.ok) writeCachedSubjects(isbn, subjects, now);
-      subjectsById.set(book.id, subjects);
+      const outcome = await lookupOwnedEdition(isbn, fetchImpl);
+      const facts = note(tally, outcome);
+      if (outcome.ok) writeCachedSubjects(isbn, facts.subjects, now, facts.workKey);
+      subjectsById.set(book.id, facts.subjects);
+      if (facts.workKey) workKeyById.set(book.id, facts.workKey);
     });
   }
 
   await mapPool(tasks, 3);
-  return signalsFromBooks(books, subjectsById);
+  return signalsFromBooks(books, subjectsById, workKeyById);
 }
 
 async function fetchFreeCandidates(
@@ -168,7 +173,11 @@ async function fetchFreeCandidates(
   return candidates;
 }
 
-function signalsFromBooks(books: BookEntry[], subjectsById = new Map<string, string[]>()): OwnedBookSignal[] {
+function signalsFromBooks(
+  books: BookEntry[],
+  subjectsById = new Map<string, string[]>(),
+  workKeyById = new Map<string, string>(),
+): OwnedBookSignal[] {
   return books.map((book) => ({
     id: book.id,
     title: book.title,
@@ -177,6 +186,7 @@ function signalsFromBooks(books: BookEntry[], subjectsById = new Map<string, str
     seriesName: book.seriesName,
     subjects: subjectsById.get(book.id) ?? [],
     isPhotoOnly: book.isPhotoOnly,
+    workKey: workKeyById.get(book.id) || undefined,
   }));
 }
 

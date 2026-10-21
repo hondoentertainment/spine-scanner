@@ -16,6 +16,7 @@ export interface RecommendationCacheFile {
 interface SubjectEntry {
   subjects: string[];
   savedAt: number;
+  workKey?: string;
 }
 
 function storage(): Storage | null {
@@ -90,11 +91,18 @@ export function readCachedSubjects(isbn: string, now: number): string[] | null {
   return entry.subjects.filter((subject) => typeof subject === 'string');
 }
 
-export function writeCachedSubjects(isbn: string, subjects: string[], now: number): void {
+export function readCachedWorkKey(isbn: string, now: number): string {
+  const entry = readSubjectStore()[isbn];
+  if (!entry || typeof entry.savedAt !== 'number') return '';
+  if (now - entry.savedAt > SUBJECT_FRESH_MS) return '';
+  return typeof entry.workKey === 'string' ? entry.workKey : '';
+}
+
+export function writeCachedSubjects(isbn: string, subjects: string[], now: number, workKey = ''): void {
   const store = storage();
   if (!store) return;
   const current = readSubjectStore();
-  current[isbn] = { subjects, savedAt: now };
+  current[isbn] = { subjects, savedAt: now, ...(workKey ? { workKey } : {}) };
   const fresh = Object.entries(current)
     .filter(([, entry]) => now - entry.savedAt <= SUBJECT_FRESH_MS)
     .sort((a, b) => b[1].savedAt - a[1].savedAt)

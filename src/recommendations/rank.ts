@@ -70,6 +70,9 @@ export interface IdentityBook {
   author: string;
   isbn: string;
   isPhotoOnly?: boolean;
+  workKey?: string;
+  alternateTitles?: string[];
+  language?: string;
 }
 
 export function canonicalIsbn(raw: string | undefined | null): string {
@@ -293,8 +296,201 @@ function formatFromLinks(links: ScoredLink[]): { reason: string; becauseTitles: 
   };
 }
 
+const NUMBER_WORDS: Record<string, number> = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
+  ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
+  seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50,
+  sixty: 60, seventy: 70, eighty: 80, ninety: 90,
+};
+
+const WORD_BY_NUMBER = Object.fromEntries(
+  Object.entries(NUMBER_WORDS).map(([word, value]) => [value, word]),
+) as Record<number, string>;
+
+const STUDY_MARKERS = [
+  'study guide', 'sparknotes', 'spark notes', 'cliffsnotes', 'cliff notes', 'cliffs notes',
+  'summary and analysis', 'chapter summary', 'book summary', 'study notes', 'workbook',
+  'notes on', 'companion to', 'reader guide', 'reading guide',
+];
+
+const COLLECTION_MARKERS = [
+  'omnibus', 'collection', 'complete novels', 'complete works', 'complete series',
+  'boxed set', 'box set', 'anthology', 'and other stories', 'and other novels',
+];
+
+const SEQUEL_HINTS = new Set([
+  'messiah', 'empire', 'returns', 'reborn', 'rising', 'awakens',
+  'part', 'volume', 'vol', 'book', 'ii', 'iii', 'iv',
+]);
+
+const LANGUAGE_ALIASES: Record<string, string> = {
+  eng: 'en', en: 'en', english: 'en',
+  fre: 'fr', fra: 'fr', fr: 'fr', french: 'fr',
+  ger: 'de', deu: 'de', de: 'de', german: 'de',
+  spa: 'es', es: 'es', spanish: 'es',
+  ita: 'it', it: 'it', italian: 'it',
+  por: 'pt', pt: 'pt', portuguese: 'pt',
+  rus: 'ru', ru: 'ru', russian: 'ru',
+  jpn: 'ja', ja: 'ja', japanese: 'ja',
+  zho: 'zh', chi: 'zh', zh: 'zh', chinese: 'zh',
+  kor: 'ko', ko: 'ko', korean: 'ko',
+  nld: 'nl', dut: 'nl', nl: 'nl', dutch: 'nl',
+  swe: 'sv', sv: 'sv', swedish: 'sv',
+  pol: 'pl', pl: 'pl', polish: 'pl',
+  lat: 'la', la: 'la', latin: 'la',
+};
+
+export function normalizeWorkKey(raw: string | undefined | null): string {
+  if (!raw) return '';
+  const match = raw.match(/OL\d+W/i);
+  return match ? match[0].toUpperCase() : '';
+}
+
+export function normalizeLanguage(raw: string | undefined | null): string {
+  if (!raw) return '';
+  const key = raw.trim().toLowerCase();
+  if (!key) return '';
+  return LANGUAGE_ALIASES[key] ?? (key.length <= 3 ? key : '');
+}
+
+export function readerLanguageTag(language?: string): string {
+  const raw = language ?? (typeof navigator !== 'undefined' ? navigator.language : 'en');
+  return normalizeLanguage(raw) || 'en';
+}
+
+/** Unknown language stays. A foreign edition of a suggestion is dropped. */
+export function matchesReaderLanguage(language: string | undefined | null, reader?: string): boolean {
+  const normalized = normalizeLanguage(language);
+  if (!normalized) return true;
+  return normalized === readerLanguageTag(reader);
+}
+
+function numberToWords(value: number): string {
+  if (WORD_BY_NUMBER[value]) return WORD_BY_NUMBER[value];
+  if (value < 100) {
+    const ten = Math.floor(value / 10) * 10;
+    const one = value % 10;
+    const tenWord = WORD_BY_NUMBER[ten] ?? '';
+    const oneWord = WORD_BY_NUMBER[one] ?? '';
+    return [tenWord, oneWord].filter(Boolean).join(' ');
+  }
+  return String(value);
+}
+
+function parseNumberWords(words: string[]): { value: number; consumed: number } | null {
+  if (words.length === 0 || !(words[0] in NUMBER_WORDS)) return null;
+  const first = NUMBER_WORDS[words[0]];
+  const second = words.length >= 2 ? NUMBER_WORDS[words[1]] : undefined;
+  const third = words.length >= 3 ? NUMBER_WORDS[words[2]] : undefined;
+  if (
+    first >= 10 && first <= 20 && second != null && second >= 20 && second % 10 === 0
+    && third != null && third < 10
+  ) {
+    return { value: first * 100 + second + third, consumed: 3 };
+  }
+  if (first >= 10 && first <= 20 && second != null && second >= 10 && second < 100 && second % 10 === 0) {
+    return { value: first * 100 + second, consumed: 2 };
+  }
+  if (first >= 20 && first % 10 === 0 && second != null && second < 10) {
+    return { value: first + second, consumed: 2 };
+  }
+  if (first >= 10) return { value: first, consumed: 1 };
+  return null;
+}
+
+function foldNumberWords(normalized: string): string {
+  const tokens = normalized.split(' ').filter(Boolean);
+  const out: string[] = [];
+  let index = 0;
+  while (index < tokens.length) {
+    const parsed = parseNumberWords(tokens.slice(index));
+    if (parsed) {
+      out.push(String(parsed.value));
+      index += parsed.consumed;
+    } else {
+      out.push(tokens[index]);
+      index += 1;
+    }
+  }
+  return out.join(' ');
+}
+
+function expandYearDigits(normalized: string): string {
+  return normalized.replace(/\b(\d{3,4})\b/g, (digits) => {
+    const value = Number(digits);
+    if (value < 1000 || value > 2099) return digits;
+    const century = Math.floor(value / 100);
+    const rest = value % 100;
+    if (rest === 0) return `${numberToWords(century)} hundred`;
+    return `${numberToWords(century)} ${numberToWords(rest)}`;
+  });
+}
+
+function titleForms(title: string, alternates: string[] = []): Set<string> {
+  const forms = new Set<string>();
+  for (const raw of [title, ...alternates]) {
+    const normalized = normalizeForMatching(raw);
+    if (normalized.length < 2) continue;
+    forms.add(normalized);
+    const folded = foldNumberWords(normalized);
+    if (folded) forms.add(folded);
+    const expanded = expandYearDigits(folded);
+    if (expanded) forms.add(expanded);
+    const expandedFirst = expandYearDigits(normalized);
+    if (expandedFirst) forms.add(foldNumberWords(expandedFirst));
+  }
+  return forms;
+}
+
+function phraseIncludes(haystack: string, needle: string): boolean {
+  if (needle.length < 2) return false;
+  return ` ${haystack} `.includes(` ${needle} `);
+}
+
+function formsOverlap(left: Set<string>, right: Set<string>): boolean {
+  for (const form of left) {
+    if (right.has(form)) return true;
+  }
+  return false;
+}
+
+function containsOwnedTitle(candidateTitle: string, ownedTitle: string, alternates: string[] = []): boolean {
+  const haystack = normalizeForMatching(candidateTitle);
+  if (!haystack) return false;
+  for (const form of titleForms(ownedTitle, alternates)) {
+    if (phraseIncludes(haystack, form) && haystack !== form) return true;
+  }
+  return false;
+}
+
+function isStudyGuideAbout(candidateTitle: string, ownedTitle: string, alternates: string[] = []): boolean {
+  const haystack = normalizeForMatching(candidateTitle);
+  if (!STUDY_MARKERS.some((marker) => haystack.includes(marker))) return false;
+  return containsOwnedTitle(candidateTitle, ownedTitle, alternates)
+    || [...titleForms(ownedTitle, alternates)].some((form) => phraseIncludes(haystack, form));
+}
+
+function isCollectionContaining(candidateTitle: string, ownedTitle: string, alternates: string[] = []): boolean {
+  if (!containsOwnedTitle(candidateTitle, ownedTitle, alternates)) return false;
+  const haystack = normalizeForMatching(candidateTitle);
+  const raw = candidateTitle.toLowerCase();
+  if (
+    COLLECTION_MARKERS.some((marker) => haystack.includes(marker))
+    || raw.includes('/')
+    || raw.includes('omnibus')
+  ) return true;
+  const segments = haystack.split(/\s+and\s+|\s+&\s+|\s+\/\s+/).map((part) => part.trim()).filter(Boolean);
+  if (segments.length < 2) return false;
+  const owned = titleForms(ownedTitle, alternates);
+  const matched = segments.some((segment) => owned.has(segment) || [...owned].some((form) => segment === form));
+  if (!matched) return false;
+  const remainder = segments.filter((segment) => !owned.has(segment));
+  if (remainder.some((segment) => SEQUEL_HINTS.has(segment))) return false;
+  return remainder.length > 0;
+}
+
 export function isAlreadyInLibrary(
-  item: { title: string; author: string; isbn?: string; isbns?: string[] },
+  item: { title: string; author: string; isbn?: string; isbns?: string[]; workKey?: string; alternateTitles?: string[] },
   library: IdentityBook[],
 ): boolean {
   const wanted = new Set<string>();
@@ -303,10 +499,20 @@ export function isAlreadyInLibrary(
     if (canonical) wanted.add(canonical);
   }
   const edition = editionKey(item.title, item.author);
+  const itemKey = normalizeWorkKey(item.workKey);
+  const itemForms = titleForms(item.title, item.alternateTitles ?? []);
+  const itemAuthor = authorKey(item.author);
   for (const book of library) {
     const ownedIsbn = canonicalIsbn(book.isbn);
     if (ownedIsbn && wanted.has(ownedIsbn)) return true;
     if (edition && editionKey(book.title, book.author) === edition) return true;
+    const ownedKey = normalizeWorkKey(book.workKey);
+    if (itemKey && ownedKey && itemKey === ownedKey) return true;
+    const ownedAuthor = authorKey(book.author);
+    const sameAuthor = Boolean(itemAuthor && ownedAuthor && itemAuthor === ownedAuthor && !isWeakAuthor(itemAuthor));
+    if (sameAuthor && formsOverlap(itemForms, titleForms(book.title, book.alternateTitles ?? []))) return true;
+    if (isStudyGuideAbout(item.title, book.title, book.alternateTitles)) return true;
+    if (isCollectionContaining(item.title, book.title, book.alternateTitles)) return true;
   }
   return false;
 }
@@ -318,8 +524,10 @@ export function libraryHasTitle(library: Array<{ title: string }>, title: string
 export function filterStillRelevant(
   recommendations: BookRecommendation[],
   library: IdentityBook[],
+  readerLanguage?: string,
 ): BookRecommendation[] {
   return recommendations.filter((recommendation) => {
+    if (!matchesReaderLanguage(recommendation.language, readerLanguage)) return false;
     if (isAlreadyInLibrary(recommendation, library)) return false;
     return recommendation.becauseTitles.some((title) => libraryHasTitle(library, title));
   });
@@ -356,6 +564,12 @@ function mergeCandidates(candidates: CatalogCandidate[]): CatalogCandidate[] {
       const canonical = canonicalIsbn(isbn);
       if (canonical && !isbns.includes(canonical)) isbns.push(canonical);
     }
+    const alternateTitles = [...(previous.alternateTitles ?? [])];
+    for (const title of candidate.alternateTitles ?? []) {
+      if (!alternateTitles.some((existing) => existing.toLowerCase() === title.toLowerCase())) {
+        alternateTitles.push(title);
+      }
+    }
     merged.set(id, {
       ...previous,
       isbn: previous.isbn || candidate.isbn,
@@ -365,6 +579,9 @@ function mergeCandidates(candidates: CatalogCandidate[]): CatalogCandidate[] {
       subjects,
       seriesName: previous.seriesName || candidate.seriesName,
       reason: previous.reason || candidate.reason,
+      workKey: previous.workKey || candidate.workKey,
+      language: previous.language || candidate.language,
+      alternateTitles,
     });
   }
   return [...merged.values()];
@@ -374,11 +591,13 @@ export function rankRecommendations(
   candidates: CatalogCandidate[],
   owned: OwnedBookSignal[],
   limit = RECOMMENDATION_LIMIT,
+  readerLanguage?: string,
 ): BookRecommendation[] {
   const ownedTitles = owned.map((book) => book.title);
   const scored: Array<BookRecommendation & { score: number }> = [];
 
   for (const candidate of mergeCandidates(candidates)) {
+    if (!matchesReaderLanguage(candidate.language, readerLanguage)) continue;
     if (isAlreadyInLibrary(candidate, owned)) continue;
     const links = linksFor(candidate, owned);
     const algorithmic = formatFromLinks(links);
@@ -398,6 +617,9 @@ export function rankRecommendations(
       pageCount: candidate.pageCount > 0 ? candidate.pageCount : 0,
       coverImg: candidate.coverImg,
       seriesName: candidate.seriesName,
+      workKey: normalizeWorkKey(candidate.workKey) || undefined,
+      language: normalizeLanguage(candidate.language) || undefined,
+      alternateTitles: candidate.alternateTitles,
       reason: chosen.reason,
       becauseTitles: chosen.becauseTitles,
       source: candidate.source,

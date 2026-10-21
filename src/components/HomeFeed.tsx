@@ -1,12 +1,16 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Library, ScanLine, Sparkles, Clock, Target, Cloud, Inbox, Lightbulb, BarChart3 } from 'lucide-react';
+import { BookOpen, Library, ScanLine, Sparkles, Clock, Target, Cloud, Inbox, BarChart3 } from 'lucide-react';
 import { useBookStore } from '../store/useBookStore.ts';
 import { useProfileStore } from '../store/useProfileStore.ts';
 import { useAuthStore } from '../store/useAuthStore.ts';
 import { useSyncQueue } from '../store/useSyncQueue.ts';
+import { loadRecommendations, peekRecommendations } from '../recommendations/engine.ts';
+import type { BookRecommendation } from '../recommendations/types.ts';
 import { getBookCoverSrc, getLibraryInsights } from '../utils/bookPresentation.ts';
+import { formatLocaleDate } from '../utils/formatDate.ts';
 import { formatRelativeTime } from '../utils/formatRelativeTime.ts';
+import { pluralize } from '../utils/plural.ts';
 import { formatLoanDue, isLoanDueSoon, isLoanOverdue, isOnLoan } from '../utils/loans.ts';
 import type { BookEntry } from '../types.ts';
 import s from './HomeFeed.module.css';
@@ -26,7 +30,7 @@ function formatAdded(dateIso: string): string {
   if (days <= 0) return 'Today';
   if (days === 1) return 'Yesterday';
   if (days < 7) return `${days} days ago`;
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return formatLocaleDate(d, { month: 'short', day: 'numeric' });
 }
 
 export default function HomeFeed() {
@@ -117,7 +121,7 @@ export default function HomeFeed() {
         }
       });
       const monthName = new Date(currentYear, bestMonth, 1).toLocaleString(undefined, { month: 'long' });
-      busiestMonthLabel = `${monthName} (${bestCount} book${bestCount === 1 ? '' : 's'})`;
+      busiestMonthLabel = `${monthName} (${pluralize(bestCount, 'book')})`;
     }
 
     return { currentYear, booksRead, totalPages, avgPages, busiestMonthLabel };
@@ -130,25 +134,26 @@ export default function HomeFeed() {
   const lentCount = useMemo(() => books.filter(isOnLoan).length, [books]);
   const overdueCount = useMemo(() => books.filter((book) => isLoanOverdue(book)).length, [books]);
 
-  const suggestions = useMemo(() => {
-    const out: { book: BookEntry; reason: string }[] = [];
-    const reading = books.filter((b) => b.status === 'reading');
-    reading
-      .sort((a, b) => b.dateAdded.localeCompare(a.dateAdded))
-      .slice(0, 2)
-      .forEach((b) => out.push({ book: b, reason: 'Continue reading' }));
-    books
-      .filter((b) => b.status === 'to-read')
-      .sort((a, b) => b.dateAdded.localeCompare(a.dateAdded))
-      .slice(0, 3)
-      .forEach((b) => out.push({ book: b, reason: 'From your want-to-read list' }));
-    const seen = new Set<string>();
-    return out.filter((item) => {
-      if (seen.has(item.book.id)) return false;
-      seen.add(item.book.id);
-      return true;
-    }).slice(0, 5);
+  const peekedSuggestions = useMemo(
+    () => (peekRecommendations(books)?.recommendations ?? []).slice(0, 5),
+    [books],
+  );
+  const [loadedSuggestions, setLoadedSuggestions] = useState<BookRecommendation[] | null>(null);
+  useEffect(() => {
+    if (books.length === 0) return undefined;
+    let cancelled = false;
+    void loadRecommendations(books).then((result) => {
+      if (cancelled) return;
+      const next = result.recommendations.slice(0, 5);
+      const peekIds = (peekRecommendations(books)?.recommendations ?? []).slice(0, 5).map((item) => item.id).join('\n');
+      if (next.map((item) => item.id).join('\n') === peekIds) return;
+      setLoadedSuggestions(next);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [books]);
+  const unownedSuggestions = loadedSuggestions ?? peekedSuggestions;
 
   return (
     <div className={s.wrap}>
@@ -174,14 +179,36 @@ export default function HomeFeed() {
       </header>
 
       {books.length > 0 && (
-        <section className={`glass ${s.discover}`} aria-label="Shelf recommendations">
-          <div className={s.discoverBody}>
-            <strong>Books you don&apos;t own yet</strong>
-            <span>Suggestions from your shelves, each with a reason tied to books you already own.</span>
+        <section className={`glass ${s.discover}`} aria-label="Books you don't own yet">
+          <div className={s.discoverTop}>
+            <div className={s.discoverBody}>
+              <strong>Books you don&apos;t own yet</strong>
+              <span>Suggestions from your shelves, each with a reason tied to books you already own.</span>
+            </div>
+            <button type="button" className={s.discoverBtn} onClick={() => navigate('/recommendations')}>
+              See suggestions
+            </button>
           </div>
-          <button type="button" className={s.discoverBtn} onClick={() => navigate('/recommendations')}>
-            See suggestions
-          </button>
+          {unownedSuggestions.length > 0 && (
+            <ul className={s.suggestionList}>
+              {unownedSuggestions.map((suggestion) => (
+                <li key={suggestion.id}>
+                  <button
+                    type="button"
+                    className={`glass ${s.suggestionCard}`}
+                    onClick={() => navigate('/recommendations')}
+                  >
+                    <img src={getBookCoverSrc(suggestion.coverImg)} alt="" className={s.suggestionCover} loading="lazy" decoding="async" />
+                    <div>
+                      <span className={s.suggestionReason}>{suggestion.reason}</span>
+                      <span className={s.suggestionTitle}>{suggestion.title}</span>
+                      <span className={s.suggestionAuthor}>{suggestion.author}</span>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       )}
 
@@ -273,7 +300,7 @@ export default function HomeFeed() {
           <strong className={s.seriesName}>{topSeries.name}</strong>
           <div className={s.goalRow}>
             <div className={s.goalMeta}>
-              <span>{topSeries.read} of {topSeries.owned} books read</span>
+              <span>{topSeries.read} of {pluralize(topSeries.owned, 'book')} read</span>
             </div>
             <div
               className={s.goalTrack}
@@ -333,7 +360,7 @@ export default function HomeFeed() {
             <h2 className={s.sectionTitle}>Lent out</h2>
           </div>
           <p className={s.lede}>
-            {lentCount} book{lentCount === 1 ? '' : 's'} with someone else
+            {pluralize(lentCount, 'book')} with someone else
             {overdueCount > 0
               ? `, ${overdueCount} overdue.`
               : dueLoans.length > 0
@@ -370,40 +397,15 @@ export default function HomeFeed() {
           <div className={s.reviewBannerBody}>
             <strong>Review queue</strong>
             <span>
-              {insights.reviewCount} book{insights.reviewCount === 1 ? '' : 's'} need a quick metadata check.
+              {insights.reviewCount === 1
+                ? '1 book needs a quick metadata check.'
+                : `${pluralize(insights.reviewCount, 'book')} need a quick metadata check.`}
             </span>
           </div>
           <button type="button" className={s.reviewBannerBtn} onClick={() => navigate('/library?review=1')}>
             Open queue
           </button>
         </div>
-      )}
-
-      {suggestions.length > 0 && (
-        <section className={s.suggestionsSection} aria-label="Suggestions">
-          <div className={s.sectionHead}>
-            <Lightbulb size={16} aria-hidden />
-            <h2 className={s.sectionTitle}>Suggestions</h2>
-          </div>
-          <ul className={s.suggestionList}>
-            {suggestions.map(({ book, reason }) => (
-              <li key={book.id}>
-                <button
-                  type="button"
-                  className={`glass ${s.suggestionCard}`}
-                  onClick={() => navigate(`/library?isbn=${encodeURIComponent(book.isbn)}`)}
-                >
-                  <img src={getBookCoverSrc(book.coverImg)} alt="" className={s.suggestionCover} loading="lazy" decoding="async" />
-                  <div>
-                    <span className={s.suggestionReason}>{reason}</span>
-                    <span className={s.suggestionTitle}>{book.title}</span>
-                    <span className={s.suggestionAuthor}>{book.author}</span>
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
       )}
 
       {strip.length > 0 && (

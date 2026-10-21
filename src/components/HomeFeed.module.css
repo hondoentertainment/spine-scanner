@@ -75,11 +75,17 @@
 
 .discover {
   display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+
+.discoverTop {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.9rem 1rem;
-  border: 1px solid rgba(168, 85, 247, 0.35);
 }
 
 .discoverBody {

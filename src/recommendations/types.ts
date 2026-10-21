@@ -12,6 +12,12 @@ export interface CatalogCandidate {
   coverImg: string;
   subjects: string[];
   seriesName?: string;
+  /** Open Library work id, such as OL1168083W, when the provider sent one. */
+  workKey?: string;
+  /** Provider language code (eng, en, fr, …). Empty when unknown. */
+  language?: string;
+  /** Other titles for the same work, such as a spelled-out year. */
+  alternateTitles?: string[];
   source: RecommendationProvider;
   /** Used only when a provider already explained the pick with owned titles. */
   reason?: string;
@@ -26,6 +32,8 @@ export interface OwnedBookSignal {
   seriesName?: string;
   subjects: string[];
   isPhotoOnly?: boolean;
+  workKey?: string;
+  alternateTitles?: string[];
 }
 
 export interface BookRecommendation {
@@ -37,6 +45,9 @@ export interface BookRecommendation {
   pageCount: number;
   coverImg: string;
   seriesName?: string;
+  workKey?: string;
+  language?: string;
+  alternateTitles?: string[];
   reason: string;
   /** Shelf titles named in `reason`. The card is dropped if none of these remain. */
   becauseTitles: string[];

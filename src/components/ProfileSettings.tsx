@@ -15,6 +15,8 @@ import {
   Database, Share2, Target, Download, Eraser, ScrollText, Bug, ShieldCheck, Trash2,
 } from 'lucide-react';
 import type { ProfilePreferences } from '../types.ts';
+import { formatLocaleDate, formatLocaleDateTime } from '../utils/formatDate.ts';
+import { pluralize } from '../utils/plural.ts';
 import { getShareBaseUrl } from '../utils/shareBook.ts';
 import { exportAccountSnapshot } from '../utils/exportFormats.ts';
 import { downloadDiagnosticsBundle } from '../utils/supportDiagnostics.ts';
@@ -91,7 +93,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
   const displayName = profile?.username ?? profile?.displayName ?? user?.user_metadata?.full_name ?? user?.email ?? 'Local reader';
   const avatarUrl = profile?.avatarUrl ?? user?.user_metadata?.avatar_url ?? null;
   const joinedLabel = user?.created_at
-    ? new Date(user.created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    ? formatLocaleDate(user.created_at, { month: 'long', year: 'numeric' })
     : 'This device';
 
   const summary = useMemo(() => {
@@ -171,7 +173,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
             <div className={s.profileBadges}>
               <span className={s.profileBadge}>
                 <BookOpen size={14} />
-                {summary.total} books
+                {pluralize(summary.total, 'book')}
               </span>
               <span className={s.profileBadge}>
                 <Clock3 size={14} />
@@ -367,7 +369,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
                     const diffSec = Math.floor((Date.now() - new Date(lastSyncedAt).getTime()) / 1000);
                     if (diffSec < 60) return 'Just now';
                     if (diffSec < 3600) return `${Math.floor(diffSec / 60)} minutes ago`;
-                    return new Date(lastSyncedAt).toLocaleDateString();
+                    return formatLocaleDate(lastSyncedAt);
                   })()}
             </span>
           </div>
@@ -398,7 +400,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
                   <li key={entry.id} style={{ color: 'var(--text-muted)' }}>
                     {entry.outcome === 'synced' ? 'Synced' : 'Failed'}
                     {' · '}
-                    {new Date(entry.at).toLocaleString()}
+                    {formatLocaleDateTime(entry.at)}
                     {entry.pendingChanges > 0 ? ` · ${entry.pendingChanges} pending` : ''}
                     {entry.conflictCount > 0 ? ` · ${entry.conflictCount} conflict${entry.conflictCount === 1 ? '' : 's'}` : ''}
                   </li>
@@ -512,7 +514,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
                 Restore from snapshot
                 {lastGoodSnapshotAt !== null && (
                   <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.25rem' }}>
-                    (taken {new Date(lastGoodSnapshotAt).toLocaleString()})
+                    (taken {formatLocaleDateTime(lastGoodSnapshotAt)})
                   </span>
                 )}
               </button>

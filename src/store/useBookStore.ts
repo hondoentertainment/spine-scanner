@@ -3,15 +3,13 @@ import { persist } from 'zustand/middleware';
 import type { BookEntry, ProfilePreferences, Shelf } from '../types.ts';
 import { normalizeBookEntry, normalizeBooks, updateBookForStatus, updateBookProgress } from '../utils/bookState.ts';
 import { lendBook as applyLend, mergeLoanLedgers, returnBook as applyReturn } from '../utils/loans.ts';
+import { localDateKey } from '../utils/formatDate.ts';
 import { normalizePhysicalLocation } from '../utils/physicalLocation.ts';
 import { migrateBooks } from '../lib/schemaMigrations.ts';
 import { useProfileStore } from './useProfileStore.ts';
 
 export function toLocalDateKey(d: Date): string {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+  return localDateKey(d);
 }
 
 export function advanceStreak(prefs: ProfilePreferences): Partial<ProfilePreferences> {
