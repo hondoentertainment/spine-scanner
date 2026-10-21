@@ -344,41 +344,36 @@ const BookDetail: React.FC<BookDetailProps> = ({ book, onClose }) => {
                     />
                   </div>
                 </div>
-                <div className={styles.row}>
-                  <div style={{ flex: 1 }}>
-                    <label className={styles.label} htmlFor={`location-room-${book.id}`}>Room</label>
-                    <input
-                      id={`location-room-${book.id}`}
-                      className={styles.input}
-                      aria-label="Location room"
-                      value={draft.locationRoom}
-                      onChange={(e) => setDraft({ ...draft, locationRoom: e.target.value })}
-                      placeholder="Study"
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label className={styles.label} htmlFor={`location-case-${book.id}`}>Case</label>
-                    <input
-                      id={`location-case-${book.id}`}
-                      className={styles.input}
-                      aria-label="Location case"
-                      value={draft.locationCase}
-                      onChange={(e) => setDraft({ ...draft, locationCase: e.target.value })}
-                      placeholder="Oak"
-                    />
-                  </div>
-                  <div style={{ width: '90px' }}>
-                    <label className={styles.label} htmlFor={`location-shelf-${book.id}`}>Shelf</label>
-                    <input
-                      id={`location-shelf-${book.id}`}
-                      className={styles.input}
-                      aria-label="Location shelf"
-                      value={draft.locationShelf}
-                      onChange={(e) => setDraft({ ...draft, locationShelf: e.target.value })}
-                      placeholder="2"
-                    />
-                  </div>
-                </div>
+                <fieldset className={styles.locationFields}>
+                  <legend className={styles.label}>Shelf location</legend>
+                  <label className={styles.locationField} htmlFor={`location-room-${book.id}`}>Room</label>
+                  <input
+                    id={`location-room-${book.id}`}
+                    className={styles.input}
+                    aria-label="Location room"
+                    value={draft.locationRoom}
+                    onChange={(e) => setDraft({ ...draft, locationRoom: e.target.value })}
+                    placeholder="Study"
+                  />
+                  <label className={styles.locationField} htmlFor={`location-case-${book.id}`}>Case</label>
+                  <input
+                    id={`location-case-${book.id}`}
+                    className={styles.input}
+                    aria-label="Location case"
+                    value={draft.locationCase}
+                    onChange={(e) => setDraft({ ...draft, locationCase: e.target.value })}
+                    placeholder="Oak"
+                  />
+                  <label className={styles.locationField} htmlFor={`location-shelf-${book.id}`}>Shelf</label>
+                  <input
+                    id={`location-shelf-${book.id}`}
+                    className={styles.input}
+                    aria-label="Location shelf"
+                    value={draft.locationShelf}
+                    onChange={(e) => setDraft({ ...draft, locationShelf: e.target.value })}
+                    placeholder="2"
+                  />
+                </fieldset>
                 <label className={styles.label}>Cover URL</label>
                 <input
                   className={styles.input}
