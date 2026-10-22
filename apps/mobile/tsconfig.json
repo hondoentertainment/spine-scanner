@@ -10,6 +10,18 @@
       ],
       "@spine/shared": [
         "../../packages/shared/src/index.ts"
+      ],
+      // packages/shared is typechecked from its own directory, so bare
+      // imports walk up to the repo root and miss this app's node_modules.
+      // Metro already resolves them here; map them so tsc does too.
+      "@supabase/supabase-js": [
+        "./node_modules/@supabase/supabase-js"
+      ],
+      "zustand": [
+        "./node_modules/zustand"
+      ],
+      "zustand/*": [
+        "./node_modules/zustand/*"
       ]
     }
   },
