@@ -1,4 +1,5 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient, SupportedStorage } from '@supabase/supabase-js';
+import { createSpineSupabaseClient as createSharedSupabaseClient } from '../../packages/shared/src/supabaseClient.ts';
 import { e2eHooksEnabled, readE2ESupabaseConfig } from './e2eHooks.ts';
 
 /**
@@ -7,14 +8,10 @@ import { e2eHooksEnabled, readE2ESupabaseConfig } from './e2eHooks.ts';
  * iOS PWA and the Safari handoff can finish the exchange on the same origin.
  */
 export function createSpineSupabaseClient(url: string, key: string): SupabaseClient {
-  return createClient(url, key, {
-    auth: {
-      flowType: 'pkce',
-      detectSessionInUrl: true,
-      persistSession: true,
-      autoRefreshToken: true,
-      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-    },
+  const storage: SupportedStorage | undefined = typeof window !== 'undefined' ? window.localStorage : undefined;
+  return createSharedSupabaseClient(url, key, {
+    storage,
+    detectSessionInUrl: true,
   });
 }
 

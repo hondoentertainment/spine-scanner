@@ -25,8 +25,9 @@ A progressive web app for digitizing and managing your personal book library. Sc
 
 ## Tech Stack
 
-- **React 19** + **TypeScript 5.9** + **Vite 7**
-- **Tesseract.js** -- OCR engine
+- **React 19** + **TypeScript** + **Vite** for the web app
+- **Expo SDK 58** + **Expo Router** for the iOS app in `apps/mobile`
+- **Tesseract.js** -- OCR engine (web)
 - **@zxing/browser** -- Barcode detection
 - **Zustand** -- State management with localStorage persistence
 - **Lucide React** -- Icons
@@ -42,6 +43,49 @@ npm run dev
 ```
 
 Open [http://localhost:5173/spine-scanner/](http://localhost:5173/spine-scanner/) in your browser.
+
+## iOS app (Expo)
+
+The native app lives in `apps/mobile` and shares types, ISBN checks, metadata lookup, the Supabase client factory, book/shelf data access, and the Zustand library store through `packages/shared` (`@spine/shared`). It does not change the Vite app's install or build.
+
+### Run it in Expo Go
+
+```bash
+cd apps/mobile
+npm install
+cp .env.example .env
+npm start
+```
+
+Set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in `apps/mobile/.env` when you want cloud sign-in. Leave them empty to use the app with on-device books only. Do not commit `.env`.
+
+Scan the QR code with the Expo Go app on your phone, or press `i` in the terminal to open the iOS simulator (macOS with Xcode). Expo Go can run the tabs, manual ISBN lookup, and the on-device library. The custom URL scheme is `spinescanner://`.
+
+Google sign-in uses that scheme in a development or store build (`spinescanner://auth/callback`). Expo Go cannot claim `spinescanner://`, so `expo-auth-session` falls back to an `exp://` redirect while you are in Expo Go. Add whichever redirect the Profile tab prints to Supabase → Authentication → URL Configuration → Redirect URLs. The Google Cloud client still redirects to `https://<PROJECT_REF>.supabase.co/auth/v1/callback` only. Keep **Skip nonce check** on for the Google provider, the same as the installed PWA.
+
+Camera barcode scanning in Expo Go works when the Expo Go build includes `expo-camera`. If the preview cannot open the camera, use a development build instead of Expo Go.
+
+### Build with EAS
+
+`apps/mobile/eas.json` has three profiles:
+
+| Profile | What it builds |
+| --- | --- |
+| `development` | Dev client, internal distribution, iOS simulator |
+| `preview` | Internal distribution for a device (TestFlight-style sharing comes later) |
+| `production` | Store build, with remote version auto-increment |
+
+From `apps/mobile`, after `npm install -g eas-cli` (or `npx eas-cli`) and `eas login`:
+
+```bash
+eas build --platform ios --profile development
+eas build --platform ios --profile preview
+eas build --platform ios --profile production
+```
+
+Put `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in the EAS environment for the profile you build (`eas env:create`, or the Expo website → Environment variables). EAS inlines `EXPO_PUBLIC_` values at bundle time. Do not put them in `eas.json` or in git.
+
+The iOS bundle id is `com.hondoentertainment.spinescanner`. The display name is Spine Scanner. What still has to happen before the App Store is listed in [MOBILE_RECOMMENDATIONS.md](MOBILE_RECOMMENDATIONS.md).
 
 ### Shelf photo scan
 
@@ -298,13 +342,15 @@ See `e2e/MOBILE_TEST_MATRIX.md` for the mobile test matrix, release gate criteri
 ## Project Structure
 
 ```
+apps/mobile/      Expo Router iOS app (Home, Library, Scan, Profile)
+packages/shared/  Types, ISBN lookup, Supabase client, book data access, Zustand stores
 src/
   components/     Scanner, BookCard, LibraryList, DataManagement, AuthPanel, ShelfManager
   hooks/          useBookLookup (API with caching, retry, fallback)
   lib/            Supabase client, cloud sync logic
   store/          useBookStore (Zustand), useAuthStore (auth session)
   utils/          ISBN validation, import/export logic, Amazon links
-  types.ts        BookEntry interface
+  types.ts        Re-exports the shared BookEntry types
 ```
 
 ## License
