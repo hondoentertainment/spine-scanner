@@ -564,7 +564,7 @@ describe('Scanner', () => {
       expect(screen.getByRole('button', { name: /add from photo/i })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /add by photo/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /choose from gallery/i })).not.toBeInTheDocument();
-      expect(screen.getByText('Camera Unavailable')).toBeInTheDocument();
+      expect(screen.getAllByText('No camera').length).toBeGreaterThan(0);
       expect(screen.queryByText(/Center the barcode/i)).not.toBeInTheDocument();
     });
 
@@ -653,8 +653,9 @@ describe('Scanner', () => {
   describe('shelf photo mode', () => {
     it('explains that each detected book is reviewed before import', async () => {
       renderWithToast(<Scanner onScan={vi.fn()} isScanning={false} />);
-      const shelf = await screen.findByRole('radio', { name: 'Shelf: Several books in one photo' });
-      expect(screen.getByRole('radio', { name: 'OCR: Read the title from a spine' })).toBeInTheDocument();
+      const shelf = await screen.findByRole('radio', { name: 'Shelf: A row of books' });
+      expect(screen.getByRole('radio', { name: 'Spine: The title on the spine' })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Barcode: The ISBN bars on the back' })).toBeInTheDocument();
       fireEvent.click(shelf);
       expect(shelf).toHaveAttribute('aria-checked', 'true');
       expect(screen.getByRole('heading', { name: 'Scan a shelf' })).toBeInTheDocument();

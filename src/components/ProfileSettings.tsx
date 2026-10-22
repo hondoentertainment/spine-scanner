@@ -18,7 +18,7 @@ import {
   CheckCircle, Layers, BarChart3, Tag, BookOpen, Clock3, Bookmark, Flame, ScanLine,
   Database, Share2, Target, Download, Eraser, ScrollText, Bug, ShieldCheck, Trash2, LogOut,
 } from 'lucide-react';
-import type { ProfilePreferences } from '../types.ts';
+import type { BookEntry, ProfilePreferences } from '../types.ts';
 import { formatLocaleDate, formatLocaleDateTime } from '../utils/formatDate.ts';
 import { pluralize } from '../utils/plural.ts';
 import { getShareBaseUrl } from '../utils/shareBook.ts';
@@ -72,9 +72,17 @@ const statusSummary = [
 ] as const;
 
 const SUPPORT_EMAIL_ENV = (import.meta.env.VITE_SUPPORT_EMAIL as string | undefined)?.trim();
+const ACTIVITY_PAGE_SIZE = 20;
+
+function activityTime(book: BookEntry): number {
+  const raw = book.finishedAt || book.startedAt || book.dateAdded;
+  const time = new Date(raw ?? '').getTime();
+  return Number.isFinite(time) ? time : 0;
+}
 
 const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = false }) => {
   const [changelogOpen, setChangelogOpen] = useState(false);
+  const [activityPages, setActivityPages] = useState(1);
   const navigate = useNavigate();
   const { toast, confirm } = useToast();
   const { user, profile, loading, error, signInWithGoogle, signOut } = useAuthStore();
@@ -120,6 +128,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
     const recentBooks = [...books]
       .sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime())
       .slice(0, 4);
+    const activity = [...books].sort((a, b) => activityTime(b) - activityTime(a));
 
     return {
       total,
@@ -132,6 +141,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
       shelfCount,
       completionRate,
       recentBooks,
+      activity,
     };
   }, [books, shelves]);
 
@@ -276,7 +286,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
         <div className={s.panelHeader}>
           <div>
             <h3 id="reading-activity" className={s.panelTitle}>Reading activity</h3>
-            <p className={s.panelSubtitle}>A quick snapshot of how your library is moving.</p>
+            <p className={s.panelSubtitle}>Newest first. Long histories load a page at a time.</p>
           </div>
           <div className={s.panelIcon}>
             <Flame size={16} />
@@ -319,6 +329,33 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
             );
           })}
         </div>
+        {summary.activity.length > 0 && (
+          <>
+            <ul className={s.activityList} aria-label="Reading history" data-testid="reading-activity-list">
+              {summary.activity.slice(0, activityPages * ACTIVITY_PAGE_SIZE).map((book) => {
+                const when = book.finishedAt || book.startedAt || book.dateAdded;
+                const statusLabel = statusOptions.find((option) => option.value === book.status)?.label ?? book.status;
+                return (
+                  <li key={book.id} className={s.activityItem}>
+                    <div className={s.activityTitle}>{book.title}</div>
+                    <div className={s.activityAuthor}>{book.author}</div>
+                    <div className={s.activityMeta}>{statusLabel} · {formatLocaleDate(when)}</div>
+                  </li>
+                );
+              })}
+            </ul>
+            {summary.activity.length > activityPages * ACTIVITY_PAGE_SIZE && (
+              <button
+                type="button"
+                className={s.activityMore}
+                aria-label="Show more reading activity"
+                onClick={() => setActivityPages((page) => page + 1)}
+              >
+                Show more
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       <div className={s.letterboxdPanel}>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookmarkPlus, RefreshCw, ScanLine, Sparkles } from 'lucide-react';
 import { useBookStore } from '../store/useBookStore.ts';
+import { useOnlineStatus } from '../hooks/useOnlineStatus.ts';
 import { useToast } from './Toast.tsx';
 import { getBookCoverSrc } from '../utils/bookPresentation.ts';
 import { loadRecommendations, peekRecommendations } from '../recommendations/engine.ts';
@@ -16,8 +17,11 @@ const sourceLabel: Record<BookRecommendation['source'], string> = {
   llm: 'Suggestions',
 };
 
+type SuggestionState = 'offline' | 'error' | 'empty' | 'nothing-new' | 'already-owned';
+
 export default function RecommendationsView() {
   const navigate = useNavigate();
+  const { online } = useOnlineStatus();
   const books = useBookStore((state) => state.books);
   const addBook = useBookStore((state) => state.addBook);
   const removeBook = useBookStore((state) => state.removeBook);
@@ -38,7 +42,7 @@ export default function RecommendationsView() {
     if (cached) setResult(cached);
     setLoading(!cached);
     // Suggestions load after this view is open. The library list does not wait on them.
-    void loadRecommendations(books, { force: refreshToken > 0 }).then((next) => {
+    void loadRecommendations(books, { force: refreshToken > 0, online }).then((next) => {
       if (cancelled) return;
       setResult(next);
       setLoading(false);
@@ -46,11 +50,27 @@ export default function RecommendationsView() {
     return () => {
       cancelled = true;
     };
-  }, [books, refreshToken]);
+  }, [books, refreshToken, online]);
 
   const visible = (result?.recommendations ?? []).filter((recommendation) => (
     matchesReaderLanguage(recommendation.language) && !isAlreadyInLibrary(recommendation, books)
   ));
+
+  const retry = () => setRefreshToken((value) => value + 1);
+
+  const suggestionState: SuggestionState | null = loading && visible.length === 0
+    ? null
+    : visible.length > 0
+      ? null
+      : books.length === 0
+        ? 'empty'
+        : result?.origin === 'offline'
+          ? 'offline'
+          : result?.origin === 'error'
+            ? 'error'
+            : (result?.recommendations.length ?? 0) > 0
+              ? 'already-owned'
+              : 'nothing-new';
 
   const addToWishlist = (recommendation: BookRecommendation) => {
     if (isAlreadyInLibrary(recommendation, books)) return;
@@ -95,7 +115,7 @@ export default function RecommendationsView() {
 
       <p className={s.live} role="status" aria-live="polite">{announcement}</p>
 
-      {result?.notice && (
+      {result?.notice && !suggestionState && (
         <p className={`glass ${s.notice}`} role="status">{result.notice}</p>
       )}
 
@@ -107,9 +127,10 @@ export default function RecommendationsView() {
         </div>
       )}
 
-      {!loading && books.length === 0 && (
-        <div className={`glass ${s.empty}`}>
-          <p>Add a few books first. Suggestions are based on the titles you already own.</p>
+      {suggestionState === 'empty' && (
+        <div className={`glass ${s.empty}`} data-testid="recommendations-state" data-state="empty">
+          <h2 className={s.emptyTitle}>Nothing to suggest yet</h2>
+          <p>Add a few books first. Suggestions come from the titles you already own.</p>
           <button type="button" className={s.primary} onClick={() => navigate('/scan')}>
             <ScanLine size={18} aria-hidden />
             Add books
@@ -117,13 +138,46 @@ export default function RecommendationsView() {
         </div>
       )}
 
-      {!loading && books.length > 0 && visible.length === 0 && (
-        <div className={`glass ${s.empty}`}>
-          <p>
-            {result?.notice
-              ? 'Saved suggestions are hidden once they are already on your shelf.'
-              : 'Nothing new to suggest from this shelf yet. Refresh after you add a few more books.'}
-          </p>
+      {suggestionState === 'offline' && (
+        <div className={`glass ${s.empty}`} data-testid="recommendations-state" data-state="offline">
+          <h2 className={s.emptyTitle}>You&apos;re offline</h2>
+          <p>Suggestions need a connection. Your library stays on this device.</p>
+          <button type="button" className={s.primary} onClick={retry} disabled={loading}>
+            <RefreshCw size={18} aria-hidden />
+            Try again
+          </button>
+        </div>
+      )}
+
+      {suggestionState === 'error' && (
+        <div className={`glass ${s.empty}`} data-testid="recommendations-state" data-state="error">
+          <h2 className={s.emptyTitle}>Couldn&apos;t load suggestions</h2>
+          <p>Something went wrong. Your library is unchanged.</p>
+          <button type="button" className={s.primary} onClick={retry} disabled={loading}>
+            <RefreshCw size={18} aria-hidden />
+            Try again
+          </button>
+        </div>
+      )}
+
+      {suggestionState === 'nothing-new' && (
+        <div className={`glass ${s.empty}`} data-testid="recommendations-state" data-state="nothing-new">
+          <h2 className={s.emptyTitle}>Nothing new yet</h2>
+          <p>Nothing new to suggest from this shelf yet. Add a few more books, then try again.</p>
+          <button type="button" className={s.primary} onClick={() => navigate('/scan')}>
+            <ScanLine size={18} aria-hidden />
+            Add a book
+          </button>
+        </div>
+      )}
+
+      {suggestionState === 'already-owned' && (
+        <div className={`glass ${s.empty}`} data-testid="recommendations-state" data-state="already-owned">
+          <h2 className={s.emptyTitle}>Already on your shelf</h2>
+          <p>Saved suggestions are hidden once they are already on your shelf.</p>
+          <button type="button" className={s.primary} onClick={() => navigate('/library')}>
+            Back to library
+          </button>
         </div>
       )}
 

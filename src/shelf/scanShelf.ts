@@ -123,7 +123,7 @@ export async function scanShelfPhoto(image: RgbaImage, deps: ShelfScanDeps): Pro
   for (let index = 0; index < regions.length; index++) {
     if (deps.signal?.aborted) break;
     const region = regions[index];
-    deps.onProgress?.(`Reading spine ${index + 1} of ${regions.length}...`);
+    deps.onProgress?.(`Reading book ${index + 1} of ${regions.length}…`);
 
     let barcode: string | null = null;
     if (deps.decodeBarcode) {

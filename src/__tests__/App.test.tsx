@@ -299,6 +299,7 @@ describe('App', () => {
     expect(screen.getByTestId('mock-profile')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'About' }));
     expect(await screen.findByRole('heading', { name: /A faster way to catalog real books/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'What happens to your data' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Terms' }));
     expect(await screen.findByRole('heading', { name: /Simple rules for using the site/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Back to app/ }));

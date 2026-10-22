@@ -838,3 +838,48 @@
     align-items: flex-start;
   }
 }
+
+.activityList {
+  list-style: none;
+  margin: 0.95rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.activityItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.1rem;
+  min-height: 48px;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.activityTitle {
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.activityAuthor,
+.activityMeta {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.activityMore {
+  margin-top: 0.75rem;
+  width: 100%;
+  min-height: 48px;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-main);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}

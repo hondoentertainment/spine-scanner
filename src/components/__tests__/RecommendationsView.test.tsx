@@ -53,10 +53,15 @@ function renderView() {
   );
 }
 
+function setOnline(online: boolean) {
+  Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: online });
+}
+
 describe('RecommendationsView', () => {
   beforeEach(() => {
     navigate.mockReset();
     localStorage.clear();
+    setOnline(true);
     useBookStore.setState({ books: [], shelves: [] });
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('no network in test'))));
   });
@@ -96,8 +101,41 @@ describe('RecommendationsView', () => {
 
   it('asks for books before suggesting anything', async () => {
     renderView();
+    expect(await screen.findByRole('heading', { name: 'Nothing to suggest yet' })).toBeInTheDocument();
+    expect(screen.getByTestId('recommendations-state')).toHaveAttribute('data-state', 'empty');
     expect(await screen.findByText(/Add a few books first/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Add books/ }));
+    expect(navigate).toHaveBeenCalledWith('/scan');
+  });
+
+  it('shows an offline state with a retry when nothing is saved', async () => {
+    setOnline(false);
+    useBookStore.setState({ books: [shelfBook()], shelves: [] });
+    renderView();
+    expect(await screen.findByRole('heading', { name: "You're offline" })).toBeInTheDocument();
+    expect(screen.getByTestId('recommendations-state')).toHaveAttribute('data-state', 'offline');
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('heading', { name: "You're offline" })).toBeInTheDocument();
+  });
+
+  it('shows an error state when suggestions fail to load', async () => {
+    useBookStore.setState({ books: [shelfBook()], shelves: [] });
+    renderView();
+    expect(await screen.findByRole('heading', { name: "Couldn't load suggestions" })).toBeInTheDocument();
+    expect(screen.getByTestId('recommendations-state')).toHaveAttribute('data-state', 'error');
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled();
+  });
+
+  it('shows a nothing-new state when the catalogs have no suggestions', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({ docs: [], totalItems: 0 }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    )));
+    useBookStore.setState({ books: [shelfBook()], shelves: [] });
+    renderView();
+    expect(await screen.findByRole('heading', { name: 'Nothing new yet' })).toBeInTheDocument();
+    expect(screen.getByTestId('recommendations-state')).toHaveAttribute('data-state', 'nothing-new');
+    fireEvent.click(screen.getByRole('button', { name: 'Add a book' }));
     expect(navigate).toHaveBeenCalledWith('/scan');
   });
 

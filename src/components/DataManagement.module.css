@@ -52,7 +52,19 @@
   margin-bottom: 1rem;
 }
 
+.steps {
+  margin: 0 0 1rem;
+  padding-left: 1.2rem;
+  color: #cbd5e1;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
 :global([data-theme="light"]) .sectionDesc,
+:global([data-theme="light"]) .steps,
 :global([data-theme="light"]) .duplicateAuthor,
 :global([data-theme="light"]) .editionMeta,
 :global([data-theme="light"]) .editionBookAuthor,
@@ -64,6 +76,7 @@
 }
 
 :global([data-theme="high-contrast"]) .sectionDesc,
+:global([data-theme="high-contrast"]) .steps,
 :global([data-theme="high-contrast"]) .duplicateAuthor,
 :global([data-theme="high-contrast"]) .editionMeta,
 :global([data-theme="high-contrast"]) .editionBookAuthor,

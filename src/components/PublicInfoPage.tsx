@@ -24,25 +24,25 @@ const PAGE_CONFIG: Record<PublicPage, PageConfig> = {
   about: {
     eyebrow: 'About Spine Scanner',
     title: 'A faster way to catalog real books.',
-    intro: 'Spine Scanner is designed for readers who want a practical library app first: quick capture, reliable edits, and ownership of their data.',
+    intro: 'Point at a barcode, a spine, or a shelf. You get a library you can edit, export, and keep. Your books stay in this browser unless you choose to sync them.',
     icon: BookOpen,
   },
   privacy: {
     eyebrow: 'Privacy',
     title: 'Your library stays yours.',
-    intro: 'The app works offline first and keeps cloud sync optional. You can browse, scan, export, and back up your library without creating an account.',
+    intro: 'The app works offline first. An account is optional. Here is what is stored, what leaves the device, and how to delete it.',
     icon: Lock,
   },
   terms: {
     eyebrow: 'Terms',
     title: 'Simple rules for using the site responsibly.',
-    intro: 'These terms are intentionally lightweight. They focus on respectful use, third-party service limits, and the practical realities of a small web product.',
+    intro: 'Use it to track your own books. Metadata comes from other services, and you can export a copy whenever you want.',
     icon: ScrollText,
   },
   support: {
     eyebrow: 'Support',
     title: 'Help for scanning, syncing, and exports.',
-    intro: 'Most issues can be solved quickly by checking camera permissions, testing a barcode in good lighting, or exporting a local backup before larger changes.',
+    intro: 'Start with the camera, the light, and a backup. Most scan and sync problems are fixed from this page.',
     icon: LifeBuoy,
   },
 };
@@ -125,20 +125,20 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
       {page === 'about' && (
         <div className={styles.grid}>
           <article className={styles.card}>
-            <h3>What the site is for</h3>
-            <p>Spine Scanner helps you add books by barcode, spine text, or manual ISBN entry, then organize them with shelves, reading states, notes, and exports.</p>
+            <h3>What you get</h3>
+            <p>A library of the books you scan or import. Each book can have a cover, shelf, reading status, notes, and a place in the room.</p>
           </article>
           <article className={styles.card}>
-            <h3>Who it is built for</h3>
-            <p>Readers, collectors, families, and small clubs who want a lightweight catalog without committing to a heavy library system.</p>
+            <h3>The steps</h3>
+            <p>Point the camera at a barcode, a spine, or a row of books. Confirm the match. The book shows up in your library. Type an ISBN if the camera misses.</p>
           </article>
           <article className={styles.card}>
-            <h3>What makes it public-ready</h3>
-            <p>The app supports offline use, optional cloud sync, import and export flows, and recoverable backups so your collection is not locked into one device.</p>
+            <h3>What happens to your data</h3>
+            <p>Your books stay in this browser. Export a file any time. Sign in only if you want the same library on another device. You can delete the local copy, and the cloud copy, from Profile.</p>
           </article>
           <article className={styles.card}>
             <h3>What to expect</h3>
-            <p>Barcode scans are usually the fastest path. OCR works best with clear, well-lit spine photos and may take longer on older devices.</p>
+            <p>A barcode is the fastest. A spine takes a moment and needs decent light. A shelf photo asks you to keep, edit, or skip each book before anything is saved.</p>
           </article>
         </div>
       )}
@@ -147,19 +147,19 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
         <div className={styles.stack}>
           <article className={styles.card}>
             <h3>What data the app stores</h3>
-            <p>Your library data, shelves, preferences, and local analytics summary are stored in your browser so the app can work offline.</p>
+            <p>Titles, authors, ISBNs, covers, shelves, notes, reading dates, and your settings stay in this browser so the app works offline.</p>
           </article>
           <article className={styles.card}>
             <h3>Camera and photos</h3>
-            <p>Camera access is only used for scanning. Photo uploads stay in your browser unless you explicitly save a photo-only book or enable cloud sync.</p>
+            <p>The camera is only used while you scan. A photo stays on this device unless you save that book and turn on cloud sync.</p>
           </article>
           <article className={styles.card}>
             <h3>Optional cloud sync</h3>
-            <p>If Supabase is configured and you sign in, your library data syncs to the connected Supabase project so you can use multiple devices.</p>
+            <p>Sign-in is optional. If this site has sync turned on and you sign in, your library is copied to that account so another device can open it.</p>
           </article>
           <article className={styles.card}>
-            <h3>Third-party requests</h3>
-            <p>ISBN lookups can call Google Books and Open Library. Those services may receive the ISBN you search for and standard web request metadata. Suggestions can also send titles, authors, and subjects from your library to those same services. An optional suggestions endpoint runs only if the site operator turns it on, and then it receives that same shelf summary.</p>
+            <h3>What leaves this device</h3>
+            <p>Looking up a barcode sends that ISBN to Google Books or Open Library. Suggestions can send titles, authors, and subjects from your shelves to those same services. An extra suggestions service runs only if the site operator turns it on, and then it receives that same summary. We do not sell your library.</p>
           </article>
           <article className={styles.card}>
             <h3>Monitoring</h3>
@@ -205,19 +205,19 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
         <div className={styles.stack}>
           <article className={styles.card}>
             <h3>Acceptable use</h3>
-            <p>Use the site for lawful library tracking and personal or household organization. Do not abuse sign-in, scraping, or automated traffic limits.</p>
+            <p>Use the site to track books for yourself or your household. Do not hammer sign-in, scrape the site, or flood it with automated traffic.</p>
           </article>
           <article className={styles.card}>
             <h3>Third-party content</h3>
-            <p>Book details and cover images may come from external APIs. Accuracy, availability, and licensing for that metadata are controlled by those providers.</p>
+            <p>Covers and book details can come from Google Books and Open Library. Those services decide whether the data is available and accurate.</p>
           </article>
           <article className={styles.card}>
             <h3>Service availability</h3>
-            <p>The app is provided on an as-is basis. Features may change, and scan quality can vary based on device hardware, lighting, and upstream metadata services.</p>
+            <p>The app is provided as-is. Scans depend on your camera, the light, and those lookup services. Features can change.</p>
           </article>
           <article className={styles.card}>
             <h3>Your backups matter</h3>
-            <p>Before major imports, deletes, or migrations, export a backup. The product includes export tools specifically so your catalog is portable.</p>
+            <p>Export a backup before a big import or delete. The export is your copy of the catalog.</p>
           </article>
           <article className={styles.card}>
             <h3>Account removal &amp; questions</h3>
@@ -235,9 +235,10 @@ export default function PublicInfoPage({ page, supportEmail, diagnostics, onClos
           <article className={styles.card}>
             <h3>Scanning tips</h3>
             <ul className={styles.list}>
-              <li>Prefer barcodes when available. They are faster and more reliable than OCR.</li>
-              <li>Use bright, even light and hold the phone steady for a second before capture.</li>
-              <li>Switch to photo upload for glossy covers, tiny spine text, or rotated books.</li>
+              <li>Barcode: point at the bars on the back. That is the fastest path.</li>
+              <li>Spine: point at the title, hold still, and use even light.</li>
+              <li>Shelf: fill the frame with one row, then keep, edit, or skip each book.</li>
+              <li>If the camera misses, type the ISBN or add a photo.</li>
             </ul>
           </article>
           <article className={styles.card}>

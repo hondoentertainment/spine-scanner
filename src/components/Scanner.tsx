@@ -17,6 +17,7 @@ import { hapticSuccess, hapticFailure, hapticHoldSteady } from '../utils/haptics
 import DebugPanel from './DebugPanel.tsx';
 import s from './Scanner.module.css';
 import { uiContracts } from '../testing/uiContracts.ts';
+import { e2eHooksEnabled, readE2EShelfReview } from '../lib/e2eHooks.ts';
 
 /* ================================================================
  *  Types & Constants
@@ -32,20 +33,20 @@ type ScanResultMeta = {
 
 const getScanResultSummary = (meta: ScanResultMeta): { title: string; detail: string } => {
     if (meta.detectionMethod === 'barcode') {
-        return { title: 'Barcode verified', detail: 'Fastest path: barcode detection confirmed the ISBN.' };
+        return { title: 'Barcode found', detail: 'We read the ISBN. Adding the book next.' };
     }
 
     if (meta.detectionMethod === 'ocr-multilang') {
-        const confidenceLabel = meta.confidence != null ? `${Math.round(meta.confidence)}% confidence` : 'confidence unavailable';
-        return { title: 'Multi-language OCR match', detail: `Fallback OCR found a match with ${confidenceLabel}.` };
+        const confidenceLabel = meta.confidence != null ? `${Math.round(meta.confidence)}% sure` : 'not sure how close';
+        return { title: 'Spine match', detail: `We read the spine (${confidenceLabel}). Confirm it if it looks off.` };
     }
 
     if (meta.confidence != null) {
         const bandLabel = meta.confidenceBand === 'high' ? 'High' : meta.confidenceBand === 'medium' ? 'Medium' : 'Low';
-        return { title: `OCR confidence: ${bandLabel}`, detail: `${Math.round(meta.confidence)}% confidence from OCR analysis.` };
+        return { title: 'Spine match', detail: `${bandLabel} confidence. We'll add it if the ISBN checks out.` };
     }
 
-    return { title: 'OCR match found', detail: 'OCR found a likely ISBN match.' };
+    return { title: 'Spine match', detail: 'We read a likely ISBN from the spine.' };
 };
 
 interface ScannerProps {
@@ -98,11 +99,38 @@ function cameraUnavailableMessage(raw: string): string {
 }
 
 const SCAN_MODES: { mode: ScanMode; label: string; description: string }[] = [
-    { mode: 'auto', label: 'Auto', description: 'Try a barcode, then the title' },
-    { mode: 'barcode', label: 'Barcode', description: 'Read the ISBN barcode' },
-    { mode: 'ocr', label: 'OCR', description: 'Read the title from a spine' },
-    { mode: 'shelf', label: 'Shelf', description: 'Several books in one photo' },
+    { mode: 'auto', label: 'Auto', description: 'Barcode, then the spine' },
+    { mode: 'barcode', label: 'Barcode', description: 'The ISBN bars on the back' },
+    { mode: 'ocr', label: 'Spine', description: 'The title on the spine' },
+    { mode: 'shelf', label: 'Shelf', description: 'A row of books' },
 ];
+
+const SCAN_GUIDANCE: Record<ScanMode, { title: string; pointAt: string; next: string; ready: string }> = {
+    auto: {
+        title: 'Scan a book',
+        pointAt: 'Point at the barcode. If there is no barcode, point at the spine.',
+        next: 'Next, we look it up and add the book.',
+        ready: 'Ready. Point at the barcode or the spine.',
+    },
+    barcode: {
+        title: 'Scan a barcode',
+        pointAt: 'Point at the ISBN barcode on the back cover.',
+        next: 'Next, we look up the book and add it.',
+        ready: 'Ready. Point at the barcode.',
+    },
+    ocr: {
+        title: 'Scan a spine',
+        pointAt: 'Point at the title on the spine and hold still.',
+        next: 'Next, we read the title and you confirm the match.',
+        ready: 'Ready. Point at the spine.',
+    },
+    shelf: {
+        title: 'Scan a shelf',
+        pointAt: 'Point at a row of spines so they fill the frame.',
+        next: 'Next, you review each book before it is added.',
+        ready: 'Ready. Point at the shelf.',
+    },
+};
 
 /* ================================================================
  *  Component
@@ -124,7 +152,7 @@ const Scanner: React.FC<ScannerProps> = ({
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     const [processing, setProcessing] = useState(false);
-    const [status, setStatus] = useState('Point camera at book barcode');
+    const [status, setStatus] = useState(SCAN_GUIDANCE.auto.ready);
     const [cameraError, setCameraError] = useState<string | null>(null);
     const [cameraReady, setCameraReady] = useState(false);
     const [isbnSuggestions, setIsbnSuggestions] = useState<string[]>([]);
@@ -159,6 +187,11 @@ const Scanner: React.FC<ScannerProps> = ({
     useEffect(() => {
         abortControllerRef.current = new AbortController();
         return () => { abortControllerRef.current?.abort(); };
+    }, []);
+
+    useEffect(() => {
+        const seeded = readE2EShelfReview(e2eHooksEnabled());
+        if (seeded && seeded.length > 0) setShelfItems(seeded);
     }, []);
     const processingRef = useRef(false);
     const submittingRef = useRef(false);
@@ -288,7 +321,7 @@ const Scanner: React.FC<ScannerProps> = ({
         processingRef.current = true;
         setProcessing(true);
         setScanProgress(null);
-        setStatus('Finding spines on the shelf...');
+        setStatus('Looking for books on the shelf…');
         setIsbnSuggestions([]);
         setRepairedMap({});
         setLastScanMeta(null);
@@ -303,28 +336,28 @@ const Scanner: React.FC<ScannerProps> = ({
                 },
             });
             if (signal?.aborted) {
-                setStatus('Shelf scan cancelled');
+                setStatus('Cancelled. Point at the shelf again.');
                 return;
             }
             if (items.length === 0) {
                 hapticFailure();
-                setStatus('No spines found. Try a clearer shelf photo, or scan one book.');
-                toast('No books detected in that photo.', 'warning');
+                setStatus('No books in that photo. Move closer, or scan one book.');
+                toast('No books in that photo.', 'warning');
                 return;
             }
             hapticSuccess();
             setShelfItems(items);
-            setStatus(`Found ${items.length === 1 ? '1 book' : `${items.length} books`}. Review them before adding.`);
+            setStatus(`Found ${items.length === 1 ? '1 book' : `${items.length} books`}. Keep, edit, or skip each one.`);
         } catch (err: unknown) {
             if (signal?.aborted) {
-                setStatus('Shelf scan cancelled');
+                setStatus('Cancelled. Point at the shelf again.');
                 return;
             }
             hapticFailure();
             const msg = err instanceof Error ? err.message : String(err);
             addLog(`SHELF SCAN ERROR: ${msg}`);
-            setStatus('Shelf scan failed. Try another photo or scan one book.');
-            toast('Shelf scan failed. Try another photo.', 'error');
+            setStatus('Could not read that photo. Try again, or scan one book.');
+            toast('Could not read that photo. Try again.', 'error');
         } finally {
             processingRef.current = false;
             setProcessing(false);
@@ -339,7 +372,7 @@ const Scanner: React.FC<ScannerProps> = ({
         if (!canvas) { addLog('Error: Missing canvas'); return; }
         if (!video || video.readyState < 2) {
             addLog('Error: Video not ready');
-            setStatus('Camera starting - one moment...');
+            setStatus('Starting the camera…');
             return;
         }
 
@@ -367,7 +400,7 @@ const Scanner: React.FC<ScannerProps> = ({
         processingRef.current = true;
         setProcessing(true);
         setScanProgress(null);
-        setStatus('Looking for ISBN...');
+        setStatus(scanMode === 'ocr' ? 'Reading the spine…' : 'Reading the barcode…');
         setIsbnSuggestions([]);
         setRepairedMap({});
         setLastScanMeta(null);
@@ -386,7 +419,7 @@ const Scanner: React.FC<ScannerProps> = ({
             const result = await runPipeline(img, canvas, '', pipelineOpts);
 
             if (abortControllerRef.current?.signal.aborted) {
-                setStatus('Scan cancelled');
+                setStatus('Cancelled. Point at the book again.');
                 return;
             }
 
@@ -399,12 +432,12 @@ const Scanner: React.FC<ScannerProps> = ({
                 hapticSuccess();
                 setScanSuccessFlash(true);
                 setTimeout(() => setScanSuccessFlash(false), 800);
-                setSuccessAnnouncement(`Scan successful. ISBN ${result.isbn} added.`);
+                setSuccessAnnouncement(`Added ISBN ${result.isbn}.`);
                 setTimeout(() => setSuccessAnnouncement(''), 1500);
                 await submitScan(result.isbn, {
                     source: scanMode === 'ocr' ? 'ocr' : scanMode === 'barcode' ? 'barcode' : 'scan',
                 });
-                setStatus('Added. Scan another book.');
+                setStatus('Added. Point at the next book.');
                 setIsbnSuggestions([]);
             } else if (result.suggestions.length > 0 || (result.repairedMap && Object.keys(result.repairedMap).length > 0)) {
                 setLastScanMeta(null);
@@ -412,24 +445,26 @@ const Scanner: React.FC<ScannerProps> = ({
                 setRepairedMap(result.repairedMap ?? {});
                 onNeedManualIsbn?.();
                 setStatus(autoScan
-                    ? 'Searching... adjust position'
-                    : 'We found something - tap a match below');
+                    ? 'Still looking. Keep the book in view.'
+                    : 'Tap a match below.');
             } else {
                 setLastScanMeta(null);
                 hapticFailure();
                 if (!autoScan) {
-                    setStatus('Not found - try moving closer or type the ISBN');
+                    setStatus(scanMode === 'ocr'
+                        ? 'No match. Hold still, or type the ISBN.'
+                        : 'No match. Move closer, or type the ISBN.');
                     onNeedManualIsbn?.();
                     const diag = result.diagnostics;
                     if (diag && (diag.skipReason || diag.quality?.isBlurry || diag.quality?.isDark)) {
                         toastDetail({
-                            message: 'Image quality may be affecting the scan',
+                            message: 'This picture is hard to read.',
                             type: 'warning',
                             details: formatDiagnostics(diag),
                         });
                     }
                 } else {
-                    setStatus('Searching... center the barcode in view');
+                    setStatus('Still looking. Keep the barcode or spine in view.');
                 }
             }
         } catch (err: unknown) {
@@ -439,14 +474,14 @@ const Scanner: React.FC<ScannerProps> = ({
             addLog(`SCAN ERROR: ${msg}`);
             const isOcrWorkerError = /timeout|tesseract|worker|module|fallback|one-shot/i.test(msg);
             setStatus(isOcrWorkerError
-                ? 'Scan engine busy - upload a photo or type ISBN'
-                : 'Scan didn\'t work - try again or type ISBN');
+                ? 'The scanner is busy. Add a photo, or type the ISBN.'
+                : 'That scan did not work. Try again, or type the ISBN.');
             onNeedManualIsbn?.();
             if (SCANNER_DEBUG_ENABLED) setShowDebug(true);
             toastDetail({
                 message: isOcrWorkerError
-                    ? 'Scanner busy - upload a photo or enter ISBN'
-                    : 'Scan failed - try a photo upload or enter ISBN',
+                    ? 'Scanner is busy. Add a photo or type the ISBN.'
+                    : 'Scan failed. Try a photo or type the ISBN.',
                 type: 'error',
                 details: buildErrorDiagnostics(msg, debugLogsRef.current),
             });
@@ -472,7 +507,7 @@ const Scanner: React.FC<ScannerProps> = ({
                 reader.readAsDataURL(file);
             });
         } catch {
-            toast('Failed to read image.', 'error');
+            toast('Could not read that photo.', 'error');
             return;
         }
 
@@ -484,7 +519,7 @@ const Scanner: React.FC<ScannerProps> = ({
         processingRef.current = true;
         setProcessing(true);
         setScanProgress(null);
-        setStatus('Scanning your photo...');
+        setStatus('Reading your photo…');
         setIsbnSuggestions([]);
         setRepairedMap({});
         setLastScanMeta(null);
@@ -506,7 +541,7 @@ const Scanner: React.FC<ScannerProps> = ({
             const result = await runPipeline(img, canvas, 'photo-', pipelineOpts);
 
             if (abortControllerRef.current?.signal.aborted) {
-                setStatus('Scan cancelled');
+                setStatus('Cancelled. Point at the book again.');
                 return;
             }
 
@@ -519,26 +554,26 @@ const Scanner: React.FC<ScannerProps> = ({
                 hapticSuccess();
                 setScanSuccessFlash(true);
                 setTimeout(() => setScanSuccessFlash(false), 800);
-                setSuccessAnnouncement(`Scan successful. ISBN ${result.isbn} added.`);
+                setSuccessAnnouncement(`Added ISBN ${result.isbn}.`);
                 setTimeout(() => setSuccessAnnouncement(''), 1500);
                 await submitScan(result.isbn, {
                     source: scanMode === 'ocr' ? 'ocr' : scanMode === 'barcode' ? 'barcode' : 'scan',
                 });
-                setStatus('Added. Scan another book.');
+                setStatus('Added. Point at the next book.');
                 setIsbnSuggestions([]);
             } else if (result.suggestions.length > 0 || (result.repairedMap && Object.keys(result.repairedMap).length > 0)) {
                 setLastScanMeta(null);
                 setIsbnSuggestions(result.suggestions);
                 setRepairedMap(result.repairedMap ?? {});
                 onNeedManualIsbn?.();
-                setStatus('We found something - tap a match below');
+                setStatus('Tap a match below.');
             } else {
                 setLastScanMeta(null);
                 hapticFailure();
-                setStatus('Not found - try a clearer photo or type the ISBN');
+                setStatus('Could not read that photo. Try a clearer one, or type the ISBN.');
                 onNeedManualIsbn?.();
                 if (onPhotoCapture && !shelfMode) {
-                    toast('No ISBN in that photo.', 'info', 7000, undefined, {
+                    toast('No ISBN in that photo. You can still save it.', 'info', 7000, undefined, {
                         label: 'Save photo',
                         onClick: () => onPhotoCapture(imageSrc),
                     });
@@ -546,7 +581,7 @@ const Scanner: React.FC<ScannerProps> = ({
                 const diag = result.diagnostics;
                 if (diag && (diag.skipReason || diag.quality?.isBlurry || diag.quality?.isDark)) {
                     toastDetail({
-                        message: 'Photo quality may be affecting the scan',
+                        message: 'This photo is hard to read.',
                         type: 'warning',
                         details: formatDiagnostics(diag),
                     });
@@ -559,14 +594,14 @@ const Scanner: React.FC<ScannerProps> = ({
             addLog(`PHOTO SCAN ERROR: ${msg}`);
             const isOcrWorkerError = /timeout|tesseract|worker|module|fallback|one-shot/i.test(msg);
             setStatus(isOcrWorkerError
-                ? 'Scanner busy - try another photo or type ISBN'
-                : 'Didn\'t work - try a different photo or type ISBN');
+                ? 'The scanner is busy. Try another photo, or type the ISBN.'
+                : 'That photo did not work. Try another, or type the ISBN.');
             onNeedManualIsbn?.();
             if (SCANNER_DEBUG_ENABLED) setShowDebug(true);
             toastDetail({
                 message: isOcrWorkerError
-                    ? 'Scanner busy - try another photo or enter ISBN'
-                    : 'Scan failed - try another photo or enter ISBN',
+                    ? 'Scanner is busy. Try another photo or type the ISBN.'
+                    : 'Scan failed. Try another photo or type the ISBN.',
                 type: 'error',
                 details: buildErrorDiagnostics(msg, debugLogsRef.current),
             });
@@ -579,7 +614,7 @@ const Scanner: React.FC<ScannerProps> = ({
     useEffect(() => {
         if (!autoScan || cameraError) return;
         addLog('Auto-scan (OCR) started');
-        setStatus('Auto-scanning... hold book steady');
+        setStatus('Hold still. Looking for a barcode or a spine.');
         const interval = setInterval(() => {
             if (!isBusy() && autoScan && liveQualityHintRef.current !== 'blurry' && liveQualityHintRef.current !== 'blurry-dark') capture();
         }, 2000);
@@ -656,11 +691,17 @@ const Scanner: React.FC<ScannerProps> = ({
     }, [zoomRange]);
 
     const getSimpleHint = (): string => {
-        if (liveQualityHint === 'ready') return 'Ready - tap Scan';
-        if (liveQualityHint === 'blurry') return 'Hold steady...';
-        if (liveQualityHint === 'dark') return hasTorch && !torchOn ? 'Too dark - tap flashlight' : 'Need more light';
-        if (liveQualityHint === 'blurry-dark') return hasTorch && !torchOn ? 'Hold steady - tap flashlight' : 'Hold steady, need more light';
-        return 'Center the barcode in the frame';
+        if (shelfMode) return 'Point at the shelf';
+        if (scanMode === 'ocr') {
+            if (liveQualityHint === 'blurry' || liveQualityHint === 'blurry-dark') return 'Hold still. Point at the spine.';
+            if (liveQualityHint === 'dark') return 'Too dark. Point at the spine in better light.';
+            return 'Point at the spine';
+        }
+        if (liveQualityHint === 'ready') return 'Looks good. Tap Scan.';
+        if (liveQualityHint === 'blurry') return 'Hold still.';
+        if (liveQualityHint === 'dark') return hasTorch && !torchOn ? 'Too dark. Tap the flashlight.' : 'Too dark. Add light.';
+        if (liveQualityHint === 'blurry-dark') return 'Hold still and add light.';
+        return scanMode === 'barcode' ? 'Point at the barcode' : 'Point at the barcode or the spine';
     };
 
     const scanResultSummary = lastScanMeta ? getScanResultSummary(lastScanMeta) : null;
@@ -674,7 +715,8 @@ const Scanner: React.FC<ScannerProps> = ({
 
     /* Render */
 
-    const systemStatusLabel = cameraError ? 'Camera Unavailable' : !cameraReady ? 'Initializing' : 'System Ready';
+    const guidance = SCAN_GUIDANCE[scanMode];
+    const systemStatusLabel = cameraError ? 'No camera' : !cameraReady ? 'Starting camera' : 'Camera ready';
     const systemDotClass = cameraError ? s.systemDotError : !cameraReady ? s.systemDotWarning : '';
     const qualityBlocked = !shelfMode && (liveQualityHint === 'blurry' || liveQualityHint === 'blurry-dark');
     const photoCaptureLabel = shelfMode ? 'Take shelf photo' : 'Take photo of ISBN';
@@ -687,7 +729,7 @@ const Scanner: React.FC<ScannerProps> = ({
                 onChange={setShelfItems}
                 onCancel={() => {
                     setShelfItems(null);
-                    setStatus('Point the camera at a bookshelf');
+                    setStatus(SCAN_GUIDANCE.shelf.ready);
                 }}
                 onConfirm={(items) => {
                     const accepted = onShelfImport?.(items);
@@ -708,11 +750,9 @@ const Scanner: React.FC<ScannerProps> = ({
                     {(isScanning || processing || submitting) && <Loader2 size={12} className="animate-spin" />}
                 </div>
 
-                <h2 className={s.panelTitle}>{shelfMode ? 'Scan a shelf' : 'Scan Barcode'}</h2>
+                <h2 className={s.panelTitle}>{guidance.title}</h2>
                 <p className={s.panelDescription}>
-                    {shelfMode
-                        ? "Photograph the whole shelf. We'll detect each spine and let you review each book before it is added."
-                        : 'Position the barcode within the frame. The system will automatically detect and capture the details.'}
+                    {guidance.pointAt} {guidance.next}
                 </p>
 
                 {/* Scan mode selector */}
@@ -724,6 +764,7 @@ const Scanner: React.FC<ScannerProps> = ({
                             className={`${s.scanModeBtn} ${scanMode === mode ? s.scanModeBtnActive : ''}`}
                             onClick={() => {
                                 setScanMode(mode);
+                                setStatus(SCAN_GUIDANCE[mode].ready);
                                 addLog(`Scan mode: ${label}`);
                             }}>
                             <span className={s.scanModeName}>{label}</span>
@@ -734,8 +775,8 @@ const Scanner: React.FC<ScannerProps> = ({
 
                 {ocrState === 'fallback' && !ocrFallbackDismissed && (
                     <div className={s.ocrFallbackBanner} role="alert">
-                        <p className={s.ocrFallbackTitle}>Text recognition loaded in compatibility mode</p>
-                        <p className={s.ocrFallbackText}>Scanning still works but may be slower.</p>
+                        <p className={s.ocrFallbackTitle}>Text reading is in a slower mode</p>
+                        <p className={s.ocrFallbackText}>Scanning still works. It may take longer.</p>
                         <div className={s.ocrFallbackActions}>
                             <button type="button" onClick={() => setOcrFallbackDismissed(true)} className={s.ocrFallbackDismiss}>
                                 OK
@@ -746,7 +787,7 @@ const Scanner: React.FC<ScannerProps> = ({
 
                 <div className={s.statusLine} role="status" aria-live="polite" aria-atomic="true">
                     <p className={s.statusHeading} id="status-text">
-                        {processing ? (inOcrPhase ? `Analyzing spine... ${ocrElapsedSec}s` : 'Scanning...') : cameraError ? 'No camera' : 'Ready to scan'}
+                        {processing ? (inOcrPhase ? `Reading the spine… ${ocrElapsedSec}s` : 'Looking…') : cameraError ? 'No camera' : 'Ready'}
                     </p>
                     <p className={s.statusText}>{cameraError ?? status}</p>
                 </div>
@@ -805,8 +846,8 @@ const Scanner: React.FC<ScannerProps> = ({
                             {processing ? <Loader2 className="animate-spin" size={24} /> : (
                                 <span className={s.ctaIcon}><Camera size={24} /></span>
                             )}
-                            {processing ? 'Scanning...' : shelfMode ? 'Scan shelf' : 'Capture Scan'}
-                            {!processing && <span className={s.ctaSubtext}>{shelfMode ? 'Photograph the shelf' : 'Tap to freeze'}</span>}
+                            {processing ? 'Looking…' : shelfMode ? 'Scan shelf' : 'Scan'}
+                            {!processing && <span className={s.ctaSubtext}>{shelfMode ? 'Then you review each book' : 'Then we add the book'}</span>}
                         </button>
 
                         <div className={s.secondaryRow}>
@@ -831,7 +872,7 @@ const Scanner: React.FC<ScannerProps> = ({
                         <p className={s.suggestionHeader}>
                             {Object.keys(repairedMap).length > 0
                                 ? 'Did you mean one of these?'
-                                : 'Possible matches - tap to add:'}
+                                : 'Tap a match to add it.'}
                         </p>
                         <div className={s.suggestionRow}>
                         {Object.entries(repairedMap).map(([repaired, original], idx) => (
@@ -883,7 +924,7 @@ const Scanner: React.FC<ScannerProps> = ({
                 onUserMedia={(stream) => {
                     setCameraError(null);
                     setCameraReady(true);
-                    setStatus('Ready - point at a barcode or ISBN');
+                    setStatus(SCAN_GUIDANCE[scanMode].ready);
                     try {
                         const track = stream.getVideoTracks()[0];
                         if (track) {

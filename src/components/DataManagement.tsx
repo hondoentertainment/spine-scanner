@@ -619,7 +619,15 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                     <Upload size={20} style={{ color: '#22c55e' }} /> Import Goodreads CSV
                 </h3>
                 <p className={s.sectionDesc}>
-                    Import your Goodreads library export. Go to Goodreads → My Books → Import/Export → Export Library.
+                    You get the books on your Goodreads shelves: titles, authors, ratings, and the dates you read them.
+                </p>
+                <ol className={s.steps}>
+                    <li>On Goodreads, open My Books, then Import/Export, then Export Library.</li>
+                    <li>Download the CSV.</li>
+                    <li>Drop that file here. We add the books on this device.</li>
+                </ol>
+                <p className={s.sectionDesc}>
+                    The file stays in this browser. It is not sent back to Goodreads. If you later sign in, those books sync with the rest of your library.
                 </p>
                 <div className={s.fileWrap}>
                     <input type="file" accept=".csv" onChange={handleGoodreadsImport}

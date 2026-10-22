@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { lookupShelfByTitleAuthor } from '../shelfLookup.ts';
+import { lookupShelfByTitleAuthor, searchShelfMatches } from '../shelfLookup.ts';
 
 const jsonResponse = (body: unknown, ok = true) => ({
   ok,
@@ -61,6 +61,52 @@ describe('lookupShelfByTitleAuthor', () => {
     const fetchImpl = vi.fn().mockRejectedValue(new Error('offline'));
     await expect(lookupShelfByTitleAuthor('Dune', 'Frank Herbert', fetchImpl as unknown as typeof fetch)).resolves.toBeNull();
     await expect(lookupShelfByTitleAuthor('Unknown Title', '', fetchImpl as unknown as typeof fetch)).resolves.toBeNull();
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('searchShelfMatches', () => {
+  it('returns a few alternate books and drops duplicates', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (String(url).includes('googleapis.com')) {
+        return jsonResponse({
+          items: [
+            {
+              volumeInfo: {
+                title: 'Kindred',
+                authors: ['Octavia E. Butler'],
+                pageCount: 264,
+                industryIdentifiers: [{ type: 'ISBN_13', identifier: '9780807083697' }],
+              },
+            },
+            {
+              volumeInfo: {
+                title: 'Parable of the Sower',
+                authors: ['Octavia E. Butler'],
+                industryIdentifiers: [{ type: 'ISBN_13', identifier: '9780446675505' }],
+              },
+            },
+          ],
+        });
+      }
+      return jsonResponse({
+        docs: [{
+          title: 'Kindred',
+          author_name: ['Octavia E. Butler'],
+          isbn: ['9780807083697'],
+        }],
+      });
+    });
+
+    const hits = await searchShelfMatches('Kindred Butler', fetchImpl as unknown as typeof fetch);
+    expect(hits.map((hit) => hit.title)).toEqual(['Kindred', 'Parable of the Sower']);
+    expect(hits[0]).toMatchObject({ isbn: '9780807083697', source: 'google_books' });
+  });
+
+  it('returns an empty list when both catalogs fail', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('offline'));
+    await expect(searchShelfMatches('Kindred', fetchImpl as unknown as typeof fetch)).resolves.toEqual([]);
+    await expect(searchShelfMatches('  ', fetchImpl as unknown as typeof fetch)).resolves.toEqual([]);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 });

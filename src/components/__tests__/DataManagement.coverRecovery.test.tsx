@@ -51,6 +51,8 @@ describe('DataManagement — missing-cover recovery', () => {
     renderPanel();
     expect(document.getElementById('goodreads-import')).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Import' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText(/You get the books on your Goodreads shelves/)).toBeInTheDocument();
+    expect(screen.getByText(/The file stays in this browser/)).toBeInTheDocument();
     window.location.hash = '';
   });
 
