@@ -94,7 +94,7 @@ describe('loadRecommendations', () => {
 
   it('tells the reader when offline with nothing saved', async () => {
     const result = await loadRecommendations(shelf, { fetchImpl: vi.fn(), online: false, llmEnv: null });
-    expect(result.origin).toBe('empty');
+    expect(result.origin).toBe('offline');
     expect(result.notice).toMatch(/offline/i);
     expect(result.recommendations).toEqual([]);
   });
@@ -118,12 +118,21 @@ describe('loadRecommendations', () => {
     expect(result.recommendations[0].reason).toBe('Because you own Dune and Hyperion');
   });
 
+  it('reports an empty result when the catalogs have nothing new', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ docs: [], totalItems: 0 }));
+    const result = await loadRecommendations([book()], { fetchImpl, online: true, llmEnv: null });
+    expect(result.origin).toBe('empty');
+    expect(result.recommendations).toEqual([]);
+    expect(result.notice).toMatch(/no new suggestions/i);
+  });
+
   it('returns an empty notice when refresh fails and nothing is cached', async () => {
     const fetchImpl = vi.fn(async () => {
       throw new Error('network down');
     });
     const result = await loadRecommendations(shelf, { fetchImpl, online: true, llmEnv: null });
     expect(result.recommendations).toEqual([]);
+    expect(result.origin).toBe('error');
     expect(result.notice).toBe("Couldn't load suggestions right now. Your library is unchanged.");
   });
 

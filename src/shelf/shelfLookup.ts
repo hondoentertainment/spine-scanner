@@ -122,3 +122,97 @@ export async function lookupShelfByTitleAuthor(
   ]);
   return google ?? openLibrary;
 }
+
+type GoogleVolumeInfo = {
+  title?: string;
+  authors?: string[];
+  pageCount?: number;
+  imageLinks?: { thumbnail?: string };
+  industryIdentifiers?: Array<{ type?: string; identifier?: string }>;
+};
+
+function hitFromGoogleInfo(info: GoogleVolumeInfo | undefined): ShelfMetadataHit | null {
+  if (!info?.title) return null;
+  const identifiers = info.industryIdentifiers ?? [];
+  const isbn13 = identifiers.find((id) => id.type === 'ISBN_13')?.identifier ?? '';
+  const isbn10 = identifiers.find((id) => id.type === 'ISBN_10')?.identifier ?? '';
+  return {
+    title: info.title,
+    author: info.authors?.filter(Boolean).join(', ') || 'Unknown Author',
+    pageCount: info.pageCount || 0,
+    thumbnail: info.imageLinks?.thumbnail || '',
+    isbn: (isbn13 || isbn10 || '').replace(/[^0-9Xx]/g, ''),
+    source: 'google_books',
+  };
+}
+
+function hitFromOpenLibraryDoc(doc: {
+  title?: string;
+  author_name?: string[];
+  number_of_pages_median?: number;
+  cover_i?: number;
+  isbn?: string[];
+} | undefined): ShelfMetadataHit | null {
+  if (!doc?.title) return null;
+  return {
+    title: doc.title,
+    author: doc.author_name?.filter(Boolean).join(', ') || 'Unknown Author',
+    pageCount: doc.number_of_pages_median || 0,
+    thumbnail: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '',
+    isbn: pickIsbn(doc.isbn),
+    source: 'open_library',
+  };
+}
+
+/**
+ * A few alternate matches for a spine the reader says is wrong.
+ * Google Books comes first. Open Library fills in anything Google missed.
+ * A network failure returns the other source, or an empty list.
+ */
+export async function searchShelfMatches(
+  query: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<ShelfMetadataHit[]> {
+  const clean = query.trim();
+  if (clean.length < 2 || clean.toLowerCase() === UNKNOWN_TITLE) return [];
+
+  const [google, openLibrary] = await Promise.all([
+    fetchImpl(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(clean)}&maxResults=5`)
+      .then(async (response) => {
+        if (!response.ok) return [] as ShelfMetadataHit[];
+        const data = await response.json() as { items?: Array<{ volumeInfo?: GoogleVolumeInfo }> };
+        return (data.items ?? [])
+          .map((item) => hitFromGoogleInfo(item.volumeInfo))
+          .filter((hit): hit is ShelfMetadataHit => hit !== null);
+      })
+      .catch(() => [] as ShelfMetadataHit[]),
+    fetchImpl(`https://openlibrary.org/search.json?${new URLSearchParams({ q: clean, limit: '5' }).toString()}`)
+      .then(async (response) => {
+        if (!response.ok) return [] as ShelfMetadataHit[];
+        const data = await response.json() as {
+          docs?: Array<{
+            title?: string;
+            author_name?: string[];
+            number_of_pages_median?: number;
+            cover_i?: number;
+            isbn?: string[];
+          }>;
+        };
+        return (data.docs ?? [])
+          .map((doc) => hitFromOpenLibraryDoc(doc))
+          .filter((hit): hit is ShelfMetadataHit => hit !== null);
+      })
+      .catch(() => [] as ShelfMetadataHit[]),
+  ]);
+
+  const hits: ShelfMetadataHit[] = [];
+  const seen = new Set<string>();
+  for (const hit of [...google, ...openLibrary]) {
+    const key = (hit.isbn || `${hit.title}|${hit.author}`).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    hits.push(hit);
+    if (hits.length >= 5) break;
+  }
+  return hits;
+}

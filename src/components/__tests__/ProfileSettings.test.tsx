@@ -94,6 +94,28 @@ describe('ProfileSettings', () => {
     vi.restoreAllMocks();
   });
 
+  it('pages a long reading history instead of rendering every book', () => {
+    const books = Array.from({ length: 25 }, (_, index) => makeBook({
+      id: `history-${index}`,
+      title: `History ${index}`,
+      isbn: `978000000${String(index).padStart(4, '0')}`,
+      status: 'read',
+      dateAdded: new Date(Date.UTC(2020, 0, 1) + index * 86_400_000).toISOString(),
+      finishedAt: new Date(Date.UTC(2024, 0, 1) + index * 86_400_000).toISOString(),
+    }));
+    useBookStore.setState({ books, shelves: [] });
+    renderProfile();
+
+    const list = screen.getByRole('list', { name: 'Reading history' });
+    expect(list.querySelectorAll('li')).toHaveLength(20);
+    expect(screen.getAllByText('History 24').length).toBeGreaterThan(0);
+    expect(screen.queryByText('History 0')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show more reading activity' }));
+    expect(list.querySelectorAll('li')).toHaveLength(25);
+    expect(screen.getByText('History 0')).toBeInTheDocument();
+  });
+
   it('renders the local profile hero and empty recent activity', () => {
     renderProfile();
     expect(screen.getByRole('heading', { name: /Profile & Settings/ })).toBeInTheDocument();

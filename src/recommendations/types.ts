@@ -54,7 +54,7 @@ export interface BookRecommendation {
   source: RecommendationProvider;
 }
 
-export type RecommendationOrigin = 'network' | 'cache' | 'empty';
+export type RecommendationOrigin = 'network' | 'cache' | 'empty' | 'offline' | 'error';
 
 export interface RecommendationResult {
   recommendations: BookRecommendation[];

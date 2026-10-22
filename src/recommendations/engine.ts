@@ -68,10 +68,11 @@ function savedResult(
   books: BookEntry[],
   notice: string,
   emptyNotice: string,
+  emptyOrigin: 'offline' | 'error' | 'empty',
 ): RecommendationResult {
   const recommendations = cached ? filterStillRelevant(cached.recommendations, books) : [];
   if (recommendations.length === 0) {
-    return { recommendations: [], origin: 'empty', notice: emptyNotice };
+    return { recommendations: [], origin: emptyOrigin, notice: emptyNotice };
   }
   return { recommendations, origin: 'cache', notice };
 }
@@ -254,6 +255,7 @@ export async function loadRecommendations(
       books,
       'You are offline. Showing saved suggestions.',
       'You are offline. Suggestions will show up when you reconnect.',
+      'offline',
     );
   }
 
@@ -273,6 +275,7 @@ export async function loadRecommendations(
         books,
         "Couldn't refresh suggestions. Showing saved ones.",
         "Couldn't load suggestions right now. Your library is unchanged.",
+        'error',
       );
     }
     return savedResult(
@@ -280,6 +283,7 @@ export async function loadRecommendations(
       books,
       "Couldn't find new suggestions. Showing saved ones.",
       'No new suggestions right now. Your library is unchanged.',
+      'empty',
     );
   } catch {
     return savedResult(
@@ -287,6 +291,7 @@ export async function loadRecommendations(
       books,
       "Couldn't refresh suggestions. Showing saved ones.",
       "Couldn't load suggestions right now. Your library is unchanged.",
+      'error',
     );
   }
 }

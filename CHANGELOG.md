@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Shelf review, scanner copy, and suggestion states
+
+- **Shelf photo review.** After a multi-book photo, each book is a row: cover, title, author, and a confidence hint, with Keep, Edit, and Skip. Add all kept saves the kept rows. Edit can search for a different match when the first one is wrong.
+- **Scanner.** Barcode, spine, and shelf each say what to point at and what happens next. Status and error lines use the same plain wording.
+- **Suggestions.** Offline, a failed lookup, and an empty shelf each have their own message and next step.
+- **Profile.** Reading activity lists the library newest first and loads it a page at a time.
+- **Public pages and Goodreads import.** About, privacy, terms, and support say what you get, the steps, and what happens to your data. The Goodreads screen says the same for the CSV.
+
 ### Continue with Google
 
 - **Google sign-in.** Profile and the header offer Continue with Google when Supabase is configured. Sign-in uses Supabase Auth's Google provider with a PKCE redirect back to the app, including the installed iOS PWA. The signed-in header and profile show the avatar, name, and email, plus Sign out.

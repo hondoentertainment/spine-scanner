@@ -1094,19 +1094,19 @@ function App() {
                     {showScanGuide && (
                     <section className={styles.scanExplainer} aria-label="Ways to add a book">
                       <h2 className={styles.scanTitle}>Three easy ways to capture a book</h2>
-                      <p className={styles.scanSubtitle}>Use the camera for speed, upload a photo for tricky spines, or type the ISBN when you want full control.</p>
+                      <p className={styles.scanSubtitle}>Point at a barcode, a spine, or a whole shelf. Then confirm the book.</p>
                       <div className={styles.scanTips}>
                         <div className={`glass ${styles.tipCard}`}>
-                          <strong>Best for speed</strong>
-                          <span>Center the barcode and hold still for a second.</span>
+                          <strong>Barcode</strong>
+                          <span>Point at the bars on the back. We look up the book and add it.</span>
                         </div>
                         <div className={`glass ${styles.tipCard}`}>
-                          <strong>Best for hard covers</strong>
-                          <span>Use photo upload when the spine text is small or reflective.</span>
+                          <strong>Spine</strong>
+                          <span>Point at the title and hold still. We read it, then you confirm.</span>
                         </div>
                         <div className={`glass ${styles.tipCard}`}>
-                          <strong>Best for a whole shelf</strong>
-                          <span>Choose Shelf, photograph the row, then accept, edit, or reject each book.</span>
+                          <strong>Shelf</strong>
+                          <span>Point at a row of books. Then keep, edit, or skip each one.</span>
                         </div>
                         <button type="button" className={`glass ${styles.tipCard} ${styles.tipCardButton}`} onClick={() => goToMain('/library', 'Library view')}>
                           <strong>Already scanned enough?</strong>
