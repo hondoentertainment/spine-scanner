@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useAuthStore } from '../useAuthStore';
+import { resetOAuthCallbackState } from '../../lib/googleAuth';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,8 @@ describe('useAuthStore — edge cases', () => {
     });
     authStateCallback = null;
     vi.clearAllMocks();
+    window.history.replaceState({}, '', '/');
+    resetOAuthCallbackState();
   });
 
   // ── onAuthStateChange: PASSWORD_RECOVERY ──────────────────────────────────

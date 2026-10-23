@@ -34,8 +34,7 @@ GitHub Pages is built in Actions without those variables, so that deploy stays l
    - `http://127.0.0.1:5173`
    - Every Vercel preview origin you will test, copied from that deployment's URL. Preview hosts look like `https://spine-scanner-git-<branch>-<team>.vercel.app` or `https://spine-scanner-<hash>-<team>.vercel.app`.
 6. Authorized redirect URIs. Add only the Supabase callback. The app URL is not a Google redirect URI:
-   - `https://<PROJECT_REF>.supabase.co/auth/v1/callback`
-   - `<PROJECT_REF>` is the subdomain of your Supabase URL (`https://<PROJECT_REF>.supabase.co`).
+   - `https://inkbptoncwddalecisyk.supabase.co/auth/v1/callback`
 7. Copy the client ID and client secret. Do not commit them and do not put them in Vite or Vercel.
 
 ## 2. Enable Google in Supabase
@@ -52,18 +51,20 @@ Authentication → URL Configuration:
 - **Site URL:** `https://spine-scanner.vercel.app`
 - **Redirect URLs:**
   - `https://spine-scanner.vercel.app/**`
-  - `https://*.vercel.app/**` (Vercel preview deployments)
+  - `https://*.vercel.app/**`
   - `http://localhost:5173/**`
-  - `http://127.0.0.1:5173/**`
+  - `spinescanner://auth/callback` (iOS development or store build)
 
-The app sets `redirectTo` to the current origin plus the Vite base path, with a trailing slash. On Vercel that is `https://spine-scanner.vercel.app/`. On the Vite dev server it is `http://localhost:5173/`.
+The app sets `redirectTo` from `window.location.origin` plus the path you were on. On Vercel that origin is `https://spine-scanner.vercel.app`. On a preview it is that deployment's host. On the Vite dev server it is `http://localhost:5173`. After Google returns, the app exchanges the PKCE `code` (or reads a hash session), strips `?code` and `#access_token`, and opens the page you started on.
+
+If Google is not enabled yet, Supabase returns `Unsupported provider: provider is not enabled`. The sign-in screen shows "Google sign-in isn't available for this app yet. You can still sign in with email." and does not stay on the error URL. The same happens for `error` and `error_description` in the query string or the hash.
 
 ## 4. Vercel env vars
 
 In the Vercel project **spine-scanner**, set both for **Production** and **Preview**, then redeploy:
 
 ```
-VITE_SUPABASE_URL=https://<PROJECT_REF>.supabase.co
+VITE_SUPABASE_URL=https://inkbptoncwddalecisyk.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon public key from Supabase → Project Settings → API>
 ```
 

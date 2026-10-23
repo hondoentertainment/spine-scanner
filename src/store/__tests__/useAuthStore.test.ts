@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useAuthStore } from '../useAuthStore';
+import { resetOAuthCallbackState } from '../../lib/googleAuth';
 
 /* ================================================================
  *  Mock Supabase client
@@ -26,6 +27,8 @@ const mockOnAuthStateChange = vi.fn(() => ({ data: { subscription: { unsubscribe
 const mockResetPasswordForEmail = vi.fn();
 const mockUpdateUser = vi.fn();
 const mockResend = vi.fn();
+const mockExchangeCodeForSession = vi.fn();
+const mockSetSession = vi.fn();
 
 vi.mock('../../lib/profiles', () => ({
   getProfile: vi.fn().mockResolvedValue(null),
@@ -45,6 +48,8 @@ vi.mock('../../lib/supabase', () => ({
       resetPasswordForEmail: (email: string, opts: unknown) => mockResetPasswordForEmail(email, opts),
       updateUser: (data: unknown) => mockUpdateUser(data),
       resend: (opts: unknown) => mockResend(opts),
+      exchangeCodeForSession: (code: string) => mockExchangeCodeForSession(code),
+      setSession: (tokens: unknown) => mockSetSession(tokens),
     },
   },
 }));
@@ -65,9 +70,13 @@ describe('useAuthStore', () => {
       confirmationPending: false,
       recoveryMode: false,
       pendingCloudLink: false,
+      authReturnPath: null,
     });
 
     vi.clearAllMocks();
+    sessionStorage.clear();
+    window.history.replaceState({}, '', '/');
+    resetOAuthCallbackState();
   });
 
   /* ── initialize ──────────────────────────────────────────── */
@@ -143,7 +152,7 @@ describe('useAuthStore', () => {
 
       expect(userId).toBeUndefined();
       const state = useAuthStore.getState();
-      expect(state.error).toBe('Email already registered');
+      expect(state.error).toMatch(/already exists/i);
       expect(state.loading).toBe(false);
     });
   });
@@ -174,7 +183,7 @@ describe('useAuthStore', () => {
       await useAuthStore.getState().signIn('test@test.com', 'wrong');
 
       const state = useAuthStore.getState();
-      expect(state.error).toBe('Invalid login credentials');
+      expect(state.error).toMatch(/don't match/i);
       expect(state.loading).toBe(false);
       expect(state.user).toBeNull();
     });
@@ -205,7 +214,7 @@ describe('useAuthStore', () => {
       await useAuthStore.getState().signInWithMagicLink('test@test.com');
 
       const state = useAuthStore.getState();
-      expect(state.error).toBe('Rate limit exceeded');
+      expect(state.error).toMatch(/too many attempts/i);
       expect(state.loading).toBe(false);
       expect(state.magicLinkSent).toBe(false);
     });
@@ -233,12 +242,26 @@ describe('useAuthStore', () => {
       expect(mockSignInWithOAuth).toHaveBeenCalledWith({
         provider: 'google',
         options: {
-          redirectTo: expect.stringMatching(/^https?:\/\/.+\/$/),
+          redirectTo: expect.stringContaining(window.location.origin),
           skipBrowserRedirect: true,
           queryParams: { prompt: 'select_account' },
         },
       });
       expect(redirectBrowser).toHaveBeenCalledWith('https://accounts.google.com/o/oauth2/auth?code=1');
+      expect(sessionStorage.getItem('spine-scanner.auth-return')).toBe('/');
+    });
+
+    it('explains when the Google provider is not enabled', async () => {
+      mockSignInWithOAuth.mockResolvedValue({
+        data: null,
+        error: { message: 'Unsupported provider: provider is not enabled' },
+      });
+
+      await useAuthStore.getState().signInWithGoogle();
+
+      expect(useAuthStore.getState().error).toMatch(/isn't available/i);
+      expect(useAuthStore.getState().loading).toBe(false);
+      expect(redirectBrowser).not.toHaveBeenCalled();
     });
 
     it('sets error on signInWithOAuth failure', async () => {
@@ -294,6 +317,47 @@ describe('useAuthStore', () => {
 
       expect(useAuthStore.getState().pendingCloudLink).toBe(true);
       expect(useAuthStore.getState().user).toEqual(fakeUser);
+      expect(window.location.search).not.toContain('code');
+      expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+    });
+
+    it('exchanges a PKCE code when the session is not restored yet', async () => {
+      window.history.replaceState({}, '', '/library?code=auth-code');
+      mockGetSession.mockResolvedValue({ data: { session: null } });
+      mockExchangeCodeForSession.mockResolvedValue({ data: { session: fakeSession }, error: null });
+
+      await useAuthStore.getState().initialize();
+
+      expect(mockExchangeCodeForSession).toHaveBeenCalledWith('auth-code');
+      expect(useAuthStore.getState().user).toEqual(fakeUser);
+      expect(useAuthStore.getState().pendingCloudLink).toBe(true);
+      expect(window.location.pathname).toBe('/library');
+      expect(window.location.search).not.toContain('code');
+    });
+
+    it('shows a friendly message for a provider error in the hash and clears it', async () => {
+      window.history.replaceState({}, '', '/#error=server_error&error_description=Unsupported+provider:+provider+is+not+enabled');
+      mockGetSession.mockResolvedValue({ data: { session: null } });
+
+      await useAuthStore.getState().initialize();
+
+      expect(useAuthStore.getState().error).toMatch(/isn't available/i);
+      expect(useAuthStore.getState().loading).toBe(false);
+      expect(useAuthStore.getState().user).toBeNull();
+      expect(window.location.hash).not.toContain('error');
+      expect(window.location.hash).not.toContain('access_token');
+    });
+
+    it('removes hash tokens and restores the page the user started on', async () => {
+      sessionStorage.setItem('spine-scanner.auth-return', '/library?status=read');
+      window.history.replaceState({}, '', '/#access_token=tok&refresh_token=ref&token_type=bearer');
+      mockGetSession.mockResolvedValue({ data: { session: fakeSession } });
+
+      await useAuthStore.getState().initialize();
+
+      expect(window.location.hash).toBe('');
+      expect(useAuthStore.getState().authReturnPath).toBe('/library?status=read');
+      expect(useAuthStore.getState().user).toEqual(fakeUser);
     });
   });
 
@@ -310,10 +374,12 @@ describe('useAuthStore', () => {
       const state = useAuthStore.getState();
       expect(state.user).toBeNull();
       expect(state.session).toBeNull();
+      expect(state.profile).toBeNull();
+      expect(state.magicLinkSent).toBe(false);
       expect(state.loading).toBe(false);
     });
 
-    it('sets error on sign-out failure', async () => {
+    it('clears the local session even when the server sign-out fails', async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       useAuthStore.setState({ user: fakeUser as any, session: fakeSession as any, loading: false });
       mockSignOut.mockResolvedValue({ error: { message: 'Sign out failed' } });
@@ -322,6 +388,8 @@ describe('useAuthStore', () => {
 
       const state = useAuthStore.getState();
       expect(state.error).toBe('Sign out failed');
+      expect(state.user).toBeNull();
+      expect(state.session).toBeNull();
       expect(state.loading).toBe(false);
     });
   });
@@ -389,7 +457,7 @@ describe('useAuthStore', () => {
       const ok = await useAuthStore.getState().updatePassword('123');
 
       expect(ok).toBe(false);
-      expect(useAuthStore.getState().error).toBe('Weak password');
+      expect(useAuthStore.getState().error).toMatch(/at least 6 characters/i);
     });
   });
 
@@ -410,7 +478,7 @@ describe('useAuthStore', () => {
       const ok = await useAuthStore.getState().resendConfirmation('test@test.com');
 
       expect(ok).toBe(false);
-      expect(useAuthStore.getState().error).toBe('Rate limited');
+      expect(useAuthStore.getState().error).toMatch(/too many attempts/i);
     });
   });
 
