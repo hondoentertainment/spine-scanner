@@ -59,4 +59,87 @@ test.describe('Google sign-in', () => {
     await page.getByTestId(uiContracts.navTabTestId('profile')).click();
     await expect(page.getByRole('button', { name: 'Continue with Google' }).first()).toBeVisible();
   });
+
+  test('a disabled Google provider shows a friendly message and leaves the page usable', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__SPINE_E2E_SUPABASE__ = {
+        url: 'https://example.supabase.co',
+        anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.e2e',
+      };
+    });
+    await seedSignedOut(page);
+    await page.route('**/*example.supabase.co/**', (route) => route.abort());
+    const description = encodeURIComponent('Unsupported provider: provider is not enabled');
+    await page.goto(`./profile?error=validation_failed&error_description=${description}`);
+
+    const hooks = await page.evaluate(() => document.documentElement.dataset.e2eHooks === 'true');
+    if (!hooks) {
+      if (process.env.CI) {
+        throw new Error('The E2E build is missing VITE_E2E_HOOKS=true, so the OAuth error return could not be checked.');
+      }
+      test.skip(true, 'Build was not compiled with VITE_E2E_HOOKS');
+      return;
+    }
+
+    await expect(page.getByRole('alert').first()).toContainText(/isn't available/i);
+    await expect(page.getByRole('button', { name: 'Continue with Google' }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Profile & Settings' })).toBeVisible();
+    expect(page.url()).not.toContain('error_description');
+    expect(page.url()).not.toContain('validation_failed');
+  });
+
+  test('a provider error in the URL hash is shown and then removed', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__SPINE_E2E_SUPABASE__ = {
+        url: 'https://example.supabase.co',
+        anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.e2e',
+      };
+    });
+    await seedSignedOut(page);
+    await page.route('**/*example.supabase.co/**', (route) => route.abort());
+    const description = encodeURIComponent('Unsupported provider: provider is not enabled');
+    await page.goto(`./profile#error=server_error&error_description=${description}`);
+
+    const hooks = await page.evaluate(() => document.documentElement.dataset.e2eHooks === 'true');
+    if (!hooks) {
+      if (process.env.CI) {
+        throw new Error('The E2E build is missing VITE_E2E_HOOKS=true, so the OAuth hash error could not be checked.');
+      }
+      test.skip(true, 'Build was not compiled with VITE_E2E_HOOKS');
+      return;
+    }
+
+    await expect(page.getByRole('alert').first()).toContainText(/isn't available/i);
+    const hash = await page.evaluate(() => window.location.hash);
+    expect(hash).not.toContain('error_description');
+    expect(hash).not.toContain('access_token');
+    await expect(page.getByRole('button', { name: 'Continue with Google' }).first()).toBeVisible();
+  });
+
+  test('an OAuth code in the callback URL is cleared and the library still renders', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__SPINE_E2E_SUPABASE__ = {
+        url: 'https://example.supabase.co',
+        anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.e2e',
+      };
+    });
+    await seedSignedOut(page);
+    await page.route('**/*example.supabase.co/**', (route) => route.abort());
+    await page.goto('./library?code=auth-code-example#access_token=should-not-stay');
+
+    const hooks = await page.evaluate(() => document.documentElement.dataset.e2eHooks === 'true');
+    if (!hooks) {
+      if (process.env.CI) {
+        throw new Error('The E2E build is missing VITE_E2E_HOOKS=true, so the OAuth code callback could not be checked.');
+      }
+      test.skip(true, 'Build was not compiled with VITE_E2E_HOOKS');
+      return;
+    }
+
+    await expect(page.getByRole('heading', { name: /start your library/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Continue with Google' }).first()).toBeVisible();
+    expect(page.url()).not.toContain('code=');
+    const hash = await page.evaluate(() => window.location.hash);
+    expect(hash).not.toContain('access_token');
+  });
 });

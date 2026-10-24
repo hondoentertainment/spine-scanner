@@ -8,6 +8,11 @@
 - **Another account stays separate.** Signing out parks that account's books on the phone. The next account does not merge or upload them. A book scanned while signed out still goes to the account you sign in to next. Signing back in restores the parked library.
 - **Saves against an older database.** A book save still succeeds when review, metadata, loan, or location columns are not in Supabase yet. Those fields stay on the device. `supabase/migrations/009_books_app_columns.sql` adds the columns the shared writer uses, including on a database that only has the base books and shelves tables.
 
+### Sign-in
+
+- **Google.** Sign-in redirects back to this origin (production, a Vercel preview, or localhost) and then to the page you were on. A provider that is not enabled yet, or an `error` / `error_description` in the query or hash, shows a short message and the address bar is cleaned up.
+- **Email.** The sign-in panel can email a magic link as well as use a password. Buttons show a busy state, ignore a second submit, and check the email before sending. "Check your email" confirms the link was sent. Sign out clears the session on this device.
+
 ### Shelf review, scanner copy, and suggestion states
 
 - **Shelf photo review.** After a multi-book photo, each book is a row: cover, title, author, and a confidence hint, with Keep, Edit, and Skip. Add all kept saves the kept rows. Edit can search for a different match when the first one is wrong.

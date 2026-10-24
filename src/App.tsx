@@ -189,7 +189,7 @@ function App() {
   const { lookupByIsbn, loading, error } = useBookLookup();
   const { addBook, books, setBooks, shelves, setShelves } = useBookStore();
   const showScanGuide = location.pathname === '/scan' && !isMvpMode() && books.length === 0;
-  const { user, recoveryMode, initialize: initAuth } = useAuthStore();
+  const { user, recoveryMode, authReturnPath, initialize: initAuth } = useAuthStore();
   const { preferences, loadFromCloud, saveToCloud, updatePreferences } = useProfileStore();
   const { pendingChanges, markDirty, markSynced, markSyncFailed, flushing, setFlushing } = useSyncQueue();
   const lastSyncFailedAt = useSyncQueue((s) => s.lastSyncFailedAt);
@@ -237,6 +237,15 @@ function App() {
   useEffect(() => {
     initAuth();
   }, [initAuth]);
+
+  useEffect(() => {
+    if (!authReturnPath) return;
+    const current = `${location.pathname}${location.search}${location.hash}`;
+    if (current !== authReturnPath) {
+      navigate(authReturnPath, { replace: true });
+    }
+    useAuthStore.setState({ authReturnPath: null });
+  }, [authReturnPath, location.hash, location.pathname, location.search, navigate]);
 
   useEffect(() => {
     setMonitoringUser(user?.id ?? null);

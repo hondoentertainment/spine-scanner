@@ -197,6 +197,7 @@ function resetStores() {
     confirmationPending: false,
     recoveryMode: false,
     pendingCloudLink: false,
+    authReturnPath: null,
     initialize: vi.fn().mockResolvedValue(undefined),
   });
   useProfileStore.setState({

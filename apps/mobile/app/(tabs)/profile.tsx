@@ -18,6 +18,7 @@ export default function ProfileScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [googleError, setGoogleError] = useState<string | null>(null);
+  const [googleBusy, setGoogleBusy] = useState(false);
   const configured = isSupabaseConfigured();
 
   return (
@@ -79,14 +80,17 @@ export default function ProfileScreen() {
           </Pressable>
           <Pressable
             style={styles.secondary}
+            disabled={googleBusy || loading}
             onPress={() => {
+              if (googleBusy || loading) return;
               setGoogleError(null);
+              setGoogleBusy(true);
               void signInWithGoogle().then((message) => {
                 if (message) setGoogleError(message);
-              });
+              }).finally(() => setGoogleBusy(false));
             }}
           >
-            <Text style={styles.secondaryText}>Continue with Google</Text>
+            <Text style={styles.secondaryText}>{googleBusy ? 'Opening Google…' : 'Continue with Google'}</Text>
           </Pressable>
           {googleError ? <Text style={styles.error}>{googleError}</Text> : null}
           <Text style={styles.meta}>Redirect: {googleRedirectUri()}</Text>

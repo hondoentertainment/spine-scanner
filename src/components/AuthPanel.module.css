@@ -294,8 +294,15 @@
   text-align: center;
 }
 
+.label {
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--text-main);
+}
+
 .formInput {
   padding: 0.6rem 0.75rem;
+  min-height: 44px;
   font-size: 0.85rem;
   color: var(--text-main);
   background: rgba(255, 255, 255, 0.08);
@@ -305,8 +312,24 @@
   font-family: inherit;
 }
 
+.formInput:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+.inputError {
+  border-color: #f87171;
+}
+
+.fieldError {
+  margin: -0.25rem 0 0;
+  color: #f87171;
+  font-size: 0.75rem;
+}
+
 .submitBtn {
   padding: 0.65rem;
+  min-height: 44px;
   font-size: 0.85rem;
   font-weight: 600;
   color: white;
@@ -315,6 +338,37 @@
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
+}
+
+.submitBtn:focus-visible,
+.modeBtn:focus-visible,
+.forgotBtn:focus-visible,
+.formClose:focus-visible,
+.signInBtn:focus-visible,
+.signOutBtn:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .googleOffer {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .googleOffer button {
+    width: 100%;
+  }
+
+  .pwaHint {
+    max-width: none;
+    text-align: left;
+  }
+
+  .formPanel {
+    max-width: none;
+    width: min(100%, 22.5rem);
+  }
 }
 
 .modeToggle {

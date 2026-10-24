@@ -61,7 +61,7 @@ Set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in `apps/mobi
 
 Scan the QR code with the Expo Go app on your phone, or press `i` in the terminal to open the iOS simulator (macOS with Xcode). Expo Go can run the tabs, manual ISBN lookup, and the on-device library. The custom URL scheme is `spinescanner://`.
 
-Google sign-in uses that scheme in a development or store build (`spinescanner://auth/callback`). Expo Go cannot claim `spinescanner://`, so `expo-auth-session` falls back to an `exp://` redirect while you are in Expo Go. Add whichever redirect the Profile tab prints to Supabase → Authentication → URL Configuration → Redirect URLs. The Google Cloud client still redirects to `https://<PROJECT_REF>.supabase.co/auth/v1/callback` only. Keep **Skip nonce check** on for the Google provider, the same as the installed PWA.
+Google sign-in uses that scheme in a development or store build. The redirect Supabase must allow is exactly `spinescanner://auth/callback` (double slash, not `spinescanner:///auth/callback`). Expo Go cannot claim `spinescanner://`, so `expo-auth-session` falls back to an `exp://` redirect while you are in Expo Go. Add whichever redirect the Profile tab prints to Supabase → Authentication → URL Configuration → Redirect URLs. The Google Cloud client still redirects only to `https://inkbptoncwddalecisyk.supabase.co/auth/v1/callback`. Keep **Skip nonce check** on for the Google provider, the same as the installed PWA.
 
 Camera barcode scanning in Expo Go works when the Expo Go build includes `expo-camera`. If the preview cannot open the camera, use a development build instead of Expo Go.
 
@@ -219,30 +219,35 @@ Full click-path, including the iOS "Skip nonce check" toggle: [SUPABASE_AUTH_SET
 
 ### Google Cloud OAuth client
 
+Project ref: `inkbptoncwddalecisyk`.
+
 1. [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials → Create credentials → OAuth client ID.
 2. Application type: **Web application**.
-3. Authorized JavaScript origins (Google does not allow wildcards):
+3. Authorized JavaScript origins (Google does not allow wildcards). Required:
    - `https://spine-scanner.vercel.app`
+4. Also add each origin you will sign in from. Google rejects a wildcard, so copy the preview host from that deployment when you need it:
    - `http://localhost:5173`
    - `http://127.0.0.1:5173`
-   - Each Vercel preview origin you will actually sign in from, copied from that deployment (for example `https://spine-scanner-git-<branch>-<team>.vercel.app`).
-4. Authorized redirect URI — this is the Supabase callback, not the app URL:
-   - `https://<PROJECT_REF>.supabase.co/auth/v1/callback`
-5. Copy the client ID and client secret into Supabase only.
+   - `https://spine-scanner-git-<branch>-<team>.vercel.app`
+5. Authorized redirect URI — this is the Supabase callback, not the app URL:
+   - `https://inkbptoncwddalecisyk.supabase.co/auth/v1/callback`
+6. Copy the client ID and client secret into Supabase only. Do not commit them.
 
 ### Supabase
 
-1. Authentication → Providers → Google → enable.
-2. Paste the client ID and client secret.
-3. Turn on **Skip nonce check**. Installed iOS PWAs otherwise fail the Google nonce check after the redirect.
+1. Authentication → Providers → Google → enable, then paste the client ID and client secret.
+2. Turn on **Skip nonce check**. Installed iOS PWAs otherwise fail the Google nonce check after the redirect.
+3. Until that provider is enabled, Continue with Google stays on screen and shows: "Google sign-in isn't available for this app yet. You can still sign in with email." The same message is shown when Supabase returns `error` / `error_description` (including `Unsupported provider: provider is not enabled`) in the query string or the hash. The app then removes those params so the page is not left on a broken URL.
 4. Authentication → URL Configuration:
    - Site URL: `https://spine-scanner.vercel.app`
    - Redirect URLs:
      - `https://spine-scanner.vercel.app/**`
-     - `https://*.vercel.app/**` (preview deployments)
+     - `https://*.vercel.app/**`
      - `http://localhost:5173/**`
-     - `http://127.0.0.1:5173/**`
-5. The app sends `redirectTo` as the current origin plus the Vite base path, with a trailing slash (`https://spine-scanner.vercel.app/` on Vercel).
+5. The app sets `redirectTo` from `window.location.origin` plus the current path (and the Vite base, when there is one). Production, a Vercel preview, and `http://localhost:5173` each return to themselves. After the code exchange, `?code` and `#access_token` are removed and the user is sent back to the page they started on.
+6. For the iOS app, also allow `spinescanner://auth/callback`.
+
+Email sign-in can use a magic link ("Check your email") or the existing email and password form. Signing out clears the Supabase session on this device. Books already saved on the device stay here.
 
 ### Vercel env
 
@@ -250,8 +255,8 @@ Project **spine-scanner** (`prj_OFj2k0ujYeJxumlVP8JUJbte4yaj`), Production and P
 
 | Name | Value |
 | --- | --- |
-| `VITE_SUPABASE_URL` | `https://<PROJECT_REF>.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | The anon public key from Supabase → Project Settings → API |
+| `VITE_SUPABASE_URL` | `https://inkbptoncwddalecisyk.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | The anon public key from Supabase → Project Settings → API. Do not commit it. |
 
 Do not set `VITE_E2E_HOOKS`. Redeploy after saving. The anon key is public by design; the Google client secret stays in Supabase.
 
