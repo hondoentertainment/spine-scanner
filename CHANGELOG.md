@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Phone library sync
+
+- **Refresh keeps books that are only on the phone.** Pulling the cloud library merges it with the device copy. The same book keeps the device version. A book scanned before sign-in stays, and a successful refresh copies it to the account. Books that exist only in the cloud are added. Refresh does not delete cloud books that this phone does not have.
+- **Another account stays separate.** Signing out parks that account's books on the phone. The next account does not merge or upload them. A book scanned while signed out still goes to the account you sign in to next. Signing back in restores the parked library.
+- **Saves against an older database.** A book save still succeeds when review, metadata, loan, or location columns are not in Supabase yet. Those fields stay on the device. `supabase/migrations/009_books_app_columns.sql` adds the columns the shared writer uses, including on a database that only has the base books and shelves tables.
+
 ### Sign-in
 
 - **Google.** Sign-in redirects back to this origin (production, a Vercel preview, or localhost) and then to the page you were on. A provider that is not enabled yet, or an `error` / `error_description` in the query or hash, shows a short message and the address bar is cleaned up.

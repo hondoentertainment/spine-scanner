@@ -141,6 +141,131 @@ export function toShelfRow(shelf: Shelf, userId: string): ShelfRow {
   return { id: shelf.id, user_id: userId, name: shelf.name, color: shelf.color };
 }
 
+/**
+ * Columns added after `000_books_shelves.sql`. PostgREST names one missing
+ * column at a time, so a named column strips its whole migration group and
+ * the write is tried again. `009_books_app_columns.sql` adds all of these.
+ */
+const OPTIONAL_BOOK_COLUMN_GROUPS = [
+  ['is_photo_only', 'needs_review', 'review_reason', 'pages_finished', 'started_at', 'finished_at', 'last_progress_at'],
+  ['metadata_source', 'user_edited_fields'],
+  ['loan'],
+  ['loan_ledger'],
+  ['location_room', 'location_case', 'location_shelf'],
+] as const;
+
+function schemaErrorMessage(error: unknown): { message: string; schemaMiss: boolean } {
+  if (!error || typeof error !== 'object') return { message: '', schemaMiss: false };
+  const record = error as { message?: unknown; code?: unknown };
+  const message = typeof record.message === 'string' ? record.message.toLowerCase() : '';
+  const code = typeof record.code === 'string' ? record.code : '';
+  const schemaMiss = (
+    code === 'PGRST204'
+    || code === '42703'
+    || message.includes('schema cache')
+    || message.includes('does not exist')
+    || message.includes('could not find')
+  );
+  return { message, schemaMiss };
+}
+
+/** Match a column as its own identifier so `loan` does not also match `loan_ledger`. */
+function messageMentionsColumn(message: string, column: string): boolean {
+  return new RegExp(`(^|[^a-z0-9_])${column}([^a-z0-9_]|$)`).test(message);
+}
+
+function omitBookColumns<T extends object>(row: T, columns: readonly string[]): T {
+  const next: Record<string, unknown> = { ...(row as Record<string, unknown>) };
+  for (const key of columns) delete next[key];
+  return next as T;
+}
+
+function errorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return 'Could not save to the cloud.';
+}
+
+function warnForMissingColumns(missing: readonly string[]): void {
+  if (missing.includes('is_photo_only')) {
+    console.warn(
+      '[sync] books review and progress columns are missing. Synced without them. Run supabase/migrations/004_books_review_and_progress.sql or 009_books_app_columns.sql.',
+    );
+  }
+  if (missing.includes('metadata_source')) {
+    console.warn(
+      '[sync] books.metadata_source/user_edited_fields are missing. Synced without metadata source. Run supabase/migrations/005_books_metadata_source.sql or 009_books_app_columns.sql.',
+    );
+  }
+  if (missing.includes('loan')) {
+    console.warn(
+      '[sync] books.loan is missing. Synced without the current loan. Run supabase/migrations/006_books_loan.sql or 009_books_app_columns.sql.',
+    );
+  }
+  if (missing.includes('loan_ledger')) {
+    console.warn(
+      '[sync] books.loan_ledger is missing. Synced the current loan only. Run supabase/migrations/008_books_loan_ledger.sql or 009_books_app_columns.sql.',
+    );
+  }
+  if (missing.some((column) => column.startsWith('location_'))) {
+    console.warn(
+      '[sync] books.location_room/location_case/location_shelf are missing. Synced without physical location. Run supabase/migrations/007_books_physical_location.sql or 009_books_app_columns.sql.',
+    );
+  }
+}
+
+/** Columns to omit when the database has not been migrated yet. A named column strips its whole group. */
+export function missingOptionalBookColumns(error: unknown): string[] {
+  const { message, schemaMiss } = schemaErrorMessage(error);
+  if (!schemaMiss) return [];
+  const missing: string[] = [];
+  for (const group of OPTIONAL_BOOK_COLUMN_GROUPS) {
+    if (group.some((column) => messageMentionsColumn(message, column))) missing.push(...group);
+  }
+  return missing;
+}
+
+/** True when PostgREST or Postgres rejected the write because location columns are not migrated yet. */
+export function isMissingLocationColumnError(error: unknown): boolean {
+  return missingOptionalBookColumns(error).some((column) => column.startsWith('location_'));
+}
+
+type BookUpsertRow = Omit<BookRow, 'updated_at'> & { updated_at: string };
+
+/**
+ * Insert or replace book rows. Retries without column groups the database
+ * does not have yet, so a library that only ran the base books/shelves
+ * migration still accepts the save.
+ */
+export async function upsertBookRows(
+  client: SupabaseClient,
+  rows: BookUpsertRow[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  let payload: BookUpsertRow[] = rows;
+  const stripped = new Set<string>();
+  for (;;) {
+    const { error } = await client.from('books').upsert(payload, { onConflict: 'id' });
+    if (!error) return;
+    const missing = missingOptionalBookColumns(error).filter((column) => !stripped.has(column));
+    if (missing.length === 0) throw error;
+    for (const column of missing) stripped.add(column);
+    payload = rows.map((row) => omitBookColumns(row, [...stripped]));
+    warnForMissingColumns(missing);
+  }
+}
+
+/** Insert or replace shelf rows. Does not delete shelves that are absent from `rows`. */
+export async function upsertShelfRows(
+  client: SupabaseClient,
+  rows: ShelfRow[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  const { error } = await client.from('shelves').upsert(rows, { onConflict: 'id' });
+  if (error) throw error;
+}
+
 /** Pull the user's books. Does not migrate schema; callers run `migrateBooks`. */
 export async function fetchUserBooks(
   client: SupabaseClient,
@@ -170,16 +295,44 @@ export async function fetchUserShelves(
   return { data: (data as ShelfRow[]).map(toShelf), error: null };
 }
 
-/** Insert or replace one book row. Does not retry missing-column migrations. */
+/** Insert or replace book rows. Does not delete rows that are absent from `books`. */
+export async function upsertUserBooks(
+  client: SupabaseClient,
+  userId: string,
+  books: BookEntry[],
+): Promise<LibraryQueryError | null> {
+  if (books.length === 0) return null;
+  const updatedAt = new Date().toISOString();
+  try {
+    await upsertBookRows(
+      client,
+      books.map((book) => ({ ...toBookRow(book, userId), updated_at: updatedAt })),
+    );
+    return null;
+  } catch (error) {
+    return { message: errorMessage(error) };
+  }
+}
+
+/** Insert or replace one book row. Retries when later migration columns are missing. */
 export async function upsertUserBook(
   client: SupabaseClient,
   userId: string,
   book: BookEntry,
 ): Promise<LibraryQueryError | null> {
-  const row = {
-    ...toBookRow(book, userId),
-    updated_at: new Date().toISOString(),
-  };
-  const { error } = await client.from('books').upsert(row, { onConflict: 'id' });
-  return error ? { message: error.message } : null;
+  return upsertUserBooks(client, userId, [book]);
+}
+
+/** Insert or replace shelf rows. Does not delete shelves that are absent from `shelves`. */
+export async function upsertUserShelves(
+  client: SupabaseClient,
+  userId: string,
+  shelves: Shelf[],
+): Promise<LibraryQueryError | null> {
+  try {
+    await upsertShelfRows(client, shelves.map((shelf) => toShelfRow(shelf, userId)));
+    return null;
+  } catch (error) {
+    return { message: errorMessage(error) };
+  }
 }

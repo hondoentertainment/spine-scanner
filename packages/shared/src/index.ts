@@ -10,6 +10,8 @@ export * from './bookLookup';
 export * from './fetchBookMetadata';
 export * from './supabaseClient';
 export * from './booksApi';
+export * from './libraryMerge';
+export * from './libraryAccount';
 export * from './libraryStore';
 export * from './authStore';
 export * from './authMessages';

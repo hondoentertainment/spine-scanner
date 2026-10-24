@@ -7,4 +7,8 @@ export const useBookStore = createLibraryStore({
   storage: createJSONStorage(() => AsyncStorage),
 });
 
-export const useAuthStore = createAuthStore(() => supabase);
+export const useAuthStore = createAuthStore(() => supabase, {
+  onAccountChange: (userId) => {
+    useBookStore.getState().claimAccount(userId);
+  },
+});

@@ -5,50 +5,20 @@ import { migrateBooks } from './schemaMigrations.ts';
 import { findBookConflicts } from './bookConflicts.ts';
 import { withRetry } from './syncRetry.ts';
 import { useSyncQueue } from '../store/useSyncQueue.ts';
-import { fetchUserBooks, fetchUserShelves, toBookEntry, toBookRow, toShelfRow } from '../../packages/shared/src/booksApi.ts';
+import {
+  fetchUserBooks,
+  fetchUserShelves,
+  isMissingLocationColumnError,
+  missingOptionalBookColumns,
+  toBookEntry,
+  toBookRow,
+  toShelfRow,
+  upsertBookRows,
+  upsertShelfRows,
+} from '../../packages/shared/src/booksApi.ts';
+import { mergeBooksLists, mergeShelvesLists } from '../../packages/shared/src/libraryMerge.ts';
 
-export { toBookEntry, toBookRow };
-
-const LOCATION_COLUMNS = ['location_room', 'location_case', 'location_shelf'] as const;
-const LOAN_LEDGER_COLUMNS = ['loan_ledger'] as const;
-const OPTIONAL_BOOK_COLUMN_GROUPS = [LOCATION_COLUMNS, LOAN_LEDGER_COLUMNS] as const;
-
-function schemaErrorMessage(error: unknown): { message: string; schemaMiss: boolean } {
-  if (!error || typeof error !== 'object') return { message: '', schemaMiss: false };
-  const record = error as { message?: unknown; code?: unknown };
-  const message = typeof record.message === 'string' ? record.message.toLowerCase() : '';
-  const code = typeof record.code === 'string' ? record.code : '';
-  const schemaMiss = (
-    code === 'PGRST204'
-    || code === '42703'
-    || message.includes('schema cache')
-    || message.includes('does not exist')
-    || message.includes('could not find')
-  );
-  return { message, schemaMiss };
-}
-
-/** Columns to omit when the database has not been migrated yet. A named column strips its whole group. */
-export function missingOptionalBookColumns(error: unknown): string[] {
-  const { message, schemaMiss } = schemaErrorMessage(error);
-  if (!schemaMiss) return [];
-  const missing: string[] = [];
-  for (const group of OPTIONAL_BOOK_COLUMN_GROUPS) {
-    if (group.some((column) => message.includes(column))) missing.push(...group);
-  }
-  return missing;
-}
-
-/** True when PostgREST or Postgres rejected the write because location columns are not migrated yet. */
-export function isMissingLocationColumnError(error: unknown): boolean {
-  return missingOptionalBookColumns(error).some((column) => column.startsWith('location_'));
-}
-
-function omitBookColumns<T extends object>(row: T, columns: readonly string[]): T {
-  const next: Record<string, unknown> = { ...(row as Record<string, unknown>) };
-  for (const key of columns) delete next[key];
-  return next as T;
-}
+export { toBookEntry, toBookRow, isMissingLocationColumnError, missingOptionalBookColumns, mergeBooksLists, mergeShelvesLists };
 
 /**
  * Pull the user's full book library from Supabase.
@@ -99,28 +69,7 @@ export async function pushBooks(userId: string, books: BookEntry[]): Promise<boo
   if (rows.length > 0) {
     try {
       await withRetry(async () => {
-        let payload = rows;
-        const stripped = new Set<string>();
-        for (;;) {
-          const { error } = await supabase!
-            .from('books')
-            .upsert(payload, { onConflict: 'id' });
-          if (!error) return;
-          const missing = missingOptionalBookColumns(error).filter((column) => !stripped.has(column));
-          if (missing.length === 0) throw error;
-          for (const column of missing) stripped.add(column);
-          payload = rows.map((row) => omitBookColumns(row, [...stripped]));
-          if (missing.some((column) => column.startsWith('location_'))) {
-            console.warn(
-              '[sync] books.location_room/location_case/location_shelf are missing. Synced without physical location. Run supabase/migrations/007_books_physical_location.sql.',
-            );
-          }
-          if (missing.includes('loan_ledger')) {
-            console.warn(
-              '[sync] books.loan_ledger is missing. Synced the current loan only. Run supabase/migrations/008_books_loan_ledger.sql.',
-            );
-          }
-        }
+        await upsertBookRows(supabase!, rows);
       });
     } catch (err) {
       const error = err as Error;
@@ -177,10 +126,7 @@ export async function pushShelves(userId: string, shelves: Shelf[]): Promise<boo
   if (rows.length > 0) {
     try {
       await withRetry(async () => {
-        const { error } = await supabase!
-          .from('shelves')
-          .upsert(rows, { onConflict: 'id' });
-        if (error) throw error;
+        await upsertShelfRows(supabase!, rows);
       });
     } catch (err) {
       const error = err as Error;
@@ -225,54 +171,6 @@ export async function pushShelves(userId: string, shelves: Shelf[]): Promise<boo
   }
 
   return true;
-}
-
-/**
- * Merge two book lists: combine all unique IDs, local wins on conflict.
- * This is a pure function — useful for testing independently of Supabase.
- */
-export function mergeBooksLists(localBooks: BookEntry[], remoteBooks: BookEntry[]): BookEntry[] {
-  const remoteMap = new Map(remoteBooks.map((b) => [b.id, b]));
-  const localMap = new Map(localBooks.map((b) => [b.id, b]));
-
-  const allIds = new Set([...remoteMap.keys(), ...localMap.keys()]);
-  const merged: BookEntry[] = [];
-
-  for (const id of allIds) {
-    const local = localMap.get(id);
-    const remote = remoteMap.get(id);
-
-    if (local) {
-      merged.push(local);
-    } else if (remote) {
-      merged.push(remote);
-    }
-  }
-
-  merged.sort((a, b) => b.dateAdded.localeCompare(a.dateAdded));
-  return merged;
-}
-
-/** Merge two shelf lists: local wins on conflict. */
-export function mergeShelvesLists(localShelves: Shelf[], remoteShelves: Shelf[]): Shelf[] {
-  const remoteMap = new Map(remoteShelves.map((s) => [s.id, s]));
-  const localMap = new Map(localShelves.map((s) => [s.id, s]));
-
-  const allIds = new Set([...remoteMap.keys(), ...localMap.keys()]);
-  const merged: Shelf[] = [];
-
-  for (const id of allIds) {
-    const local = localMap.get(id);
-    const remote = remoteMap.get(id);
-
-    if (local) {
-      merged.push(local);
-    } else if (remote) {
-      merged.push(remote);
-    }
-  }
-
-  return merged;
 }
 
 /**

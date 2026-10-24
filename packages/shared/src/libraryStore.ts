@@ -5,10 +5,14 @@ import { normalizeBookEntry, normalizeBooks, updateBookForStatus, updateBookProg
 import { lendBook as applyLend, mergeLoanLedgers, returnBook as applyReturn } from './loans';
 import { normalizePhysicalLocation } from './physicalLocation';
 import { migrateBooks } from './schemaMigrations';
+import { switchLibraryAccount, type AccountLibrary } from './libraryAccount';
 
 export interface LibraryPersisted {
   books: BookEntry[];
   shelves: Shelf[];
+  /** Account the visible books belong to. Absent on libraries saved before account switching. */
+  ownerId?: string | null;
+  librariesByAccount?: Record<string, AccountLibrary>;
 }
 
 export interface CreateLibraryStoreOptions {
@@ -75,6 +79,16 @@ interface BookStore {
   unassignShelf: (bookId: string, shelfId: string) => void;
   /** Merge duplicate rows into one entry (keep `keepId`, drop others). */
   mergeBooks: (keepId: string, removeIds: string[]) => void;
+  /** Account the visible books belong to. Null is the signed-out scratch list. */
+  ownerId: string | null;
+  /** Libraries parked for accounts that are not signed in. Never merged into the current upload. */
+  librariesByAccount: Record<string, AccountLibrary>;
+  /**
+   * Show this account's library. Another account's cached rows are parked
+   * first so a later refresh cannot upload them under the new user id.
+   * Null parks the current account and clears the visible list.
+   */
+  claimAccount: (userId: string | null) => void;
 }
 
 export function createLibraryStore(options: CreateLibraryStoreOptions = {}) {
@@ -84,6 +98,9 @@ export function createLibraryStore(options: CreateLibraryStoreOptions = {}) {
     (set) => ({
       books: [],
       shelves: [],
+      ownerId: null,
+      librariesByAccount: {},
+      claimAccount: (userId) => set((state) => switchLibraryAccount(state, userId)),
       addBook: (book) => set((state) => ({ books: [normalizeBookEntry(book), ...state.books] })),
       removeBook: (id) => set((state) => ({ books: state.books.filter((b) => b.id !== id) })),
       updateBook: (id, updates) =>
@@ -255,13 +272,23 @@ export function createLibraryStore(options: CreateLibraryStoreOptions = {}) {
         ? { storage: options.storage as unknown as PersistStorage<BookStore> }
         : {}),
       merge: (persistedState, currentState) => {
-        const p = persistedState as { books?: BookEntry[]; shelves?: Shelf[] } | undefined;
+        const p = persistedState as LibraryPersisted | undefined;
         const persistedBooks = p?.books ?? currentState.books;
         const migratedBooks = migrateBooks(persistedBooks);
+        const librariesByAccount: Record<string, AccountLibrary> = {};
+        for (const [accountId, library] of Object.entries(p?.librariesByAccount ?? {})) {
+          if (!library || typeof library !== 'object') continue;
+          librariesByAccount[accountId] = {
+            books: normalizeBooks(migrateBooks(Array.isArray(library.books) ? library.books : [])),
+            shelves: Array.isArray(library.shelves) ? library.shelves : [],
+          };
+        }
         return {
           ...currentState,
           books: normalizeBooks(migratedBooks),
           shelves: p?.shelves ?? currentState.shelves,
+          ownerId: typeof p?.ownerId === 'string' ? p.ownerId : null,
+          librariesByAccount,
         };
       },
     }
