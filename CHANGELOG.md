@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Phone library sync
+
+- **Refresh keeps books that are only on the phone.** Pulling the cloud library merges it with the device copy. The same book keeps the device version. A book scanned before sign-in stays, and a successful refresh copies it to the account. Books that exist only in the cloud are added. Refresh does not delete cloud books that this phone does not have.
+- **Saves against an older database.** A book save still succeeds when review, metadata, loan, or location columns are not in Supabase yet. Those fields stay on the device. `supabase/migrations/009_books_app_columns.sql` adds the columns the shared writer uses, including on a database that only has the base books and shelves tables.
+
 ### Shelf review, scanner copy, and suggestion states
 
 - **Shelf photo review.** After a multi-book photo, each book is a row: cover, title, author, and a confidence hint, with Keep, Edit, and Skip. Add all kept saves the kept rows. Edit can search for a different match when the first one is wrong.

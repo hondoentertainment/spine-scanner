@@ -205,7 +205,7 @@ alter table books
   add column if not exists location_shelf text not null default '';
 ```
 
-Empty string means that part of the location is unset. Sync still uploads the rest of each book when these columns are missing; the location stays on this device until the migration is applied.
+Empty string means that part of the location is unset. Sync still uploads the rest of each book when these columns are missing; the location stays on this device until the migration is applied. The iOS app uses that same save. Review, metadata, loan, and location columns can be added in one step with [`supabase/migrations/009_books_app_columns.sql`](supabase/migrations/009_books_app_columns.sql). That file is safe when migrations 004–008 already ran. Until they exist, a save leaves the missing columns off that write and keeps the values on the device.
 
 7. Restart the dev server. When both Supabase variables are set, Profile and the header show **Continue with Google**. Email sign-in stays available as "Use email instead". If either variable is missing, the app stays local-only and explains that cloud sign-in isn't set up.
 

@@ -16,17 +16,17 @@ The scaffold already has: Expo SDK 58 and Expo Router; tabs for Home, Library, S
 
 5. **Supabase redirect allow-list.** Add `spinescanner://auth/callback` and the Expo Go `exp://…/--/auth/callback` URL printed on the Profile tab. Google Cloud’s authorized redirect stays the Supabase callback (`https://<PROJECT_REF>.supabase.co/auth/v1/callback`). Keep Skip nonce check on for Google. The anon key stays in EAS env (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`), never in git.
 
-6. **Account and library behavior under review.** A reviewer will sign in, deny the camera, kill the app, and relaunch. Email sign-in, the camera permission denial state, and the empty library need to be obvious. Cloud refresh currently replaces the on-device book list with the server list (`Library` → `setBooks`). It does not run the web merge in `mergeSync` (`src/lib/syncBooks.ts`), so a book scanned offline can disappear on refresh. That has to be the same merge as the PWA before TestFlight users sync two devices.
+6. **Account and library behavior under review.** A reviewer will sign in, deny the camera, kill the app, and relaunch. Email sign-in, the camera permission denial state, and the empty library need to be obvious. Cloud refresh merges with the device library (`mergePulledLibrary` in `packages/shared`): the device copy wins on the same id, cloud-only books are added, and a book that exists only on the phone is copied to the account. It does not delete cloud rows this phone lacks, and it does not run the web conflict list or sync queue.
 
 ## P1 — Product parity
 
 7. **Shelf-photo OCR on device.** The web shelf flow is not portable. `src/shelf/imageCanvas.ts` and `src/shelf/runBrowserShelfScan.ts` use canvas and browser image decoding. `src/shelf/decodeSpineBarcode.ts` uses `@zxing/browser`. `src/hooks/useOcrEngine.ts` runs Tesseract.js in a web worker. Those cannot be imported by Metro. What can move later: `src/shelf/parseSpineText.ts` (ISBN extraction from text) and the pure parts of `src/shelf/shelfLookup.ts`. On iOS, capture a still with `expo-camera` (or the photo library, which needs its own purpose string and privacy label) and recognize text with Apple Vision (`VNRecognizeTextRequest`) or ML Kit. Keep the review-before-save step the web app already has. The Scan tab states that shelf photos are not in this build.
 
 8. **Offline storage.** AsyncStorage already persists the Zustand library (`createLibraryStore` in `packages/shared/src/libraryStore.ts`). That is not the web offline stack. Still browser-only:
-   - `src/store/useSyncQueue.ts` and the push/retry/conflict path in `src/lib/syncBooks.ts` (the shared package only maps rows, fetches, and upserts one book)
+   - `src/store/useSyncQueue.ts` and the push/retry/conflict path in `src/lib/syncBooks.ts` (the shared package maps rows, merges a pull, fetches, and upserts books and shelves without deleting rows the device does not have)
    - `src/lib/metadataLookupCache.ts` (`localStorage`)
    - the service worker from `vite-plugin-pwa`
-   A device build needs a queue that survives airplane mode, replays upserts, and uses `mergeBooksLists` instead of last-refresh-wins. SecureStore is only for the auth session, and only when the payload fits.
+   Refresh already uses `mergeBooksLists` instead of last-refresh-wins. A device build still needs a queue that survives airplane mode and replays upserts. SecureStore is only for the auth session, and only when the payload fits.
 
 9. **Push notifications.** The web app reminds you about loans inside Home. Nothing is sent by APNs. Add `expo-notifications`, an APNs key, a device token table in Supabase, and a sender (Edge Function or cron) for due dates. Ask for notification permission in context, and add the matching privacy label. This also needs a physical device; Expo Go’s push story is not the production path.
 
@@ -43,7 +43,7 @@ These are why the first share is a package of pure modules plus a store factory,
 | `src/store/useSyncQueue.ts`, `useAnalyticsStore.ts`, `useReadingSessionStore.ts` | `localStorage` persist and web-only call sites. Not moved. |
 | `src/lib/bookLookupCore.ts` | Still owns the rate limit, in-memory/localStorage cache, and Sentry breadcrumbs. The fetch itself is `lookupBookByIsbn` in `packages/shared`. |
 | `src/lib/errorMonitoring.ts` | `import.meta.env` and `@sentry/react`. Metro will not accept that module. |
-| `src/lib/syncBooks.ts` | Push, stale-row deletion, optional-column retries, and `mergeSync` stay on the web. iOS uses `fetchUserBooks`, `fetchUserShelves`, and `upsertUserBook`. A single-row upsert does not strip missing location/ledger columns the way `pushBooks` does. |
+| `src/lib/syncBooks.ts` | Stale-row deletion, the sync queue, and `mergeSync` stay on the web. The optional-column retry and the local-wins merge live in `packages/shared`. iOS refresh uses that merge and upserts the result without deleting cloud rows the phone does not have. |
 | `src/hooks/useBarcodeScanner.ts`, `src/components/Scanner.tsx` | Webcam, ZXing, and React DOM. The phone uses `expo-camera`. |
 | `src/shelf/*` browser files | Canvas, workers, and DOM. See item 7. `parseSpineText` is the piece worth extracting next. |
 | `src/recommendations/*` | Fetch logic could move later. The screens are React DOM, and the optional LLM endpoint is a Vite env flag. Home on iOS does not suggest books. |
@@ -55,7 +55,7 @@ These are why the first share is a package of pure modules plus a store factory,
 
 ## Suggested sequence
 
-1. Sign in with Apple, privacy policy URL, account deletion, and the offline merge so a refresh cannot drop local scans.
+1. Sign in with Apple, privacy policy URL, and account deletion. Refresh already keeps a scan that exists only on the device.
 2. App icon, screenshots, TestFlight, and a pass on a physical iPhone (camera, Google, Apple, relaunch).
 3. On-device shelf OCR behind the existing review step, reusing `parseSpineText` once it lives in `packages/shared`.
 4. Sync queue, push for loan due dates, then universal links.
