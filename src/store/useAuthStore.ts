@@ -4,11 +4,14 @@ import { supabase } from '../lib/supabase.ts';
 import { getProfile, upsertProfile } from '../lib/profiles.ts';
 import { e2eHooksEnabled, readE2EAuthSeed } from '../lib/e2eHooks.ts';
 import {
+  consumeAuthReturn,
+  consumeOAuthCallback,
+  currentAppPath,
+  friendlyAuthError,
   getOAuthRedirectUrl,
-  hasOAuthCode,
-  readOAuthReturnError,
+  rememberAuthReturn,
   redirectBrowser,
-  stripOAuthErrorParams,
+  stripOAuthParams,
 } from '../lib/googleAuth.ts';
 
 export interface AuthProfile {
@@ -39,12 +42,40 @@ interface AuthStore {
   resetPassword: (email: string) => Promise<boolean>;
   updatePassword: (newPassword: string) => Promise<boolean>;
   resendConfirmation: (email: string) => Promise<boolean>;
+  /** App path to restore after the OAuth redirect, relative to the router basename. */
+  authReturnPath: string | null;
   clearError: () => void;
   clearMagicLinkSent: () => void;
   clearConfirmation: () => void;
 }
 
 let stopAuthListener: (() => void) | null = null;
+let authInFlight = false;
+
+function beginAuth(): boolean {
+  if (authInFlight) return false;
+  authInFlight = true;
+  return true;
+}
+
+function endAuth(): void {
+  authInFlight = false;
+}
+
+function clearedSession() {
+  return {
+    user: null,
+    session: null,
+    profile: null,
+    loading: false,
+    error: null as string | null,
+    magicLinkSent: false,
+    confirmationPending: false,
+    recoveryMode: false,
+    pendingCloudLink: false,
+    authReturnPath: null as string | null,
+  };
+}
 
 function seededUser(seed: { id?: string; email: string; name: string; avatarUrl?: string }): User {
   return {
@@ -70,6 +101,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   confirmationPending: false,
   recoveryMode: false,
   pendingCloudLink: false,
+  authReturnPath: null,
 
   initialize: async () => {
     stopAuthListener?.();
@@ -100,38 +132,74 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       return;
     }
 
-    const oauthError = typeof window !== 'undefined' ? readOAuthReturnError(window.location.search) : null;
-    if (oauthError && typeof window !== 'undefined') {
-      const next = stripOAuthErrorParams(window.location.href);
-      window.history.replaceState(window.history.state, '', next);
-      set({ error: oauthError.message, loading: false });
+    const href = typeof window !== 'undefined' ? window.location.href : '';
+    const callback = href ? consumeOAuthCallback(href) : null;
+    const callbackError = callback?.error?.message ?? null;
+    const returnPath = callback ? consumeAuthReturn() : null;
+
+    if (callback && typeof window !== 'undefined') {
+      const next = stripOAuthParams(window.location.href);
+      const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      if (next !== current) {
+        window.history.replaceState(window.history.state, '', next);
+      }
+    }
+    if (callbackError) {
+      set({ error: callbackError, loading: false, authReturnPath: returnPath });
     }
 
     try {
-      const hadCode = typeof window !== 'undefined' && hasOAuthCode(window.location.search);
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session: restored } } = await supabase.auth.getSession();
+      let session = restored;
+      let exchangeError: string | null = null;
+
+      if (callback?.code && !session && !callback.error) {
+        const exchanged = await supabase.auth.exchangeCodeForSession(callback.code);
+        if (exchanged.error) {
+          exchangeError = friendlyAuthError(exchanged.error.message);
+        } else {
+          session = exchanged.data.session;
+        }
+      } else if (callback?.accessToken && callback.refreshToken && !session && !callback.error) {
+        const fromHash = await supabase.auth.setSession({
+          access_token: callback.accessToken,
+          refresh_token: callback.refreshToken,
+        });
+        if (fromHash.error) {
+          exchangeError = friendlyAuthError(fromHash.error.message);
+        } else {
+          session = fromHash.data.session;
+        }
+      }
+
+      const freshSignIn = Boolean(session && callback && (callback.code || callback.accessToken));
       set({
         session,
         user: session?.user ?? null,
         loading: false,
-        pendingCloudLink: Boolean(session && hadCode),
+        pendingCloudLink: freshSignIn,
+        error: callbackError ?? exchangeError ?? get().error,
+        ...(returnPath ? { authReturnPath: returnPath } : {}),
       });
       if (session?.user?.id) {
         get().loadProfile();
       }
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+        if (event === 'SIGNED_OUT') {
+          set({
+            ...clearedSession(),
+            error: get().error,
+          });
+          return;
+        }
         const isRecovery = event === 'PASSWORD_RECOVERY';
         set({
           session: nextSession,
           user: nextSession?.user ?? null,
           profile: isRecovery ? get().profile : null,
           recoveryMode: isRecovery || get().recoveryMode,
-          pendingCloudLink: event === 'SIGNED_IN'
-            ? true
-            : event === 'SIGNED_OUT'
-              ? false
-              : get().pendingCloudLink,
+          pendingCloudLink: event === 'SIGNED_IN' ? true : get().pendingCloudLink,
           loading: false,
         });
 
@@ -166,90 +234,110 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         document.removeEventListener('visibilitychange', onResume);
         window.removeEventListener('pageshow', onPageShow);
       };
-    } catch {
-      set({ loading: false });
+    } catch (err) {
+      const fallback = err instanceof Error ? friendlyAuthError(err.message) : null;
+      set({
+        loading: false,
+        error: callbackError ?? fallback ?? get().error,
+        ...(returnPath ? { authReturnPath: returnPath } : {}),
+      });
     }
   },
 
   signUp: async (email: string, password: string, username?: string): Promise<string | undefined> => {
-    if (!supabase) return undefined;
+    if (!supabase || !beginAuth()) return undefined;
     set({ loading: true, error: null, confirmationPending: false });
+    try {
+      const { data, error } = await supabase.auth.signUp({ email, password });
 
-    const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) {
+        set({ error: friendlyAuthError(error.message), loading: false });
+        return undefined;
+      }
 
-    if (error) {
-      set({ error: error.message, loading: false });
-      return undefined;
-    }
+      // Supabase returns a user but no session when email confirmation is required
+      if (data.user && !data.session) {
+        if (username) {
+          await upsertProfile(data.user.id, { username });
+        }
+        set({ confirmationPending: true, loading: false, error: null });
+        return data.user.id;
+      }
 
-    // Supabase returns a user but no session when email confirmation is required
-    if (data.user && !data.session) {
-      // Save username to profile if provided (will be available after confirmation)
-      if (username) {
+      if (data.user?.id && username) {
         await upsertProfile(data.user.id, { username });
       }
-      set({ confirmationPending: true, loading: false, error: null });
-      return data.user.id;
+      set({
+        session: data.session,
+        user: data.user,
+        loading: false,
+        error: null,
+        pendingCloudLink: true,
+      });
+      if (data.user?.id) {
+        get().loadProfile();
+      }
+      return data.user?.id;
+    } catch (err) {
+      set({ error: friendlyAuthError(err instanceof Error ? err.message : 'Could not create the account.'), loading: false });
+      return undefined;
+    } finally {
+      endAuth();
     }
-
-    // Session exists = email confirmation disabled or auto-confirmed
-    if (data.user?.id && username) {
-      await upsertProfile(data.user.id, { username });
-    }
-    set({
-      session: data.session,
-      user: data.user,
-      loading: false,
-      error: null,
-      pendingCloudLink: true,
-    });
-    if (data.user?.id) {
-      get().loadProfile();
-    }
-    return data.user?.id;
   },
 
   signIn: async (email: string, password: string) => {
-    if (!supabase) return;
+    if (!supabase || !beginAuth()) return;
     set({ loading: true, error: null });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (error) {
-      if (error.message === 'Email not confirmed') {
-        set({ error: 'Please check your email and confirm your account before signing in.', loading: false });
-      } else {
-        set({ error: error.message, loading: false });
+      if (error) {
+        set({ error: friendlyAuthError(error.message), loading: false });
+        return;
       }
-    } else {
       set({
         session: data.session,
         user: data.user,
         loading: false,
         error: null,
         confirmationPending: false,
+        magicLinkSent: false,
         pendingCloudLink: true,
       });
       if (data.user?.id) {
         get().loadProfile();
       }
+    } catch (err) {
+      set({ error: friendlyAuthError(err instanceof Error ? err.message : 'Sign-in failed.'), loading: false });
+    } finally {
+      endAuth();
     }
   },
 
   signInWithMagicLink: async (email: string) => {
-    if (!supabase) return;
+    if (!supabase || !beginAuth()) return;
     set({ loading: true, error: null, magicLinkSent: false });
+    const returnPath = typeof window !== 'undefined' ? currentAppPath() : '/';
+    rememberAuthReturn(returnPath);
+    const redirectTo = getOAuthRedirectUrl(returnPath);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: redirectTo },
+      });
 
-    const redirectTo = getOAuthRedirectUrl();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: redirectTo },
-    });
-
-    if (error) {
-      set({ error: error.message, loading: false });
-    } else {
-      set({ loading: false, magicLinkSent: true });
+      if (error) {
+        consumeAuthReturn();
+        set({ error: friendlyAuthError(error.message), loading: false });
+      } else {
+        set({ loading: false, magicLinkSent: true });
+      }
+    } catch (err) {
+      consumeAuthReturn();
+      set({ error: friendlyAuthError(err instanceof Error ? err.message : 'Could not send the sign-in link.'), loading: false });
+    } finally {
+      endAuth();
     }
   },
 
@@ -258,56 +346,71 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       set({ error: 'Google sign-in is not set up for this install.', loading: false });
       return;
     }
+    if (!beginAuth()) return;
     set({ loading: true, error: null });
 
-    const redirectTo = getOAuthRedirectUrl();
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo,
-        skipBrowserRedirect: true,
-        queryParams: { prompt: 'select_account' },
-      },
-    });
-
-    if (error) {
-      set({ error: error.message, loading: false });
-      return;
-    }
-    if (!data?.url) {
-      set({ error: 'Google did not return a sign-in link. Try again.', loading: false });
-      return;
-    }
-
+    const returnPath = typeof window !== 'undefined' ? currentAppPath() : '/';
+    rememberAuthReturn(returnPath);
+    const redirectTo = getOAuthRedirectUrl(returnPath);
     try {
-      redirectBrowser(data.url);
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+          queryParams: { prompt: 'select_account' },
+        },
+      });
+
+      if (error) {
+        consumeAuthReturn();
+        set({ error: friendlyAuthError(error.message), loading: false });
+        return;
+      }
+      if (!data?.url) {
+        consumeAuthReturn();
+        set({ error: 'Google did not return a sign-in link. Try again.', loading: false });
+        return;
+      }
+
+      try {
+        redirectBrowser(data.url);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '';
+        // jsdom refuses navigation. A real browser leaves this page with the PKCE verifier stored.
+        if (/not implemented/i.test(message)) return;
+        consumeAuthReturn();
+        set({ error: 'Could not open Google sign-in. Try again.', loading: false });
+      }
     } catch (err) {
-      const message = err instanceof Error ? err.message : '';
-      // jsdom refuses navigation. A real browser leaves this page with the PKCE verifier stored.
-      if (/not implemented/i.test(message)) return;
-      set({ error: 'Could not open Google sign-in. Try again.', loading: false });
+      consumeAuthReturn();
+      set({ error: friendlyAuthError(err instanceof Error ? err.message : 'Could not open Google sign-in. Try again.'), loading: false });
+    } finally {
+      endAuth();
     }
   },
 
   signOut: async () => {
-    if (!supabase) return;
+    if (!supabase || !beginAuth()) return;
     set({ loading: true, error: null });
-
-    const { error } = await supabase.auth.signOut();
-
-    if (error) {
-      set({ error: error.message, loading: false });
-    } else {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+      }
+      consumeAuthReturn();
       set({
-        user: null,
-        session: null,
-        profile: null,
-        loading: false,
-        error: null,
-        confirmationPending: false,
-        recoveryMode: false,
-        pendingCloudLink: false,
+        ...clearedSession(),
+        error: error ? friendlyAuthError(error.message) : null,
       });
+    } catch (err) {
+      consumeAuthReturn();
+      set({
+        ...clearedSession(),
+        error: friendlyAuthError(err instanceof Error ? err.message : 'Signed out on this device.'),
+      });
+    } finally {
+      endAuth();
     }
   },
 
@@ -333,46 +436,63 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   resetPassword: async (email: string): Promise<boolean> => {
-    if (!supabase) return false;
+    if (!supabase || !beginAuth()) return false;
     set({ loading: true, error: null });
-
-    const redirectTo = getOAuthRedirectUrl();
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
-
-    if (error) {
-      set({ error: error.message, loading: false });
+    const returnPath = typeof window !== 'undefined' ? currentAppPath() : '/';
+    rememberAuthReturn(returnPath);
+    const redirectTo = getOAuthRedirectUrl(returnPath);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) {
+        set({ error: friendlyAuthError(error.message), loading: false });
+        return false;
+      }
+      set({ loading: false });
+      return true;
+    } catch (err) {
+      set({ error: friendlyAuthError(err instanceof Error ? err.message : 'Could not send the reset link.'), loading: false });
       return false;
+    } finally {
+      endAuth();
     }
-    set({ loading: false });
-    return true;
   },
 
   updatePassword: async (newPassword: string): Promise<boolean> => {
-    if (!supabase) return false;
+    if (!supabase || !beginAuth()) return false;
     set({ loading: true, error: null });
-
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-
-    if (error) {
-      set({ error: error.message, loading: false });
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        set({ error: friendlyAuthError(error.message), loading: false });
+        return false;
+      }
+      set({ loading: false, recoveryMode: false });
+      return true;
+    } catch (err) {
+      set({ error: friendlyAuthError(err instanceof Error ? err.message : 'Could not update the password.'), loading: false });
       return false;
+    } finally {
+      endAuth();
     }
-    set({ loading: false, recoveryMode: false });
-    return true;
   },
 
   resendConfirmation: async (email: string): Promise<boolean> => {
-    if (!supabase) return false;
+    if (!supabase || !beginAuth()) return false;
     set({ loading: true, error: null });
-
-    const { error } = await supabase.auth.resend({ type: 'signup', email });
-
-    if (error) {
-      set({ error: error.message, loading: false });
+    try {
+      const { error } = await supabase.auth.resend({ type: 'signup', email });
+      if (error) {
+        set({ error: friendlyAuthError(error.message), loading: false });
+        return false;
+      }
+      set({ loading: false });
+      return true;
+    } catch (err) {
+      set({ error: friendlyAuthError(err instanceof Error ? err.message : 'Could not resend the email.'), loading: false });
       return false;
+    } finally {
+      endAuth();
     }
-    set({ loading: false });
-    return true;
   },
 
   clearError: () => set({ error: null }),

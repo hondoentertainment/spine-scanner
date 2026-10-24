@@ -1,6 +1,11 @@
 import type { SupabaseClient, SupportedStorage } from '@supabase/supabase-js';
 import { createSpineSupabaseClient as createSharedSupabaseClient } from '../../packages/shared/src/supabaseClient.ts';
 import { e2eHooksEnabled, readE2ESupabaseConfig } from './e2eHooks.ts';
+import { noteOAuthCallback } from './googleAuth.ts';
+
+if (typeof window !== 'undefined') {
+  noteOAuthCallback(window.location.href);
+}
 
 /**
  * PKCE is required so the OAuth `code` survives the round trip back into the

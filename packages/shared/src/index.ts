@@ -12,3 +12,4 @@ export * from './supabaseClient';
 export * from './booksApi';
 export * from './libraryStore';
 export * from './authStore';
+export * from './authMessages';
