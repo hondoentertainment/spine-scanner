@@ -16,7 +16,7 @@ The scaffold already has: Expo SDK 58 and Expo Router; tabs for Home, Library, S
 
 5. **Supabase redirect allow-list.** Add `spinescanner://auth/callback` and the Expo Go `exp://…/--/auth/callback` URL printed on the Profile tab. Google Cloud’s authorized redirect stays the Supabase callback (`https://<PROJECT_REF>.supabase.co/auth/v1/callback`). Keep Skip nonce check on for Google. The anon key stays in EAS env (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`), never in git.
 
-6. **Account and library behavior under review.** A reviewer will sign in, deny the camera, kill the app, and relaunch. Email sign-in, the camera permission denial state, and the empty library need to be obvious. Cloud refresh merges with the device library (`mergePulledLibrary` in `packages/shared`): the device copy wins on the same id, cloud-only books are added, and a book that exists only on the phone is copied to the account. It does not delete cloud rows this phone lacks, and it does not run the web conflict list or sync queue.
+6. **Account and library behavior under review.** A reviewer will sign in, deny the camera, kill the app, and relaunch. Email sign-in, the camera permission denial state, and the empty library need to be obvious. Cloud refresh merges with this account's device library (`mergePulledLibrary` in `packages/shared`): the device copy wins on the same id, cloud-only books are added, and a book scanned for this account is copied up. Signing out parks that account's cache. The next account does not merge or upload it. Refresh does not delete cloud rows this phone lacks, and it does not run the web conflict list or sync queue.
 
 ## P1 — Product parity
 

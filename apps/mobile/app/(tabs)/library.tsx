@@ -30,6 +30,7 @@ export default function LibraryScreen() {
     setRefreshing(true);
     setError(null);
     setNote(null);
+    useBookStore.getState().claimAccount(user.id);
     const localBooks = useBookStore.getState().books;
     const localShelves = useBookStore.getState().shelves;
     const [bookResult, shelfResult] = await Promise.all([

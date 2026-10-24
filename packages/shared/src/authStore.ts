@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import type { Session, SupabaseClient, User } from '@supabase/supabase-js';
 
+export interface CreateAuthStoreOptions {
+  /**
+   * Called when the signed-in user id changes, including sign-out (null).
+   * The phone library uses this to park the previous account's books.
+   */
+  onAccountChange?: (userId: string | null) => void;
+}
+
 export interface MobileAuthState {
   user: User | null;
   session: Session | null;
@@ -20,8 +28,18 @@ export interface MobileAuthState {
  * Google OAuth stays in the app shell because it needs the system browser.
  * The web auth store is still separate: it owns the PWA redirect, e2e seed, and visibility listeners.
  */
-export function createAuthStore(getClient: () => SupabaseClient | null) {
+export function createAuthStore(
+  getClient: () => SupabaseClient | null,
+  options: CreateAuthStoreOptions = {},
+) {
   let unsubscribe: (() => void) | null = null;
+  let publishedUserId: string | null = null;
+
+  function publishUser(userId: string | null): void {
+    if (publishedUserId === userId) return;
+    publishedUserId = userId;
+    options.onAccountChange?.(userId);
+  }
 
   return create<MobileAuthState>((set) => ({
     user: null,
@@ -30,18 +48,22 @@ export function createAuthStore(getClient: () => SupabaseClient | null) {
     error: null,
     confirmationPending: false,
     clearError: () => set({ error: null }),
-    setSession: (session) => set({
-      session,
-      user: session?.user ?? null,
-      loading: false,
-      error: null,
-    }),
+    setSession: (session) => {
+      set({
+        session,
+        user: session?.user ?? null,
+        loading: false,
+        error: null,
+      });
+      publishUser(session?.user?.id ?? null);
+    },
     initialize: async () => {
       unsubscribe?.();
       unsubscribe = null;
       const client = getClient();
       if (!client) {
         set({ loading: false, user: null, session: null });
+        publishUser(null);
         return;
       }
       const { data, error } = await client.auth.getSession();
@@ -54,6 +76,7 @@ export function createAuthStore(getClient: () => SupabaseClient | null) {
           user: data.session?.user ?? null,
           error: null,
         });
+        publishUser(data.session?.user?.id ?? null);
       }
       const { data: listener } = client.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_OUT') {
@@ -63,6 +86,7 @@ export function createAuthStore(getClient: () => SupabaseClient | null) {
             loading: false,
             confirmationPending: false,
           });
+          publishUser(null);
           return;
         }
         set({
@@ -70,6 +94,7 @@ export function createAuthStore(getClient: () => SupabaseClient | null) {
           user: session?.user ?? null,
           loading: false,
         });
+        publishUser(session?.user?.id ?? null);
       });
       unsubscribe = () => listener.subscription.unsubscribe();
     },
@@ -97,6 +122,7 @@ export function createAuthStore(getClient: () => SupabaseClient | null) {
         error: null,
         confirmationPending: false,
       });
+      publishUser(data.user?.id ?? null);
       return true;
     },
     signUp: async (email, password) => {
@@ -121,6 +147,7 @@ export function createAuthStore(getClient: () => SupabaseClient | null) {
         loading: false,
         error: null,
       });
+      publishUser(data.user?.id ?? null);
       return true;
     },
     signOut: async () => {
@@ -139,6 +166,7 @@ export function createAuthStore(getClient: () => SupabaseClient | null) {
         error: null,
         confirmationPending: false,
       });
+      publishUser(null);
     },
   }));
 }
