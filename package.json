@@ -33,16 +33,16 @@
   "dependencies": {
     "@sentry/react": "^11.8.0",
     "@supabase/supabase-js": "^2.118.0",
-    "@tanstack/react-virtual": "^3.14.20",
+    "@tanstack/react-virtual": "^3.14.22",
     "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.23.0",
-    "lucide-react": "^1.57.0",
+    "lucide-react": "^1.61.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.4",
     "react-webcam": "^7.2.0",
     "tesseract.js": "^7.0.0",
-    "zustand": "^5.0.15"
+    "zustand": "^5.0.16"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
@@ -66,7 +66,7 @@
     "tsx": "^4.23.15",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.2",
-    "vite": "^8.3.4",
+    "vite": "^8.3.5",
     "vite-plugin-pwa": "^2.0.0",
     "vitest": "^5.0.0"
   }
