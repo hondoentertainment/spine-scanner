@@ -80,8 +80,42 @@ describe('createAuthStore', () => {
     const store = createAuthStore(() => null);
     await expect(store.getState().signIn('a@b.c', 'pw')).resolves.toBe(false);
     await expect(store.getState().signUp('a@b.c', 'pw')).resolves.toBe(false);
+    await expect(store.getState().signInWithMagicLink('a@b.c', 'spinescanner://auth/callback')).resolves.toBe(false);
     await store.getState().signOut();
     expect(store.getState().error).toMatch(/not set up/);
+    expect(store.getState().magicLinkSent).toBe(false);
+  });
+
+  it('emails a magic link and reports validation and provider errors', async () => {
+    const signInWithOtp = vi.fn().mockResolvedValue({ error: null });
+    const store = createAuthStore(() => client({ signInWithOtp }));
+    await expect(store.getState().signInWithMagicLink('not-an-email', 'spinescanner://auth/callback')).resolves.toBe(false);
+    expect(store.getState().error).toMatch(/valid email/i);
+    expect(signInWithOtp).not.toHaveBeenCalled();
+
+    await expect(store.getState().signInWithMagicLink('reader@example.com', 'spinescanner://auth/callback')).resolves.toBe(true);
+    expect(signInWithOtp).toHaveBeenCalledWith({
+      email: 'reader@example.com',
+      options: { emailRedirectTo: 'spinescanner://auth/callback' },
+    });
+    expect(store.getState().magicLinkSent).toBe(true);
+    expect(store.getState().loading).toBe(false);
+
+    store.getState().clearMagicLinkSent();
+    expect(store.getState().magicLinkSent).toBe(false);
+
+    const limited = createAuthStore(() => client({
+      signInWithOtp: vi.fn().mockResolvedValue({ error: { message: 'over_email_send_rate_limit' } }),
+    }));
+    await expect(limited.getState().signInWithMagicLink('reader@example.com', 'spinescanner://auth/callback')).resolves.toBe(false);
+    expect(limited.getState().error).toMatch(/too many attempts/i);
+    expect(limited.getState().magicLinkSent).toBe(false);
+
+    const offline = createAuthStore(() => client({
+      signInWithOtp: vi.fn().mockRejectedValue(new Error('Network request failed')),
+    }));
+    await expect(offline.getState().signInWithMagicLink('reader@example.com', 'spinescanner://auth/callback')).resolves.toBe(false);
+    expect(offline.getState().error).toMatch(/connection/i);
   });
 
   it('waits for email confirmation on sign-up and reports provider errors', async () => {

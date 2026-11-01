@@ -88,3 +88,18 @@ Notes:
 - Known issues:
 ```
 
+## Expo app (`apps/mobile`)
+
+These checks are for the Expo Router app, separate from the browser matrix above. Run them in Expo Go where noted, and on a development build for the magic-link return. `spinescanner://auth/callback` is the redirect. Do not change the Supabase dashboard for this pass. Multi-book shelf recognition is out of scope.
+
+| ID | Where | Test case | Pass criteria |
+|---|---|---|---|
+| E01 | Profile | Empty or invalid email, then Email me a sign-in link | No request is sent. The screen asks for a valid email. The button is not stuck busy. |
+| E02 | Profile | Valid email | The button reads Sending link…, ignores a second tap, then Check your email names that address. |
+| E03 | Profile | Open the link on a development build | The app returns through `spinescanner://auth/callback` and Profile shows the account. A provider or network failure shows a short message. Expo Go cannot claim this scheme. |
+| E04 | Scan | Take photo or Choose photo, leave the title blank, add the book | Library shows Unknown Title with a Needs review marker. The book is photo-only. |
+| E05 | Scan | Add a photo book with a title | Library shows that title and Needs review. |
+| E06 | Book | Lend with a borrower and a due date, then Mark returned | The row shows Lent out (or a due label) while it is out, then clears after return. |
+| E07 | Book | Set room, case, and shelf | The library row shows the place, for example Study · Oak · Shelf 2. |
+| E08 | Library | Sign in, edit a loan or place, Refresh from cloud | The same fields are still on the book after refresh. A failed cloud save says so and keeps the device copy. |
+

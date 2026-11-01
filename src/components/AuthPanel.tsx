@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/useAuthStore.ts';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
 import { upsertProfile } from '../lib/profiles.ts';
 import { accountIdentity } from '../lib/accountIdentity.ts';
-import { INSTALLED_PWA_HINT, isInstalledPwa } from '../lib/googleAuth.ts';
+import { emailAddressProblem, INSTALLED_PWA_HINT, isInstalledPwa } from '../lib/googleAuth.ts';
 import GoogleSignInButton from './GoogleSignInButton.tsx';
 import { LogIn, LogOut, UserPlus, Cloud, AlertCircle, Loader, X, WifiOff, Settings, Mail, ArrowLeft, CheckCircle2, KeyRound, RefreshCw } from 'lucide-react';
 import s from './AuthPanel.module.css';
@@ -20,15 +20,6 @@ interface AuthPanelProps {
 }
 
 type AuthMode = 'signin' | 'password' | 'signup' | 'forgot' | 'reset-sent' | 'confirm-pending' | 'magic-sent';
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function emailProblem(value: string): string | null {
-  const email = value.trim();
-  if (!email) return 'Enter your email address.';
-  if (!EMAIL_PATTERN.test(email)) return 'Enter a valid email address.';
-  return null;
-}
 
 function passwordProblem(value: string): string | null {
   if (!value) return 'Enter your password.';
@@ -132,7 +123,7 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSyncedAt,
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
-    const nextEmailError = emailProblem(email);
+    const nextEmailError = emailAddressProblem(email);
     const nextPasswordError = passwordProblem(password);
     setEmailError(nextEmailError);
     setPasswordError(nextPasswordError);
@@ -160,7 +151,7 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSyncedAt,
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
-    const nextEmailError = emailProblem(email);
+    const nextEmailError = emailAddressProblem(email);
     setEmailError(nextEmailError);
     if (nextEmailError) {
       emailRef.current?.focus();
@@ -173,7 +164,7 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ onSyncNow, syncing, lastSyncedAt,
     e.preventDefault();
     if (loading) return;
     const target = (resetEmail || email).trim();
-    const nextEmailError = emailProblem(target);
+    const nextEmailError = emailAddressProblem(target);
     setEmailError(nextEmailError);
     if (nextEmailError) {
       emailRef.current?.focus();

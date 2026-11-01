@@ -1,5 +1,6 @@
 import { getRouterBasename } from './routerBasename.ts';
 import {
+  emailAddressProblem,
   friendlyAuthError,
   GOOGLE_CANCELLED_MESSAGE,
   GOOGLE_PROVIDER_DISABLED_MESSAGE,
@@ -12,6 +13,7 @@ import {
 } from '../../packages/shared/src/authMessages.ts';
 
 export {
+  emailAddressProblem,
   friendlyAuthError,
   parseOAuthCallback,
   sanitizeReturnPath,

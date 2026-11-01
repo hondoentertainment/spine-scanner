@@ -19,6 +19,7 @@ import type { ShelfReviewItem } from './shelf/types.ts';
 import { importShelfBooks } from './shelf/reviewImport.ts';
 import { BookOpen, Library, Scan, AlertCircle, Layers, User, Sparkles, Cloud, BookMarked, ChevronRight, Home } from 'lucide-react';
 import { generateAmazonLink } from './utils/amazonLink.ts';
+import { createPhotoOnlyBook } from './utils/bookState.ts';
 import { isValidIsbn, normalizeToIsbn13 } from './utils/isbnValidation.ts';
 import { isbnExistsInLibrary } from './utils/libraryUtils.ts';
 import { batchSummaryMessage } from './utils/batchSession.ts';
@@ -515,30 +516,13 @@ function App() {
 
   const handlePhotoCapture = useCallback((imageDataUrl: string) => {
     const id = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2);
-    const photoIsbn = `photo-${id}`;
-    const newBook: BookEntry = {
-      id,
-      isbn: photoIsbn,
-      isPhotoOnly: true,
-      title: 'Unknown Title',
-      author: 'Unknown Author',
-      pageCount: 0,
-      amazonLink: '',
-      coverImg: imageDataUrl,
-      status: 'to-read',
-      notes: '',
-      dateAdded: new Date().toISOString(),
-      shelfIds: [],
-      needsReview: true,
-      reviewReason: 'Photo-only capture. Add metadata when ready.',
-      metadataSource: 'manual',
-    };
+    const newBook = createPhotoOnlyBook({ id, coverImg: imageDataUrl });
     addBook(newBook);
     track('book_added', { method: 'photo' });
     setRecentAdd({ title: newBook.title, isbn: newBook.isbn });
     toast(`Added ${newBook.title}`, 'success', 6000, undefined, {
       label: 'View',
-      onClick: () => navigate(`/library?isbn=${encodeURIComponent(photoIsbn)}`),
+      onClick: () => navigate(`/library?isbn=${encodeURIComponent(newBook.isbn)}`),
     });
     if (user && online) {
       void pushBooks(user.id, [...books, newBook]).catch(() => toast('Cloud sync failed. Changes saved locally.', 'warning'));

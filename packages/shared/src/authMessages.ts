@@ -31,6 +31,16 @@ export const GOOGLE_PROVIDER_DISABLED_MESSAGE =
 export const GOOGLE_CANCELLED_MESSAGE =
   'Google sign-in was cancelled. Your library is still on this device.';
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Same check the web sign-in panel uses before it sends a magic link. */
+export function emailAddressProblem(value: string): string | null {
+  const email = value.trim();
+  if (!email) return 'Enter your email address.';
+  if (!EMAIL_PATTERN.test(email)) return 'Enter a valid email address.';
+  return null;
+}
+
 export interface OAuthReturnError {
   cancelled: boolean;
   message: string;

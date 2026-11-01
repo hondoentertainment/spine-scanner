@@ -5,6 +5,40 @@ import { normalizePhysicalLocation } from './physicalLocation';
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
+/** Shown until someone fills in a book that was added from a photo. */
+export const PHOTO_ONLY_REVIEW_REASON = 'Photo-only capture. Add metadata when ready.';
+
+/**
+ * A book saved from one photo, with no ISBN lookup.
+ * Title is optional. `isPhotoOnly` and `needsReview` match the web capture path.
+ */
+export function createPhotoOnlyBook(input: {
+  id: string;
+  title?: string | null;
+  coverImg?: string | null;
+  dateAdded?: string;
+}): BookEntry {
+  const title = typeof input.title === 'string' ? input.title.trim() : '';
+  const coverImg = typeof input.coverImg === 'string' ? input.coverImg.trim() : '';
+  return {
+    id: input.id,
+    isbn: `photo-${input.id}`,
+    isPhotoOnly: true,
+    title: title || 'Unknown Title',
+    author: 'Unknown Author',
+    pageCount: 0,
+    amazonLink: '',
+    coverImg,
+    status: 'to-read',
+    notes: '',
+    dateAdded: input.dateAdded ?? new Date().toISOString(),
+    shelfIds: [],
+    needsReview: true,
+    reviewReason: PHOTO_ONLY_REVIEW_REASON,
+    metadataSource: 'manual',
+  };
+}
+
 export function inferNeedsReview(book: Partial<BookEntry>): boolean {
   if (book.needsReview === true) return true;
   if (book.needsReview === false) return false;
