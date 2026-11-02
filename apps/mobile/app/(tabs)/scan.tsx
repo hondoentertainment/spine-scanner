@@ -1,16 +1,17 @@
 import { useCallback, useRef, useState } from 'react';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFocusEffect } from 'expo-router';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import {
+  createPhotoOnlyBook,
   isValidIsbn,
   lookupIsbnWithFallback,
   normalizeToIsbn13,
-  upsertUserBook,
   type BookEntry,
 } from '@spine/shared';
 
-import { supabase } from '../../src/lib/supabase';
+import { pickBookPhoto } from '../../src/books/pickBookPhoto';
+import { saveBookToAccount } from '../../src/books/saveToAccount';
 import { useAuthStore, useBookStore } from '../../src/store';
 import { colors } from '../../src/theme';
 
@@ -31,6 +32,10 @@ export default function ScanScreen() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState<BookEntry | null>(null);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [photoTitle, setPhotoTitle] = useState('');
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [pickerBusy, setPickerBusy] = useState(false);
   const books = useBookStore((state) => state.books);
   const addBook = useBookStore((state) => state.addBook);
   const user = useAuthStore((state) => state.user);
@@ -88,23 +93,97 @@ export default function ScanScreen() {
     }
   }, [books]);
 
+  const saveBook = useCallback(async (book: BookEntry) => {
+    addBook(book);
+    const cloudError = await saveBookToAccount(book);
+    if (!user) {
+      setMessage('Saved on this device. Sign in to copy it to your account.');
+    } else if (cloudError) {
+      setMessage(`Saved on this device. Cloud save failed: ${cloudError}`);
+    } else {
+      setMessage('Saved to your library.');
+    }
+  }, [addBook, user]);
+
   const save = useCallback(async () => {
     if (!pending) return;
-    addBook(pending);
-    if (supabase && user?.id) {
-      const error = await upsertUserBook(supabase, user.id, pending);
-      setMessage(error ? `Saved on this device. Cloud save failed: ${error.message}` : 'Saved to your library.');
-    } else {
-      setMessage('Saved on this device. Sign in to copy it to your account.');
-    }
+    await saveBook(pending);
     setPending(null);
     setManualIsbn('');
     scanLock.current = false;
-  }, [addBook, pending, user]);
+  }, [pending, saveBook]);
+
+  const choosePhoto = useCallback(async (source: 'camera' | 'library') => {
+    if (pickerBusy || photoBusy) return;
+    setPickerBusy(true);
+    setMessage(null);
+    try {
+      const picked = await pickBookPhoto(source);
+      if ('error' in picked) {
+        setMessage(picked.error);
+        return;
+      }
+      if ('cancelled' in picked) return;
+      setPhoto(picked.coverImg);
+      setPending(null);
+      scanLock.current = false;
+    } catch {
+      setMessage('Could not open that photo. Try again.');
+    } finally {
+      setPickerBusy(false);
+    }
+  }, [photoBusy, pickerBusy]);
+
+  const savePhoto = useCallback(async () => {
+    if (!photo || photoBusy) return;
+    setPhotoBusy(true);
+    try {
+      await saveBook(createPhotoOnlyBook({ id: newId(), title: photoTitle, coverImg: photo }));
+      setPhoto(null);
+      setPhotoTitle('');
+    } finally {
+      setPhotoBusy(false);
+    }
+  }, [photo, photoBusy, photoTitle, saveBook]);
 
   return (
-    <View style={styles.screen}>
-      <Text style={styles.note}>Shelf photos are not in this build. Point the camera at an ISBN barcode.</Text>
+    <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
+      <Text style={styles.note}>
+        Add one book from a photo. The title is optional. A shelf photo with more than one book is not recognized in this build.
+      </Text>
+      <View style={styles.row}>
+        <Pressable style={styles.secondaryFlex} disabled={pickerBusy || photoBusy} onPress={() => { void choosePhoto('camera'); }}>
+          <Text style={styles.secondaryText}>{pickerBusy ? 'Opening…' : 'Take photo'}</Text>
+        </Pressable>
+        <Pressable style={styles.secondaryFlex} disabled={pickerBusy || photoBusy} onPress={() => { void choosePhoto('library'); }}>
+          <Text style={styles.secondaryText}>{pickerBusy ? 'Opening…' : 'Choose photo'}</Text>
+        </Pressable>
+      </View>
+      {photo ? (
+        <View style={styles.card}>
+          <Image source={{ uri: photo }} style={styles.preview} accessibilityLabel="Selected book photo" />
+          <TextInput
+            value={photoTitle}
+            onChangeText={setPhotoTitle}
+            placeholder="Title (optional)"
+            placeholderTextColor={colors.muted}
+            accessibilityLabel="Photo book title"
+            style={styles.input}
+          />
+          <Pressable style={styles.button} disabled={photoBusy} onPress={() => { void savePhoto(); }}>
+            <Text style={styles.buttonText}>{photoBusy ? 'Saving…' : 'Add photo book'}</Text>
+          </Pressable>
+          <Pressable
+            style={styles.secondary}
+            onPress={() => {
+              setPhoto(null);
+              setPhotoTitle('');
+            }}
+          >
+            <Text style={styles.secondaryText}>Discard photo</Text>
+          </Pressable>
+        </View>
+      ) : null}
       {permission?.granted && focused ? (
         <CameraView
           style={styles.camera}
@@ -158,12 +237,15 @@ export default function ScanScreen() {
           </Pressable>
         </View>
       ) : null}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background, padding: 16, gap: 12 },
+  screen: { backgroundColor: colors.background, padding: 16, gap: 12 },
+  row: { flexDirection: 'row', gap: 10 },
+  secondaryFlex: { flex: 1, backgroundColor: colors.card, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+  preview: { height: 160, borderRadius: 12, backgroundColor: colors.background },
   note: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   camera: { height: 220, borderRadius: 16, overflow: 'hidden' },
   cameraFallback: {

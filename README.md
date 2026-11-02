@@ -63,7 +63,9 @@ Scan the QR code with the Expo Go app on your phone, or press `i` in the termina
 
 Google sign-in uses that scheme in a development or store build. The redirect Supabase must allow is exactly `spinescanner://auth/callback` (double slash, not `spinescanner:///auth/callback`). Expo Go cannot claim `spinescanner://`, so `expo-auth-session` falls back to an `exp://` redirect while you are in Expo Go. Add whichever redirect the Profile tab prints to Supabase → Authentication → URL Configuration → Redirect URLs. The Google Cloud client still redirects only to `https://inkbptoncwddalecisyk.supabase.co/auth/v1/callback`. Keep **Skip nonce check** on for the Google provider, the same as the installed PWA.
 
-Camera barcode scanning in Expo Go works when the Expo Go build includes `expo-camera`. If the preview cannot open the camera, use a development build instead of Expo Go.
+Email me a sign-in link uses that same `spinescanner://auth/callback` redirect (code exchange or hash session). Expo Go cannot open it. Confirm the return on a development or store build. Photo books, loans, and room / case / shelf edits work in Expo Go. See the Expo section of `e2e/MOBILE_TEST_MATRIX.md`.
+
+Camera barcode scanning in Expo Go works when the Expo Go build includes `expo-camera`. Taking or choosing one book photo uses `expo-image-picker`, which Expo Go includes. If the preview cannot open the camera, use a development build instead of Expo Go.
 
 ### Build with EAS
 

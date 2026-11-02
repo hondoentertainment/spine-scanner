@@ -2,6 +2,15 @@ import type { BookEntry, Shelf } from './types';
 import { migrateBooks } from './schemaMigrations';
 
 /**
+ * Device fields win. Keys the device copy never stored stay from the cloud
+ * copy, so a refresh does not drop photo-only, review, loan, or location
+ * values this phone has not overwritten.
+ */
+export function mergeBookCopies(local: BookEntry, remote: BookEntry): BookEntry {
+  return { ...remote, ...local };
+}
+
+/**
  * Merge two book lists: combine all unique IDs, local wins on conflict.
  * This is a pure function — useful for testing independently of Supabase.
  */
@@ -16,7 +25,9 @@ export function mergeBooksLists(localBooks: BookEntry[], remoteBooks: BookEntry[
     const local = localMap.get(id);
     const remote = remoteMap.get(id);
 
-    if (local) {
+    if (local && remote) {
+      merged.push(mergeBookCopies(local, remote));
+    } else if (local) {
       merged.push(local);
     } else if (remote) {
       merged.push(remote);

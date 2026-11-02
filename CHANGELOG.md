@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### iOS app
+
+- **Email link.** Profile can email a sign-in link as well as use a password or Google. The link returns to `spinescanner://auth/callback`. The button shows a busy state, checks the email, and says check your email. A bad address or a failed send shows a short message.
+- **Photo books.** Scan can add one book from the camera or the photo library. The title is optional. The book is saved as photo-only and needs review, and Library marks it Needs review. A shelf photo with more than one book is not recognized.
+- **Loans and places.** Open a book to lend it (name and due date), mark it returned, and set a room, case, and shelf. Refresh from cloud keeps and uploads those fields, plus photo-only and needs review.
+
 ### Phone library sync
 
 - **Refresh keeps books that are only on the phone.** Pulling the cloud library merges it with the device copy. The same book keeps the device version. A book scanned before sign-in stays, and a successful refresh copies it to the account. Books that exist only in the cloud are added. Refresh does not delete cloud books that this phone does not have.

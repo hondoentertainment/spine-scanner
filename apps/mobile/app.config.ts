@@ -1,6 +1,7 @@
 import type { ExpoConfig } from 'expo/config';
 
-const cameraPermission = 'Spine Scanner uses the camera to scan ISBN barcodes on books.';
+const cameraPermission = 'Spine Scanner uses the camera to scan ISBN barcodes and to photograph a book.';
+const photosPermission = 'Spine Scanner uses your photos so you can add a book from a picture.';
 
 const config: ExpoConfig = {
   name: 'Spine Scanner',
@@ -15,6 +16,7 @@ const config: ExpoConfig = {
     bundleIdentifier: 'com.hondoentertainment.spinescanner',
     infoPlist: {
       NSCameraUsageDescription: cameraPermission,
+      NSPhotoLibraryUsageDescription: photosPermission,
     },
   },
   android: {
@@ -49,6 +51,14 @@ const config: ExpoConfig = {
         cameraPermission,
         microphonePermission: false,
         recordAudioAndroid: false,
+      },
+    ],
+    [
+      'expo-image-picker',
+      {
+        photosPermission,
+        cameraPermission,
+        microphonePermission: false,
       },
     ],
   ],

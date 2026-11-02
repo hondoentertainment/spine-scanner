@@ -1,8 +1,12 @@
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import {
   fetchUserBooks,
   fetchUserShelves,
+  formatPhysicalLocation,
+  isOnLoan,
+  loanBadgeText,
   mergePulledLibrary,
   upsertUserBooks,
   upsertUserShelves,
@@ -85,17 +89,28 @@ export default function LibraryScreen() {
         )}
         ListEmptyComponent={(
           <Text style={styles.muted}>
-            No books on this device yet. Scan an ISBN, or pull down after you sign in.
+            No books on this device yet. Scan an ISBN or add a photo, or pull down after you sign in.
           </Text>
         )}
         contentContainerStyle={books.length === 0 ? styles.empty : styles.list}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text style={styles.title}>{item.title || 'Untitled'}</Text>
-            <Text style={styles.muted}>{item.author || 'Unknown author'}</Text>
-            <Text style={styles.meta}>{item.isbn} · {item.status}</Text>
-          </View>
-        )}
+        renderItem={({ item }) => {
+          const place = formatPhysicalLocation(item);
+          return (
+            <Pressable
+              style={styles.card}
+              onPress={() => router.push(`/book/${item.id}`)}
+              accessibilityRole="button"
+              accessibilityLabel={item.needsReview ? `${item.title || 'Untitled'}. Needs review` : item.title || 'Untitled'}
+            >
+              <Text style={styles.title}>{item.title || 'Untitled'}</Text>
+              <Text style={styles.muted}>{item.author || 'Unknown author'}</Text>
+              <Text style={styles.meta}>{item.isPhotoOnly ? 'Photo' : item.isbn} · {item.status}</Text>
+              {item.needsReview ? <Text style={styles.review}>Needs review</Text> : null}
+              {isOnLoan(item) ? <Text style={styles.meta}>{loanBadgeText(item) ?? 'Lent out'}</Text> : null}
+              {place ? <Text style={styles.meta}>{place}</Text> : null}
+            </Pressable>
+          );
+        }}
       />
       {user ? (
         <Pressable style={styles.button} onPress={() => { void refresh(); }}>
@@ -122,6 +137,18 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 16, fontWeight: '600' },
   muted: { color: colors.muted, fontSize: 14, lineHeight: 20 },
   meta: { color: colors.muted, fontSize: 12 },
+  review: {
+    alignSelf: 'flex-start',
+    color: '#78350f',
+    backgroundColor: '#fde68a',
+    overflow: 'hidden',
+    fontSize: 12,
+    fontWeight: '700',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    marginTop: 4,
+  },
   error: { color: colors.danger, paddingHorizontal: 16, paddingTop: 12 },
   note: { color: colors.muted, paddingHorizontal: 16, paddingTop: 12, fontSize: 14, lineHeight: 20 },
   button: { margin: 16, backgroundColor: colors.card, borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
