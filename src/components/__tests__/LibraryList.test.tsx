@@ -342,7 +342,7 @@ describe('LibraryList', () => {
     });
     renderLibraryList(<LibraryList />);
     fireEvent.click(screen.getByRole('tab', { name: 'Shelves' }));
-    fireEvent.click(screen.getByRole('button', { name: /^Study/ }));
+    fireEvent.click(screen.getByRole('treeitem', { name: /^Room Study/ }));
     expect(screen.getByText('Physical shelf map')).toBeInTheDocument();
     expect(screen.queryByLabelText('Search library')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Show these books in All books' }));
