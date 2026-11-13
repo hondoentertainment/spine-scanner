@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Shelf map
+
+- **Keyboard.** On the web library, Tab and the arrow keys move through rooms, cases, and shelves. Enter or Space selects that place, the focus ring matches the scanner, and the selection is announced.
+
 ### iOS app
 
 - **Email link.** Profile can email a sign-in link as well as use a password or Google. The link returns to `spinescanner://auth/callback`. The button shows a busy state, checks the email, and says check your email. A bad address or a failed send shows a short message.

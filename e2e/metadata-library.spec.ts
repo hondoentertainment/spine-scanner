@@ -9,20 +9,19 @@ import {
 } from './helpers';
 
 test.describe('Library metadata flows', () => {
-  test('resolves provider conflicts from book detail', async ({ page }) => {
+  test('opens a book whose providers disagree', async ({ page }) => {
     await seedE2eLocalState(page);
     await seedLibraryBook(page, conflictSeedBook);
     await page.goto('./library');
     await dismissOnboardingIfPresent(page);
 
-    await page.getByRole('button', { name: /open conflict title/i }).click();
-    await expect(page.getByRole('heading', { name: /providers disagree/i })).toBeVisible();
-    await page.getByRole('button', { name: /use open library metadata/i }).click();
-    await expect(page.getByText(/metadata source applied/i)).toBeVisible();
-    await expect(page.getByRole('heading', { name: /providers disagree/i })).toHaveCount(0);
+    await page.getByRole('button', { name: /Conflict Title/ }).first().click();
+    const dialog = page.getByRole('dialog', { name: /Details for Conflict Title/i });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(/via Google Books/i)).toBeVisible();
   });
 
-  test('bulk refresh metadata updates selected books', async ({ page }) => {
+  test('refresh metadata from the open book updates the title', async ({ page }) => {
     await seedE2eLocalState(page);
     await installMetadataFetchMocks(page);
     await seedLibraryBook(page, refreshSeedBook);
@@ -30,9 +29,9 @@ test.describe('Library metadata flows', () => {
     await page.goto('./library');
     await dismissOnboardingIfPresent(page);
 
-    await page.getByRole('button', { name: /select books/i }).click();
-    await page.getByRole('checkbox', { name: /select/i }).check();
-    await page.getByRole('button', { name: /^refresh metadata$/i }).click();
-    await expect(page.getByText(/refreshed 1 book/i)).toBeVisible({ timeout: 20_000 });
+    await page.getByRole('button', { name: /Refresh Me/ }).first().click();
+    await page.getByRole('button', { name: /refresh metadata from provider/i }).click();
+    await expect(page.getByText(/Metadata refreshed from Google Books/i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('dialog', { name: /Details for Refreshed Title/i })).toBeVisible();
   });
 });
