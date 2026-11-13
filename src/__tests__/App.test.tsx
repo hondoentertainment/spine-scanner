@@ -61,6 +61,24 @@ vi.mock('../components/Scanner.tsx', () => ({
     onViewLibrary: (isbn?: string) => void;
     onOpenSupport: () => void;
     onOpenPrivacy: () => void;
+    onNeedManualIsbn?: () => void;
+    onEditIsbn?: (isbn: string) => void;
+    onShelfImport?: (items: Array<{
+      id: string;
+      title: string;
+      author: string;
+      isbn: string;
+      pageCount: number;
+      coverImg: string;
+      previewUrl: string;
+      confidence: number;
+      decision: 'accept' | 'reject';
+      metadataSource: 'manual';
+      detectionMethod: 'barcode';
+      needsReview: boolean;
+      reviewReason: string;
+      rawText: string;
+    }>) => boolean | void;
   }) => (
     <div data-testid="mock-scanner">
       <button type="button" onClick={() => props.onScan('9780141036144')}>scan-valid</button>
@@ -79,6 +97,45 @@ vi.mock('../components/Scanner.tsx', () => ({
       <button type="button" onClick={() => props.onViewLibrary()}>view-library</button>
       <button type="button" onClick={props.onOpenSupport}>open-support</button>
       <button type="button" onClick={props.onOpenPrivacy}>open-privacy</button>
+      <button type="button" onClick={() => props.onNeedManualIsbn?.()}>need-manual</button>
+      <button type="button" onClick={() => props.onEditIsbn?.('9780141036144')}>edit-isbn</button>
+      <button
+        type="button"
+        onClick={() => props.onShelfImport?.([{
+          id: 'row-1',
+          title: 'Shelf Title',
+          author: 'Shelf Author',
+          isbn: '9780141036144',
+          pageCount: 100,
+          coverImg: '',
+          previewUrl: '',
+          confidence: 0.9,
+          decision: 'accept',
+          metadataSource: 'manual',
+          detectionMethod: 'barcode',
+          needsReview: false,
+          reviewReason: '',
+          rawText: '',
+        }, {
+          id: 'row-2',
+          title: 'Second Shelf',
+          author: 'Shelf Author',
+          isbn: '9780441172719',
+          pageCount: 200,
+          coverImg: '',
+          previewUrl: '',
+          confidence: 0.8,
+          decision: 'accept',
+          metadataSource: 'manual',
+          detectionMethod: 'barcode',
+          needsReview: false,
+          reviewReason: '',
+          rawText: '',
+        }])}
+      >
+        import-shelf
+      </button>
+      <button type="button" onClick={() => props.onShelfImport?.([])}>import-shelf-empty</button>
     </div>
   ),
 }));
@@ -827,6 +884,120 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(screen.getByText('recovered')).toBeInTheDocument();
     spy.mockRestore();
+  });
+
+  it('clears a library deep link after the opened book is dismissed', async () => {
+    renderApp('/library?isbn=9780141036144&series=Discworld');
+    expect(await screen.findByText('open-isbn:9780141036144')).toBeInTheDocument();
+    expect(screen.getByText('series:Discworld')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'finish-open' }));
+    expect(screen.getByText('open-isbn:')).toBeInTheDocument();
+    expect(screen.getByText('series:Discworld')).toBeInTheDocument();
+  });
+
+  it('keeps a saved cloud-link choice from merging on sign-in', async () => {
+    localStorage.setItem('spine-scanner.cloud-link', JSON.stringify({ 'user-1': 'later' }));
+    useBookStore.setState({ books: [makeBook()], shelves: [] });
+    useAuthStore.setState({ user: fakeUser as never, pendingCloudLink: true });
+    renderApp('/home');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    expect(mergeSync).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: /add this device/i })).not.toBeInTheDocument();
+  });
+
+  it('shows a merge error when the account cannot be reached', async () => {
+    useBookStore.setState({ books: [makeBook({ title: 'Local only' })], shelves: [] });
+    useAuthStore.setState({ user: fakeUser as never, pendingCloudLink: true });
+    mergeSync.mockResolvedValue(null);
+    renderApp('/home');
+    fireEvent.click(await screen.findByRole('button', { name: /merge and sync/i }));
+    expect(await screen.findByText(/Could not reach your account/)).toBeInTheDocument();
+    expect(useBookStore.getState().books[0]?.title).toBe('Local only');
+  });
+
+  it('toasts when a manual sync flush fails', async () => {
+    isSupabaseConfigured.mockReturnValue(true);
+    useAuthStore.setState({ user: fakeUser as never });
+    useSyncQueue.setState({ pendingChanges: 2, flushing: false });
+    mergeSync.mockResolvedValueOnce(null);
+    mergeSync.mockRejectedValueOnce(new Error('nope'));
+    renderApp('/home');
+    const pill = await screen.findByRole('button', { name: /Sync 2 pending changes/ });
+    fireEvent.click(pill);
+    expect(await screen.findByText('Sync failed. Will retry when online.')).toBeInTheDocument();
+  });
+
+  it('flushes pending edits after the browser reconnects', async () => {
+    onlineState.justReconnected = true;
+    onlineState.clearReconnected.mockImplementation(() => {
+      onlineState.justReconnected = false;
+    });
+    useAuthStore.setState({ user: fakeUser as never });
+    useSyncQueue.setState({ pendingChanges: 1, flushing: false });
+    mergeSync.mockResolvedValue({ books: [makeBook({ title: 'From cloud' })], shelves: [] });
+    renderApp('/home');
+    expect(await screen.findByText('Back online – changes synced')).toBeInTheDocument();
+    expect(onlineState.clearReconnected).toHaveBeenCalled();
+  });
+
+  it('does not flush a reconnect while the reader chose to link later', async () => {
+    localStorage.setItem('spine-scanner.cloud-link', JSON.stringify({ 'user-1': 'later' }));
+    onlineState.justReconnected = true;
+    onlineState.clearReconnected.mockImplementation(() => {
+      onlineState.justReconnected = false;
+    });
+    useAuthStore.setState({ user: fakeUser as never });
+    useSyncQueue.setState({ pendingChanges: 2, flushing: false });
+    renderApp('/home');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    expect(mergeSync).not.toHaveBeenCalled();
+    expect(screen.queryByText('Back online – changes synced')).not.toBeInTheDocument();
+  });
+
+  it('marks shelves dirty without treating it as a library edit', async () => {
+    mergeSync.mockResolvedValue(null);
+    useAuthStore.setState({ user: fakeUser as never });
+    renderApp('/home');
+    await waitFor(() => expect(mergeSync).toHaveBeenCalled());
+    act(() => {
+      useBookStore.setState({
+        shelves: [{ id: 's1', name: 'Fiction', color: '#6366f1' }],
+      });
+    });
+    await waitFor(() => {
+      expect(useSyncQueue.getState().pendingMutations.some((entry) => entry.label.includes('Shelves'))).toBe(true);
+    });
+  });
+
+  it('imports accepted shelf rows and skips an empty selection', async () => {
+    useAuthStore.setState({ user: fakeUser as never });
+    renderApp('/scan');
+    await screen.findByTestId('mock-scanner');
+    fireEvent.click(screen.getByRole('button', { name: 'import-shelf-empty' }));
+    expect(await screen.findByText('Select at least one book to add.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'import-shelf' }));
+    await waitFor(() => {
+      expect(useBookStore.getState().books.map((book) => book.title).sort()).toEqual(['Second Shelf', 'Shelf Title']);
+    });
+    expect(pushBooks).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'import-shelf' }));
+    expect(await screen.findByText('Those books are already in your library.')).toBeInTheDocument();
+  });
+
+  it('opens the library from the scanner and prefills a near-miss ISBN', async () => {
+    renderApp('/scan');
+    await screen.findByTestId('mock-scanner');
+    fireEvent.click(screen.getByRole('button', { name: 'need-manual' }));
+    expect(screen.getByRole('textbox', { name: 'Enter ISBN manually' })).toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: 'edit-isbn' }));
+    expect(screen.getByRole('textbox', { name: 'Enter ISBN manually' })).toHaveValue('9780141036144');
+    fireEvent.click(screen.getByRole('button', { name: 'view-library' }));
+    expect(await screen.findByTestId('mock-library')).toBeInTheDocument();
+    expect(screen.getByText('open-isbn:')).toBeInTheDocument();
   });
 
   it('skips the duplicate warning when the preference is off', async () => {
