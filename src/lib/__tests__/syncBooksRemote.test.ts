@@ -316,6 +316,26 @@ describe('pushShelves', () => {
     expect(ok).toBe(false);
     expect(captureException).toHaveBeenCalledOnce();
   });
+
+  it('returns false when fetching remote shelf ids fails', async () => {
+    tables.shelves.select.mockResolvedValueOnce({ data: null, error: { message: 'shelf fetch boom' } });
+
+    const ok = await pushShelves('user-1', [{ id: 's1', name: 'Fiction', color: '#f00' }]);
+
+    expect(ok).toBe(false);
+    expect(captureException).toHaveBeenCalledOnce();
+    expect(tables.shelves.deleteIn).not.toHaveBeenCalled();
+  });
+
+  it('returns false when deleting stale shelves fails', async () => {
+    tables.shelves.select.mockResolvedValueOnce({ data: [{ id: 'stale' }], error: null });
+    tables.shelves.deleteIn.mockResolvedValueOnce({ error: new Error('shelf delete boom') });
+
+    const ok = await pushShelves('user-1', [{ id: 's1', name: 'Fiction', color: '#f00' }]);
+
+    expect(ok).toBe(false);
+    expect(captureException).toHaveBeenCalledOnce();
+  });
 });
 
 describe('mergeSync', () => {

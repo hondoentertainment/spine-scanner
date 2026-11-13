@@ -19,8 +19,9 @@ jobs:
   verify:
     name: Lint, Test & Build
     runs-on: ubuntu-latest
-    # lint + unit tests (up to 18m) + build + Playwright install + E2E (up to 12m)
-    timeout-minutes: 45
+    # lint + unit tests (up to 18m) + build + Playwright install
+    # + release E2E (up to 12m) + desktop E2E (up to 20m)
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
 
@@ -91,6 +92,21 @@ jobs:
           VITE_APP_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'test' }}
           VITE_APP_RELEASE: ${{ github.sha }}
         run: npm run test:e2e:release
+
+      # Full Chromium project, after the release build and browser install.
+      # test:e2e:desktop does not rebuild; it previews the dist the release step produced.
+      - name: E2E desktop tests
+        timeout-minutes: 20
+        env:
+          CI: 'true'
+          VITE_SITE_URL: ${{ github.ref == 'refs/heads/main' && (vars.VITE_SITE_URL != '' && vars.VITE_SITE_URL || format('https://{0}.github.io', github.repository_owner)) || 'https://example.com' }}
+          VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH != '' && vars.VITE_BASE_PATH || '/spine-scanner/' }}
+          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL != '' && vars.VITE_SUPPORT_EMAIL || 'noreply@example.com' }}
+          VITE_ENABLE_SCANNER_DEBUG: 'false'
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          VITE_APP_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'test' }}
+          VITE_APP_RELEASE: ${{ github.sha }}
+        run: npm run test:e2e:desktop
 
       - name: Upload Playwright report
         if: failure()
