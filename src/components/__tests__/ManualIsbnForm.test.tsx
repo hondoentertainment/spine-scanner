@@ -19,13 +19,15 @@ describe('ManualIsbnForm', () => {
   it('shows the ISBN field immediately', () => {
     renderForm();
     expect(screen.getByTestId(uiContracts.scannerManualInputTestId)).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Submit ISBN' })).toBeDisabled();
+    const submit = screen.getByRole('button', { name: 'Add ISBN' });
+    expect(submit).toBeDisabled();
+    expect(submit).toHaveTextContent('Add');
   });
 
   it('submits a valid ISBN', () => {
     const { onSubmit } = renderForm();
     fireEvent.change(screen.getByLabelText('Enter ISBN manually'), { target: { value: '9780141036144' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit ISBN' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add ISBN' }));
     expect(onSubmit).toHaveBeenCalledWith('9780141036144', { source: 'manual' });
   });
 
@@ -42,21 +44,21 @@ describe('ManualIsbnForm', () => {
   it('keeps a short ISBN from submitting', () => {
     const { onSubmit } = renderForm();
     fireEvent.change(screen.getByLabelText('Enter ISBN manually'), { target: { value: '123456' } });
-    expect(screen.getByRole('button', { name: 'Submit ISBN' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add ISBN' })).toBeDisabled();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('submits a valid ISBN-10', () => {
     const { onSubmit } = renderForm();
     fireEvent.change(screen.getByLabelText('Enter ISBN manually'), { target: { value: '0743273567' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit ISBN' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add ISBN' }));
     expect(onSubmit).toHaveBeenCalledWith('0743273567', { source: 'manual' });
   });
 
   it('sends an unverifiable ISBN for review', () => {
     const { onSubmit } = renderForm();
     fireEvent.change(screen.getByLabelText('Enter ISBN manually'), { target: { value: '1111111111111' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit ISBN' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add ISBN' }));
     expect(onSubmit).toHaveBeenCalledWith('1111111111111', { allowReview: true, source: 'manual' });
   });
 
@@ -71,7 +73,7 @@ describe('ManualIsbnForm', () => {
       </ToastProvider>,
     );
     fireEvent.change(screen.getByLabelText('Enter ISBN manually'), { target: { value: '9780141036144' } });
-    const submit = screen.getByRole('button', { name: 'Submit ISBN' });
+    const submit = screen.getByRole('button', { name: 'Add ISBN' });
     fireEvent.click(submit);
     await waitFor(() => expect(submit).toBeDisabled());
     expect(onSubmit).toHaveBeenCalledTimes(1);
@@ -87,6 +89,6 @@ describe('ManualIsbnForm', () => {
       </ToastProvider>,
     );
     expect(screen.getByLabelText('Enter ISBN manually')).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Submit ISBN' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add ISBN' })).toBeDisabled();
   });
 });
