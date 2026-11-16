@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Recommended for your shelves
+
+- **From the books you already have.** Home and Library open recommendations built from authors, named shelves, physical shelf labels, and loans. Open Library and Google Books supply the titles. Each card says why, for example "Because you have 4 books by Frank Herbert" or "More from your Sci-Fi shelf". One tap adds it to your to-read list.
+- **Small shelves.** An empty library asks you to add books. One or two books still get suggestions, with a note that a few more books or a named shelf will make them more specific. A wishlist placeholder is not treated as a copy you own.
+- **Keyboard.** Arrow keys, Home, and End move between the wishlist actions, the same way the shelf map moves between places.
+
 ### Shelf map
 
 - **Keyboard.** On the web library, Tab and the arrow keys move through rooms, cases, and shelves. Enter or Space selects that place, the focus ring matches the scanner, and the selection is announced.

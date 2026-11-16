@@ -18,6 +18,11 @@ export interface CatalogCandidate {
   language?: string;
   /** Other titles for the same work, such as a spelled-out year. */
   alternateTitles?: string[];
+  /**
+   * Collection shelf whose subject search returned this title
+   * ("Sci-Fi" → science fiction). Empty when the hit came from an author or series search.
+   */
+  fromShelf?: string;
   source: RecommendationProvider;
   /** Used only when a provider already explained the pick with owned titles. */
   reason?: string;
@@ -34,6 +39,16 @@ export interface OwnedBookSignal {
   isPhotoOnly?: boolean;
   workKey?: string;
   alternateTitles?: string[];
+  /** Virtual shelves and physical shelf labels that name a collection, such as "Sci-Fi". */
+  shelfNames?: string[];
+  /** Times this copy has been lent. Zero when the ledger is empty. */
+  loanCount?: number;
+}
+
+/** A reader-named shelf. Only the id and name are needed to explain a suggestion. */
+export interface RecommendationShelf {
+  id: string;
+  name: string;
 }
 
 export interface BookRecommendation {

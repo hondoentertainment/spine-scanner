@@ -1,6 +1,6 @@
 import { isbn10To13 } from '../utils/isbnValidation.ts';
 import { normalizeForMatching } from '../utils/editionDuplicates.ts';
-import type { BookRecommendation, CatalogCandidate, OwnedBookSignal } from './types.ts';
+import type { BookRecommendation, CatalogCandidate, OwnedBookSignal, RecommendationShelf } from './types.ts';
 
 export const RECOMMENDATION_LIMIT = 12;
 const AUTHOR_MATCH_WEIGHT = 5;
@@ -160,7 +160,165 @@ export function editionKey(title: string, author: string): string {
   return `${normalizedTitle}|${normalizedAuthor}`;
 }
 
-export function becauseYouOwn(titles: string[]): string {
+const GENERIC_SHELF_NAMES = new Set([
+  'shelf', 'shelves', 'my shelf', 'bookshelf', 'bookcase', 'case', 'room',
+  'books', 'my books', 'library', 'owned', 'wishlist', 'to read', 'reading',
+  'read', 'favorites', 'favourite', 'favourites', 'all', 'misc', 'miscellaneous',
+  'unassigned', 'living room', 'bedroom', 'office', 'hallway', 'kitchen', 'den',
+  'study', 'lounge', 'home', 'default', 'general', 'other', 'unknown', 'new shelf',
+  'want to read', 'currently reading', 'dnf', 'did not finish', 'unread', 'finished',
+]);
+
+/** Shelf labels readers use as genres, mapped onto Open Library subject phrases. */
+const SHELF_SUBJECT_ALIASES: Record<string, string> = {
+  'sci-fi': 'science fiction',
+  'sci fi': 'science fiction',
+  scifi: 'science fiction',
+  sf: 'science fiction',
+  'science fiction': 'science fiction',
+  'science-fiction': 'science fiction',
+  'speculative fiction': 'science fiction',
+  fantasy: 'fantasy',
+  'epic fantasy': 'fantasy',
+  mystery: 'mystery',
+  mysteries: 'mystery',
+  crime: 'crime',
+  thriller: 'thriller',
+  thrillers: 'thriller',
+  romance: 'romance',
+  historical: 'history',
+  history: 'history',
+  biography: 'biography',
+  biographies: 'biography',
+  memoir: 'biography',
+  poetry: 'poetry',
+  poems: 'poetry',
+  horror: 'horror',
+  ya: 'young adult fiction',
+  'young adult': 'young adult fiction',
+  'graphic novels': 'graphic novels',
+  'graphic novel': 'graphic novels',
+  comics: 'comics',
+  nonfiction: 'nonfiction',
+  'non-fiction': 'nonfiction',
+  'non fiction': 'nonfiction',
+  philosophy: 'philosophy',
+  classics: 'classics',
+  'literary fiction': 'literary fiction',
+  'space opera': 'space opera',
+};
+
+export function shelfNameKey(name: string): string {
+  return normalizeSubject(name).replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function shelfAlias(name: string): string {
+  const spaced = shelfNameKey(name);
+  return SHELF_SUBJECT_ALIASES[spaced] ?? SHELF_SUBJECT_ALIASES[normalizeSubject(name)] ?? '';
+}
+
+/** A room called "Living Room" or "Shelf 2" is a place. "Sci-Fi" is a collection. */
+export function isCollectionShelfName(name: string): boolean {
+  const key = shelfNameKey(name);
+  if (!key || GENERIC_SHELF_NAMES.has(key)) return false;
+  if (shelfAlias(name)) return key.length >= 2;
+  if (key.length < 3) return false;
+  if (/^\d+$/.test(key)) return false;
+  if (/^(shelf|case|row|bay|level)\s*[a-z0-9]+$/.test(key)) return false;
+  return true;
+}
+
+/** Open Library subject for a collection shelf. Empty when the label is only a place. */
+export function shelfSubjectQuery(name: string): string {
+  if (!isCollectionShelfName(name)) return '';
+  return shelfAlias(name) || shelfNameKey(name);
+}
+
+export function displayShelfName(name: string): string {
+  return name.replace(/\s+/g, ' ').trim();
+}
+
+/** Wishlist placeholders are not copies on a shelf. Scanned and typed books are. */
+export function countsTowardShelf(book: { isbn?: string | null }): boolean {
+  return !(book.isbn ?? '').startsWith('wish-');
+}
+
+export function lendingCount(book: {
+  loanLedger?: unknown[] | null;
+  loan?: { borrowerName?: string | null } | null;
+  lentTo?: string | null;
+}): number {
+  const ledger = Array.isArray(book.loanLedger) ? book.loanLedger.length : 0;
+  if (ledger > 0) return ledger;
+  if (book.loan?.borrowerName?.trim() || book.lentTo?.trim()) return 1;
+  return 0;
+}
+
+export function collectionNamesForBook(
+  book: { shelfIds?: string[]; locationShelf?: string | null; locationCase?: string | null },
+  shelves: RecommendationShelf[],
+): string[] {
+  const byId = new Map(shelves.map((shelf) => [shelf.id, shelf.name]));
+  const names: string[] = [];
+  const seen = new Set<string>();
+  const push = (raw: string | null | undefined) => {
+    const display = displayShelfName(raw ?? '');
+    if (!isCollectionShelfName(display)) return;
+    const key = shelfNameKey(display);
+    if (seen.has(key)) return;
+    seen.add(key);
+    names.push(display);
+  };
+  for (const id of book.shelfIds ?? []) push(byId.get(id));
+  push(book.locationShelf);
+  push(book.locationCase);
+  return names;
+}
+
+export interface ShelfSeed {
+  name: string;
+  subject: string;
+  count: number;
+}
+
+export function shelfSeeds(
+  books: Array<{
+    isbn?: string | null;
+    shelfIds?: string[];
+    locationShelf?: string | null;
+    locationCase?: string | null;
+    loanLedger?: unknown[] | null;
+    loan?: { borrowerName?: string | null } | null;
+    lentTo?: string | null;
+  }>,
+  shelves: RecommendationShelf[],
+  limit = 3,
+): ShelfSeed[] {
+  const map = new Map<string, { name: string; subject: string; count: number; loans: number }>();
+  for (const book of books) {
+    if (!countsTowardShelf(book)) continue;
+    const loans = lendingCount(book);
+    for (const name of collectionNamesForBook(book, shelves)) {
+      const subject = shelfSubjectQuery(name);
+      if (!subject) continue;
+      const key = shelfNameKey(name);
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+        existing.loans += loans;
+      } else {
+        map.set(key, { name: displayShelfName(name), subject, count: 1, loans });
+      }
+    }
+  }
+  return [...map.values()]
+    .filter((entry) => entry.count >= 2)
+    .sort((a, b) => (b.count * 2 + b.loans) - (a.count * 2 + a.loans) || a.name.localeCompare(b.name))
+    .slice(0, limit)
+    .map(({ name, subject, count }) => ({ name, subject, count }));
+}
+
+function uniqueTitles(titles: string[]): string[] {
   const unique: string[] = [];
   const seen = new Set<string>();
   for (const title of titles) {
@@ -170,10 +328,36 @@ export function becauseYouOwn(titles: string[]): string {
     seen.add(key);
     unique.push(trimmed);
   }
+  return unique;
+}
+
+function phraseForTitles(kind: 'own' | 'lent', titles: string[]): string {
+  const unique = uniqueTitles(titles);
   if (unique.length === 0) return '';
-  if (unique.length === 1) return `Because you own ${unique[0]}`;
-  if (unique.length === 2) return `Because you own ${unique[0]} and ${unique[1]}`;
-  return `Because you own ${unique[0]}, ${unique[1]}, and ${unique.length - 2} more`;
+  const verb = kind === 'own' ? 'Because you own' : "Because you've lent";
+  if (unique.length === 1) return `${verb} ${unique[0]}`;
+  if (unique.length === 2) return `${verb} ${unique[0]} and ${unique[1]}`;
+  return `${verb} ${unique[0]}, ${unique[1]}, and ${unique.length - 2} more`;
+}
+
+export function becauseYouOwn(titles: string[]): string {
+  return phraseForTitles('own', titles);
+}
+
+export function becauseYouLent(titles: string[]): string {
+  return phraseForTitles('lent', titles);
+}
+
+export function becauseYouHaveAuthor(count: number, author: string): string {
+  const name = displayAuthor(author);
+  if (count < 2 || !name) return '';
+  return `Because you have ${count} books by ${name}`;
+}
+
+export function moreFromShelf(name: string): string {
+  const display = displayShelfName(name);
+  if (!isCollectionShelfName(display)) return '';
+  return `More from your ${display} shelf`;
 }
 
 function titlesMatch(owned: string, cited: string): boolean {
@@ -236,6 +420,13 @@ interface ScoredLink {
   title: string;
   weight: number;
   index: number;
+  loanCount: number;
+}
+
+interface ShelfExplanation {
+  reason: string;
+  becauseTitles: string[];
+  score: number;
 }
 
 function linksFor(candidate: CatalogCandidate, owned: OwnedBookSignal[]): ScoredLink[] {
@@ -245,6 +436,7 @@ function linksFor(candidate: CatalogCandidate, owned: OwnedBookSignal[]): Scored
   const links: ScoredLink[] = [];
 
   owned.forEach((book, index) => {
+    if (!countsTowardShelf(book)) return;
     let weight = 0;
     const bookAuthor = authorKey(book.author);
     if (candidateAuthor && bookAuthor && candidateAuthor === bookAuthor && !isWeakAuthor(bookAuthor)) {
@@ -263,15 +455,17 @@ function linksFor(candidate: CatalogCandidate, owned: OwnedBookSignal[]): Scored
       }
       weight += shared * SUBJECT_MATCH_WEIGHT;
     }
-    if (weight > 0) links.push({ title: book.title, weight, index });
+    const loanCount = book.loanCount ?? 0;
+    if (weight > 0 && loanCount > 0) weight += Math.min(loanCount, 3);
+    if (weight > 0) links.push({ title: book.title, weight, index, loanCount });
   });
 
   links.sort((a, b) => b.weight - a.weight || a.index - b.index);
   return links;
 }
 
-function formatFromLinks(links: ScoredLink[]): { reason: string; becauseTitles: string[]; score: number } | null {
-  if (links.length === 0) return null;
+function closeLinks(links: ScoredLink[]): ScoredLink[] {
+  if (links.length === 0) return [];
   const best = links[0].weight;
   const close = links.filter((link) => best - link.weight <= CLOSE_WEIGHT);
   const unique: ScoredLink[] = [];
@@ -282,18 +476,100 @@ function formatFromLinks(links: ScoredLink[]): { reason: string; becauseTitles: 
     seen.add(key);
     unique.push(link);
   }
+  return unique;
+}
+
+function titleReason(links: ScoredLink[]): ShelfExplanation | null {
+  const unique = closeLinks(links);
   if (unique.length === 0) return null;
-  const named = unique.slice(0, 2).map((link) => link.title);
-  const extra = unique.length - named.length;
-  const reason = extra > 0
-    ? `Because you own ${named[0]}, ${named[1]}, and ${extra} more`
-    : becauseYouOwn(named);
+  const lent = unique.every((link) => link.loanCount > 0);
+  const reason = phraseForTitles(lent ? 'lent' : 'own', unique.map((link) => link.title));
   if (!reason) return null;
   return {
     reason,
-    becauseTitles: named,
+    becauseTitles: unique.slice(0, 2).map((link) => link.title),
     score: links.reduce((sum, link) => sum + link.weight, 0),
   };
+}
+
+function authorCopies(candidate: CatalogCandidate, owned: OwnedBookSignal[]): OwnedBookSignal[] {
+  const key = authorKey(candidate.author);
+  if (isWeakAuthor(key)) return [];
+  return owned.filter((book) => countsTowardShelf(book) && authorKey(book.author) === key);
+}
+
+function titlesOnShelf(owned: OwnedBookSignal[], shelfKey: string): string[] {
+  return uniqueTitles(owned
+    .filter((book) => (
+      countsTowardShelf(book)
+      && (book.shelfNames ?? []).some((name) => shelfNameKey(name) === shelfKey)
+    ))
+    .map((book) => book.title));
+}
+
+function shelfReason(
+  candidate: CatalogCandidate,
+  owned: OwnedBookSignal[],
+  links: ScoredLink[],
+): { name: string; titles: string[] } | null {
+  if (candidate.fromShelf && isCollectionShelfName(candidate.fromShelf)) {
+    const titles = titlesOnShelf(owned, shelfNameKey(candidate.fromShelf));
+    if (titles.length >= 2) return { name: displayShelfName(candidate.fromShelf), titles };
+  }
+
+  const tally = new Map<string, { name: string; titles: string[] }>();
+  for (const link of links) {
+    const book = owned[link.index];
+    if (!book) continue;
+    for (const name of book.shelfNames ?? []) {
+      if (!isCollectionShelfName(name)) continue;
+      const key = shelfNameKey(name);
+      const entry = tally.get(key) ?? { name: displayShelfName(name), titles: [] };
+      const title = book.title.trim();
+      if (title && !entry.titles.some((existing) => existing.toLowerCase() === title.toLowerCase())) {
+        entry.titles.push(title);
+      }
+      tally.set(key, entry);
+    }
+  }
+  const ranked = [...tally.values()]
+    .filter((entry) => entry.titles.length >= 2)
+    .sort((a, b) => b.titles.length - a.titles.length || a.name.localeCompare(b.name));
+  return ranked[0] ?? null;
+}
+
+function explainCandidate(
+  candidate: CatalogCandidate,
+  owned: OwnedBookSignal[],
+  links: ScoredLink[],
+): ShelfExplanation | null {
+  const fromTitles = titleReason(links);
+  const authors = authorCopies(candidate, owned);
+  if (authors.length >= 2) {
+    const reason = becauseYouHaveAuthor(authors.length, authors[0].author);
+    const becauseTitles = uniqueTitles(authors.map((book) => book.title));
+    if (reason && becauseTitles.length > 0) {
+      return {
+        reason,
+        becauseTitles,
+        score: (fromTitles?.score ?? AUTHOR_MATCH_WEIGHT) + authors.length,
+      };
+    }
+  }
+
+  const shelf = shelfReason(candidate, owned, links);
+  if (shelf) {
+    const reason = moreFromShelf(shelf.name);
+    if (reason) {
+      return {
+        reason,
+        becauseTitles: shelf.titles,
+        score: Math.max(fromTitles?.score ?? 0, SUBJECT_MATCH_WEIGHT * Math.min(shelf.titles.length, 4)),
+      };
+    }
+  }
+
+  return fromTitles;
 }
 
 const NUMBER_WORDS: Record<string, number> = {
@@ -470,6 +746,18 @@ function isStudyGuideAbout(candidateTitle: string, ownedTitle: string, alternate
     || [...titleForms(ownedTitle, alternates)].some((form) => phraseIncludes(haystack, form));
 }
 
+function collectionSegments(candidateTitle: string): string[] {
+  const parts = candidateTitle
+    .split(/\s*(?:,|&|\/|\band\b)\s*/i)
+    .map((part) => normalizeForMatching(part))
+    .filter((part) => part.length >= 2);
+  if (parts.length >= 2) return parts;
+  return normalizeForMatching(candidateTitle)
+    .split(/\s+and\s+|\s+&\s+|\s+\/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 function isCollectionContaining(candidateTitle: string, ownedTitle: string, alternates: string[] = []): boolean {
   if (!containsOwnedTitle(candidateTitle, ownedTitle, alternates)) return false;
   const haystack = normalizeForMatching(candidateTitle);
@@ -479,7 +767,7 @@ function isCollectionContaining(candidateTitle: string, ownedTitle: string, alte
     || raw.includes('/')
     || raw.includes('omnibus')
   ) return true;
-  const segments = haystack.split(/\s+and\s+|\s+&\s+|\s+\/\s+/).map((part) => part.trim()).filter(Boolean);
+  const segments = collectionSegments(candidateTitle);
   if (segments.length < 2) return false;
   const owned = titleForms(ownedTitle, alternates);
   const matched = segments.some((segment) => owned.has(segment) || [...owned].some((form) => segment === form));
@@ -579,6 +867,7 @@ function mergeCandidates(candidates: CatalogCandidate[]): CatalogCandidate[] {
       subjects,
       seriesName: previous.seriesName || candidate.seriesName,
       reason: previous.reason || candidate.reason,
+      fromShelf: previous.fromShelf || candidate.fromShelf,
       workKey: previous.workKey || candidate.workKey,
       language: previous.language || candidate.language,
       alternateTitles,
@@ -600,9 +889,13 @@ export function rankRecommendations(
     if (!matchesReaderLanguage(candidate.language, readerLanguage)) continue;
     if (isAlreadyInLibrary(candidate, owned)) continue;
     const links = linksFor(candidate, owned);
-    const algorithmic = formatFromLinks(links);
+    const algorithmic = explainCandidate(candidate, owned, links);
     const external = candidate.reason ? acceptShelfReason(candidate.reason, ownedTitles) : null;
-    const chosen = external ?? algorithmic;
+    const shelfLed = Boolean(
+      algorithmic
+      && (algorithmic.reason.startsWith('Because you have ') || algorithmic.reason.startsWith('More from your ')),
+    );
+    const chosen = shelfLed ? algorithmic : (external ?? algorithmic);
     if (!chosen) continue;
     const score = external
       ? Math.max(algorithmic?.score ?? 0, external.becauseTitles.length)
@@ -643,34 +936,69 @@ export function rankRecommendations(
 }
 
 export function libraryFingerprint(
-  books: Array<{ isbn: string; title: string; author: string; seriesName?: string }>,
+  books: Array<{
+    isbn: string;
+    title: string;
+    author: string;
+    seriesName?: string;
+    shelfIds?: string[];
+    locationCase?: string | null;
+    locationShelf?: string | null;
+    loanLedger?: unknown[] | null;
+    loan?: { borrowerName?: string | null } | null;
+    lentTo?: string | null;
+  }>,
+  shelves: RecommendationShelf[] = [],
 ): string {
   const parts = books.map((book) => [
     canonicalIsbn(book.isbn) || (book.isbn.startsWith('photo-') || book.isbn.startsWith('wish-') ? book.isbn : ''),
     normalizeForMatching(book.title),
     authorKey(book.author),
     normalizeForMatching(book.seriesName ?? ''),
+    [...(book.shelfIds ?? [])].sort().join(','),
+    shelfNameKey(book.locationCase ?? ''),
+    shelfNameKey(book.locationShelf ?? ''),
+    String(lendingCount(book)),
   ].join('|'));
   parts.sort();
+  const shelfPart = shelves
+    .map((shelf) => `${shelf.id}:${shelfNameKey(shelf.name)}`)
+    .sort()
+    .join(',');
   let hash = 5381;
-  const value = parts.join('\n');
+  const value = `${parts.join('\n')}\n#${shelfPart}`;
   for (let i = 0; i < value.length; i += 1) {
     hash = ((hash << 5) + hash) ^ value.charCodeAt(i);
   }
-  return `v1:${(hash >>> 0).toString(16)}`;
+  return `v2:${(hash >>> 0).toString(16)}`;
 }
 
-export function authorSeeds(books: Array<{ author: string }>, limit = 3): string[] {
-  const map = new Map<string, { name: string; count: number; index: number }>();
+export function authorSeeds(
+  books: Array<{
+    author: string;
+    isbn?: string | null;
+    loanLedger?: unknown[] | null;
+    loan?: { borrowerName?: string | null } | null;
+    lentTo?: string | null;
+  }>,
+  limit = 3,
+): string[] {
+  const map = new Map<string, { name: string; count: number; loans: number; index: number }>();
   books.forEach((book, index) => {
+    if (!countsTowardShelf(book)) return;
     const key = authorKey(book.author);
     if (isWeakAuthor(key)) return;
     const existing = map.get(key);
-    if (existing) existing.count += 1;
-    else map.set(key, { name: displayAuthor(book.author), count: 1, index });
+    const loans = lendingCount(book);
+    if (existing) {
+      existing.count += 1;
+      existing.loans += loans;
+    } else {
+      map.set(key, { name: displayAuthor(book.author), count: 1, loans, index });
+    }
   });
   return [...map.values()]
-    .sort((a, b) => b.count - a.count || a.index - b.index)
+    .sort((a, b) => (b.count * 2 + b.loans) - (a.count * 2 + a.loans) || b.count - a.count || a.index - b.index)
     .slice(0, limit)
     .map((entry) => entry.name);
 }
@@ -695,11 +1023,12 @@ export function subjectSeeds(books: Array<{ subjects: string[] }>, limit = 3): s
 }
 
 export function seriesSeeds(
-  books: Array<{ author: string; seriesName?: string }>,
+  books: Array<{ author: string; seriesName?: string; isbn?: string | null }>,
   limit = 2,
 ): Array<{ series: string; author: string }> {
   const map = new Map<string, { series: string; author: string; count: number }>();
   for (const book of books) {
+    if (!countsTowardShelf(book)) continue;
     const series = book.seriesName?.trim() ?? '';
     const key = normalizeForMatching(series);
     if (key.length < 3 || isWeakAuthor(authorKey(book.author))) continue;

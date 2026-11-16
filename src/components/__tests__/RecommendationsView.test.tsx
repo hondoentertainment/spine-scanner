@@ -156,4 +156,67 @@ describe('RecommendationsView', () => {
     expect(await screen.findByText('Because you own Dune')).toBeInTheDocument();
     expect(await screen.findByText(/Couldn't refresh suggestions/)).toBeInTheDocument();
   });
+
+  it('names the page and moves between recommendations with the arrow keys', async () => {
+    const books = [shelfBook(), shelfBook({ id: 'hyperion', title: 'Hyperion', author: 'Dan Simmons', isbn: '9780553283686' })];
+    useBookStore.setState({ books, shelves: [{ id: 'sf', name: 'Sci-Fi', color: '#6366f1' }] });
+    writeRecommendationCache({
+      fingerprint: libraryFingerprint(books, [{ id: 'sf', name: 'Sci-Fi' }]),
+      fetchedAt: Date.now(),
+      recommendations: [
+        suggestion,
+        { ...suggestion, id: 'isbn:9780441007462', title: 'The Left Hand of Darkness', isbn: '9780441007462', isbns: ['9780441007462'] },
+      ],
+    });
+    renderView();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Recommended for your shelves' })).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Recommended for your shelves' })).toBeInTheDocument();
+    const actions = screen.getAllByRole('button', { name: /Add to wishlist:/ });
+    actions[0].focus();
+    fireEvent.keyDown(actions[0], { key: 'ArrowDown' });
+    expect(actions[1]).toHaveFocus();
+    fireEvent.keyDown(actions[1], { key: 'Home' });
+    expect(actions[0]).toHaveFocus();
+    expect(screen.getByTestId('recommendations-small-shelf')).toBeInTheDocument();
+  });
+
+  it('asks for books when the only copy is a wishlist placeholder', async () => {
+    useBookStore.setState({
+      books: [shelfBook({ isbn: 'wish-1', title: 'Dune Messiah' })],
+      shelves: [],
+    });
+    renderView();
+    expect(await screen.findByTestId('recommendations-state')).toHaveAttribute('data-state', 'empty');
+  });
+
+  it('shows shelf and author reasons from the library', async () => {
+    const herbert = ['Dune', 'Children of Dune', 'God Emperor of Dune', 'Heretics of Dune'].map((title, index) => shelfBook({
+      id: `h${index}`,
+      title,
+      isbn: `978044117271${index}`,
+      shelfIds: ['sf'],
+    }));
+    useBookStore.setState({
+      books: [
+        ...herbert,
+        shelfBook({ id: 'hyperion', title: 'Hyperion', author: 'Dan Simmons', isbn: '9780553283686', shelfIds: ['sf'] }),
+      ],
+      shelves: [{ id: 'sf', name: 'Sci-Fi', color: '#6366f1' }],
+    });
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.includes('isbn=')
+        ? { docs: [{ subject: ['Science fiction'], key: '/works/OL1W' }] }
+        : url.includes('author=Frank')
+          ? { docs: [{ title: 'Dune Messiah', author_name: ['Frank Herbert'], isbn: ['9780441013593'], subject: ['Science fiction'], cover_i: 10, number_of_pages_median: 336 }] }
+          : url.includes('subject=science')
+            ? { docs: [{ title: 'The Left Hand of Darkness', author_name: ['Ursula K. Le Guin'], isbn: ['9780441007462'], subject: ['Science fiction'], cover_i: 11, number_of_pages_median: 304 }] }
+            : { docs: [] };
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }));
+    renderView();
+    expect(await screen.findByText('Because you have 4 books by Frank Herbert')).toBeInTheDocument();
+    expect(await screen.findByText('More from your Sci-Fi shelf')).toBeInTheDocument();
+    expect(screen.queryByTestId('recommendations-small-shelf')).not.toBeInTheDocument();
+  });
 });

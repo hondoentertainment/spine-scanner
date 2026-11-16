@@ -8,6 +8,7 @@ const ROUTES: Array<{ name: string; path: string }> = [
   { name: 'library', path: './library' },
   { name: 'data', path: './data' },
   { name: 'profile', path: './profile' },
+  { name: 'recommendations', path: './recommendations' },
 ];
 
 async function seedOnboarding(page: Page) {

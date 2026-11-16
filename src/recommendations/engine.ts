@@ -14,15 +14,19 @@ import {
   authorSeeds,
   booksForSubjectLookup,
   canonicalIsbn,
+  collectionNamesForBook,
+  countsTowardShelf,
   filterStillRelevant,
+  lendingCount,
   libraryFingerprint,
   mentionsSeries,
   rankRecommendations,
   seriesSeeds,
+  shelfSeeds,
   subjectSeeds,
 } from './rank.ts';
 import { lookupOwnedEdition, searchGoogleBooks, searchOpenLibrary, type FetchOutcome } from './sources.ts';
-import type { CatalogCandidate, OwnedBookSignal, RecommendationResult } from './types.ts';
+import type { CatalogCandidate, OwnedBookSignal, RecommendationResult, RecommendationShelf } from './types.ts';
 
 export interface LoadRecommendationOptions {
   fetchImpl?: typeof fetch;
@@ -35,6 +39,8 @@ export interface LoadRecommendationOptions {
    * The free path stays the default.
    */
   llmEnv?: RecommendationLlmEnv | null;
+  /** Named shelves, so a suggestion can say which shelf it belongs with. */
+  shelves?: RecommendationShelf[];
 }
 
 interface Tally {
@@ -81,13 +87,17 @@ function savedResult(
  * Cached suggestions for the first paint. Returns null when nothing is saved.
  * Safe to call while the library is already on screen — it does not use the network.
  */
-export function peekRecommendations(books: BookEntry[], now = Date.now()): RecommendationResult | null {
-  if (books.length === 0) return { recommendations: [], origin: 'empty', notice: '' };
+export function peekRecommendations(
+  books: BookEntry[],
+  now = Date.now(),
+  shelves: RecommendationShelf[] = [],
+): RecommendationResult | null {
+  if (!books.some(countsTowardShelf)) return { recommendations: [], origin: 'empty', notice: '' };
   const cached = readRecommendationCache();
   if (!cached) return null;
   const recommendations = filterStillRelevant(cached.recommendations, books);
   if (recommendations.length === 0) return null;
-  const fresh = cached.fingerprint === libraryFingerprint(books) && now - cached.fetchedAt < RECOMMENDATION_FRESH_MS;
+  const fresh = cached.fingerprint === libraryFingerprint(books, shelves) && now - cached.fetchedAt < RECOMMENDATION_FRESH_MS;
   return {
     recommendations,
     origin: 'cache',
@@ -100,6 +110,7 @@ async function attachSubjects(
   fetchImpl: typeof fetch,
   now: number,
   tally: Tally,
+  shelves: RecommendationShelf[],
 ): Promise<OwnedBookSignal[]> {
   const targets = new Set(booksForSubjectLookup(books).map((book) => book.id));
   const subjectsById = new Map<string, string[]>();
@@ -127,7 +138,12 @@ async function attachSubjects(
   }
 
   await mapPool(tasks, 3);
-  return signalsFromBooks(books, subjectsById, workKeyById);
+  return signalsFromBooks(books, subjectsById, workKeyById, shelves);
+}
+
+function tagShelf(candidates: CatalogCandidate[], shelfName: string | undefined): CatalogCandidate[] {
+  if (!shelfName) return candidates;
+  return candidates.map((candidate) => (candidate.fromShelf ? candidate : { ...candidate, fromShelf: shelfName }));
 }
 
 async function fetchFreeCandidates(
@@ -135,10 +151,18 @@ async function fetchFreeCandidates(
   owned: OwnedBookSignal[],
   fetchImpl: typeof fetch,
   tally: Tally,
+  shelves: RecommendationShelf[],
 ): Promise<CatalogCandidate[]> {
-  const authors = authorSeeds(books, 3);
-  const subjects = subjectSeeds(owned, 3);
-  const series = seriesSeeds(books, 2);
+  const catalog = books.filter(countsTowardShelf);
+  const ownedCatalog = owned.filter(countsTowardShelf);
+  const authors = authorSeeds(catalog, 3);
+  const subjects = subjectSeeds(ownedCatalog, 3);
+  const series = seriesSeeds(catalog, 2);
+  const shelfPlans = shelfSeeds(catalog, shelves, 3);
+  const shelfBySubject = new Map<string, string>();
+  for (const plan of shelfPlans) {
+    if (!shelfBySubject.has(plan.subject)) shelfBySubject.set(plan.subject, plan.name);
+  }
   const candidates: CatalogCandidate[] = [];
 
   const authorHits = (await mapPool(
@@ -151,12 +175,35 @@ async function fetchFreeCandidates(
   }
 
   const subjectHits = (await mapPool(
-    subjects.map((subject) => async () => note(tally, await searchOpenLibrary({ subject, limit: '8' }, fetchImpl))),
+    subjects.map((subject) => async () => tagShelf(
+      note(tally, await searchOpenLibrary({ subject, limit: '8' }, fetchImpl)),
+      shelfBySubject.get(subject),
+    )),
     3,
   )).flat();
   candidates.push(...subjectHits);
   if (subjectHits.length === 0 && subjects[0]) {
-    candidates.push(...note(tally, await searchGoogleBooks(`subject:"${subjects[0].replace(/["\\]/g, '')}"`, fetchImpl)));
+    candidates.push(...tagShelf(
+      note(tally, await searchGoogleBooks(`subject:"${subjects[0].replace(/["\\]/g, '')}"`, fetchImpl)),
+      shelfBySubject.get(subjects[0]),
+    ));
+  }
+
+  const extraShelves = shelfPlans.filter((plan) => !subjects.includes(plan.subject));
+  const shelfHits = (await mapPool(
+    extraShelves.map((plan) => async () => tagShelf(
+      note(tally, await searchOpenLibrary({ subject: plan.subject, limit: '8' }, fetchImpl)),
+      plan.name,
+    )),
+    3,
+  )).flat();
+  candidates.push(...shelfHits);
+  if (shelfHits.length === 0 && extraShelves[0]) {
+    const plan = extraShelves[0];
+    candidates.push(...tagShelf(
+      note(tally, await searchGoogleBooks(`subject:"${plan.subject.replace(/["\\]/g, '')}"`, fetchImpl)),
+      plan.name,
+    ));
   }
 
   const seriesHits = await mapPool(series.map((seed) => async () => {
@@ -178,6 +225,7 @@ function signalsFromBooks(
   books: BookEntry[],
   subjectsById = new Map<string, string[]>(),
   workKeyById = new Map<string, string>(),
+  shelves: RecommendationShelf[] = [],
 ): OwnedBookSignal[] {
   return books.map((book) => ({
     id: book.id,
@@ -188,6 +236,8 @@ function signalsFromBooks(
     subjects: subjectsById.get(book.id) ?? [],
     isPhotoOnly: book.isPhotoOnly,
     workKey: workKeyById.get(book.id) || undefined,
+    shelfNames: collectionNamesForBook(book, shelves),
+    loanCount: lendingCount(book),
   }));
 }
 
@@ -196,21 +246,23 @@ async function computeRecommendations(
   fetchImpl: typeof fetch,
   now: number,
   llmEnv: RecommendationLlmEnv | null | undefined,
+  shelves: RecommendationShelf[],
 ): Promise<{ recommendations: RecommendationResult['recommendations']; failed: boolean }> {
   const tally: Tally = { attempted: 0, succeeded: 0 };
   const llm = llmEnv === null ? null : readLlmConfig(llmEnv ?? import.meta.env);
   if (llm) {
     tally.attempted += 1;
-    const fromLlm = await fetchLlmRecommendations(signalsFromBooks(books), llm.endpoint, fetchImpl);
+    const signals = signalsFromBooks(books, new Map(), new Map(), shelves);
+    const fromLlm = await fetchLlmRecommendations(signals, llm.endpoint, fetchImpl);
     if (fromLlm) {
       tally.succeeded += 1;
-      const ranked = rankRecommendations(fromLlm, signalsFromBooks(books));
+      const ranked = rankRecommendations(fromLlm, signals);
       if (ranked.length > 0) return { recommendations: ranked, failed: false };
     }
   }
 
-  const owned = await attachSubjects(books, fetchImpl, now, tally);
-  const free = await fetchFreeCandidates(books, owned, fetchImpl, tally);
+  const owned = await attachSubjects(books, fetchImpl, now, tally, shelves);
+  const free = await fetchFreeCandidates(books, owned, fetchImpl, tally, shelves);
   const ranked = rankRecommendations(free, owned);
   const failed = tally.attempted > 0 && tally.succeeded === 0;
   return { recommendations: ranked, failed };
@@ -229,11 +281,12 @@ export async function loadRecommendations(
   const online = options.online ?? isOnline();
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  if (books.length === 0) {
+  const shelves = options.shelves ?? [];
+  if (!books.some(countsTowardShelf)) {
     return { recommendations: [], origin: 'empty', notice: '' };
   }
 
-  const fingerprint = libraryFingerprint(books);
+  const fingerprint = libraryFingerprint(books, shelves);
   const cached = readRecommendationCache();
   const fresh = Boolean(
     cached
@@ -260,7 +313,7 @@ export async function loadRecommendations(
   }
 
   try {
-    const computed = await computeRecommendations(books, fetchImpl, now, options.llmEnv);
+    const computed = await computeRecommendations(books, fetchImpl, now, options.llmEnv, shelves);
     if (computed.recommendations.length > 0) {
       writeRecommendationCache({
         fingerprint,

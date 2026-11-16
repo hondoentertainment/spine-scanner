@@ -165,4 +165,64 @@ test.describe('UX round', () => {
     await page.getByRole('button', { name: 'Add a book' }).click();
     await expect(page).toHaveURL(/\/scan/);
   });
+
+  test('recommends books for a named shelf and moves with the keyboard', async ({ page }) => {
+    await seedReady(page);
+    const herbert = ['Dune', 'Children of Dune', 'God Emperor of Dune', 'Heretics of Dune'].map((title, index) => ({
+      ...dune,
+      id: `e2e-herbert-${index}`,
+      title,
+      isbn: `978044117271${index}`,
+      shelfIds: ['sf'],
+      loanLedger: index === 0
+        ? [{ lentTo: 'Alex', lentAt: '2026-03-01T00:00:00.000Z', dueAt: '', returnedAt: '2026-04-01T00:00:00.000Z' }]
+        : [],
+    }));
+    await page.addInitScript(({ key, books }) => {
+      window.localStorage.setItem(key, JSON.stringify({
+        state: {
+          books,
+          shelves: [{ id: 'sf', name: 'Sci-Fi', color: '#6366f1' }],
+        },
+        version: 0,
+      }));
+    }, {
+      key: BOOK_STORAGE_KEY,
+      books: [
+        ...herbert,
+        { ...dune, id: 'e2e-hyperion', title: 'Hyperion', author: 'Dan Simmons', isbn: '9780553283686', shelfIds: ['sf'] },
+      ],
+    });
+    await page.route(/openlibrary\.org|googleapis\.com/, (route) => {
+      const url = route.request().url();
+      const docs = url.includes('isbn=')
+        ? [{ subject: ['Science fiction'], key: '/works/OL1W' }]
+        : url.includes('author=Frank')
+          ? [{ title: 'Dune Messiah', author_name: ['Frank Herbert'], isbn: ['9780441013593'], subject: ['Science fiction'], cover_i: 10, number_of_pages_median: 336 }]
+          : url.includes('subject=science')
+            ? [{ title: 'The Left Hand of Darkness', author_name: ['Ursula K. Le Guin'], isbn: ['9780441007462'], subject: ['Science fiction'], cover_i: 11, number_of_pages_median: 304 }]
+            : [];
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ docs, totalItems: docs.length }),
+      });
+    });
+
+    await page.goto('./recommendations');
+    await expect(page.getByRole('heading', { level: 1, name: 'Recommended for your shelves' })).toBeVisible();
+    await expect(page.getByText('Because you have 4 books by Frank Herbert')).toBeVisible();
+    await expect(page.getByText('More from your Sci-Fi shelf')).toBeVisible();
+
+    const list = page.getByRole('list', { name: 'Recommended for your shelves' });
+    const first = list.getByRole('button', { name: /Add to wishlist/ }).first();
+    const second = list.getByRole('button', { name: /Add to wishlist/ }).nth(1);
+    await first.focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(second).toBeFocused();
+    await page.keyboard.press('Home');
+    await expect(first).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByText(/Added .+ to your wishlist/).first()).toBeVisible();
+  });
 });

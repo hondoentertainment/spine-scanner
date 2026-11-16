@@ -6,6 +6,7 @@ import { useProfileStore } from '../store/useProfileStore.ts';
 import { useAuthStore } from '../store/useAuthStore.ts';
 import { useSyncQueue } from '../store/useSyncQueue.ts';
 import { loadRecommendations, peekRecommendations } from '../recommendations/engine.ts';
+import { countsTowardShelf } from '../recommendations/rank.ts';
 import type { BookRecommendation } from '../recommendations/types.ts';
 import { getBookCoverSrc, getLibraryInsights } from '../utils/bookPresentation.ts';
 import { formatLocaleDate } from '../utils/formatDate.ts';
@@ -36,6 +37,7 @@ function formatAdded(dateIso: string): string {
 export default function HomeFeed() {
   const navigate = useNavigate();
   const books = useBookStore((state) => state.books);
+  const shelves = useBookStore((state) => state.shelves);
   const { preferences } = useProfileStore();
   const user = useAuthStore((state) => state.user);
   const pendingChanges = useSyncQueue((state) => state.pendingChanges);
@@ -140,24 +142,24 @@ export default function HomeFeed() {
   const overdueCount = useMemo(() => books.filter((book) => isLoanOverdue(book)).length, [books]);
 
   const peekedSuggestions = useMemo(
-    () => (peekRecommendations(books)?.recommendations ?? []).slice(0, 5),
-    [books],
+    () => (peekRecommendations(books, Date.now(), shelves)?.recommendations ?? []).slice(0, 5),
+    [books, shelves],
   );
   const [loadedSuggestions, setLoadedSuggestions] = useState<BookRecommendation[] | null>(null);
   useEffect(() => {
-    if (books.length === 0) return undefined;
+    if (!books.some(countsTowardShelf)) return undefined;
     let cancelled = false;
-    void loadRecommendations(books).then((result) => {
+    void loadRecommendations(books, { shelves }).then((result) => {
       if (cancelled) return;
       const next = result.recommendations.slice(0, 5);
-      const peekIds = (peekRecommendations(books)?.recommendations ?? []).slice(0, 5).map((item) => item.id).join('\n');
+      const peekIds = (peekRecommendations(books, Date.now(), shelves)?.recommendations ?? []).slice(0, 5).map((item) => item.id).join('\n');
       if (next.map((item) => item.id).join('\n') === peekIds) return;
       setLoadedSuggestions(next);
     });
     return () => {
       cancelled = true;
     };
-  }, [books]);
+  }, [books, shelves]);
   const unownedSuggestions = loadedSuggestions ?? peekedSuggestions;
 
   if (books.length === 0) {
@@ -390,15 +392,15 @@ export default function HomeFeed() {
           <span className={s.statLabel}>Done</span>
         </div>
       </section>
-      {books.length > 0 && (
-        <section className={`glass ${s.discover}`} aria-label="Books you don't own yet">
+      {books.some(countsTowardShelf) && (
+        <section className={`glass ${s.discover}`} aria-label="Recommended for your shelves">
           <div className={s.discoverTop}>
             <div className={s.discoverBody}>
-              <strong>Books you don&apos;t own yet</strong>
-              <span>Suggestions from your shelves, each with a reason tied to books you already own.</span>
+              <strong>Recommended for your shelves</strong>
+              <span>Books you don&apos;t own yet, based on your shelves, authors, and loans.</span>
             </div>
             <button type="button" className={s.discoverBtn} onClick={() => navigate('/recommendations')}>
-              See suggestions
+              See recommendations
             </button>
           </div>
           {unownedSuggestions.length > 0 && (

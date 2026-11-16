@@ -4,13 +4,18 @@ import {
   acceptShelfReason,
   authorKey,
   becauseYouOwn,
+  countsTowardShelf,
   editionKey,
   isAlreadyInLibrary,
+  isCollectionShelfName,
   isDistinctiveSubject,
+  lendingCount,
   libraryFingerprint,
   matchesReaderLanguage,
   normalizeSubject,
   rankRecommendations,
+  shelfSeeds,
+  shelfSubjectQuery,
 } from '../rank.ts';
 
 const owned = (overrides: Partial<OwnedBookSignal> = {}): OwnedBookSignal => ({
@@ -23,6 +28,8 @@ const owned = (overrides: Partial<OwnedBookSignal> = {}): OwnedBookSignal => ({
   isPhotoOnly: overrides.isPhotoOnly,
   workKey: overrides.workKey,
   alternateTitles: overrides.alternateTitles,
+  shelfNames: overrides.shelfNames,
+  loanCount: overrides.loanCount,
 });
 
 const candidate = (overrides: Partial<CatalogCandidate> = {}): CatalogCandidate => ({
@@ -39,6 +46,58 @@ const candidate = (overrides: Partial<CatalogCandidate> = {}): CatalogCandidate 
   language: overrides.language,
   workKey: overrides.workKey,
   alternateTitles: overrides.alternateTitles,
+  fromShelf: overrides.fromShelf,
+});
+
+describe('shelf organization', () => {
+  it('treats genre labels as collections and rooms as places', () => {
+    expect(isCollectionShelfName('Sci-Fi')).toBe(true);
+    expect(isCollectionShelfName('SF')).toBe(true);
+    expect(shelfSubjectQuery('Sci-Fi')).toBe('science fiction');
+    expect(isCollectionShelfName('Living Room')).toBe(false);
+    expect(isCollectionShelfName('Shelf 2')).toBe(false);
+    expect(shelfSubjectQuery('Shelf 2')).toBe('');
+    expect(isCollectionShelfName('Favorites')).toBe(false);
+  });
+
+  it('seeds a named shelf only after two books sit on it, and prefers one that has been lent', () => {
+    const book = (shelfIds: string[], loans = 0) => ({
+      isbn: '9780441172719',
+      shelfIds,
+      loanLedger: Array.from({ length: loans }, () => ({ lentTo: 'Alex' })),
+    });
+    const shelves = [
+      { id: 'sf', name: 'Sci-Fi' },
+      { id: 'my', name: 'Mystery' },
+      { id: 'fav', name: 'Favorites' },
+      { id: 'num', name: 'Shelf 2' },
+    ];
+    expect(shelfSeeds([
+      book(['sf']),
+      book(['sf'], 2),
+      book(['my']),
+      book(['my']),
+      book(['fav']),
+      book(['fav']),
+      book(['num']),
+      book(['num']),
+    ], shelves)).toEqual([
+      { name: 'Sci-Fi', subject: 'science fiction', count: 2 },
+      { name: 'Mystery', subject: 'mystery', count: 2 },
+    ]);
+    expect(countsTowardShelf({ isbn: 'wish-1' })).toBe(false);
+    expect(lendingCount({ lentTo: 'Alex' })).toBe(1);
+    expect(lendingCount({ loanLedger: [{}, {}], lentTo: 'Alex' })).toBe(2);
+  });
+
+  it('changes the fingerprint when a shelf is renamed or a copy is lent', () => {
+    const dune = owned({ title: 'Dune', isbn: '9780441172719' });
+    const quiet = libraryFingerprint([dune], [{ id: 'sf', name: 'Sci-Fi' }]);
+    const renamed = libraryFingerprint([dune], [{ id: 'sf', name: 'Fantasy' }]);
+    const lent = libraryFingerprint([{ ...dune, lentTo: 'Alex' }], [{ id: 'sf', name: 'Sci-Fi' }]);
+    expect(quiet).not.toBe(renamed);
+    expect(quiet).not.toBe(lent);
+  });
 });
 
 describe('becauseYouOwn', () => {
@@ -92,6 +151,16 @@ describe('shelf identity', () => {
     expect(isAlreadyInLibrary({ title: 'Nineteen Eighty-Four', author: 'George Orwell', isbn: '9780000000001' }, library)).toBe(true);
     expect(isAlreadyInLibrary({ title: 'SparkNotes: 1984', author: 'SparkNotes Editors', isbn: '9780000000002' }, library)).toBe(true);
     expect(isAlreadyInLibrary({ title: '1984 / Animal Farm', author: 'George Orwell', isbn: '9780000000003' }, library)).toBe(true);
+    expect(isAlreadyInLibrary({
+      title: 'Dune, Dune Messiah, Children of Dune',
+      author: 'Frank Herbert',
+      isbn: '9780000000005',
+    }, [owned({ title: 'Dune', author: 'Frank Herbert', isbn: '9780441172719' })])).toBe(true);
+    expect(isAlreadyInLibrary({
+      title: 'Dune Messiah',
+      author: 'Frank Herbert',
+      isbn: '9780441013593',
+    }, [owned({ title: 'Dune', author: 'Frank Herbert', isbn: '9780441172719' })])).toBe(false);
     expect(isAlreadyInLibrary({ title: 'Mille neuf cent quatre-vingt-quatre', author: 'George Orwell', isbn: '9780000000004', workKey: '/works/OL1168083W' }, library)).toBe(true);
     expect(isAlreadyInLibrary({ title: 'Animal Farm', author: 'George Orwell', isbn: '9780451526342' }, library)).toBe(false);
   });
@@ -249,5 +318,78 @@ describe('rankRecommendations', () => {
     const a = owned({ title: 'Dune', isbn: '9780441172719' });
     const b = owned({ title: 'Hyperion', author: 'Dan Simmons', isbn: '9780553283686' });
     expect(libraryFingerprint([a, b])).toBe(libraryFingerprint([b, a]));
+  });
+
+  it('names an author once the shelf has more than one of their books', () => {
+    const herbert = ['Dune', 'Dune Messiah', 'Children of Dune', 'God Emperor of Dune'].map((title, index) => owned({
+      id: `h${index}`,
+      title,
+      isbn: `978044117271${index}`,
+    }));
+    const ranked = rankRecommendations([
+      candidate({ title: 'Heretics of Dune', isbn: '9780441172726', isbns: ['9780441172726'] }),
+    ], herbert);
+    expect(ranked[0].reason).toBe('Because you have 4 books by Frank Herbert');
+    expect(ranked[0].becauseTitles).toEqual(herbert.map((book) => book.title));
+  });
+
+  it('does not count a wishlist placeholder toward the author total', () => {
+    const ranked = rankRecommendations([
+      candidate({ title: 'Heretics of Dune', isbn: '9780441172726', isbns: ['9780441172726'] }),
+    ], [
+      dune,
+      owned({ id: 'wish', title: 'Children of Dune', isbn: 'wish-1' }),
+    ]);
+    expect(ranked[0].reason).toBe('Because you own Dune');
+  });
+
+  it('explains a different author with the collection shelf those books share', () => {
+    const onSciFi = (book: OwnedBookSignal): OwnedBookSignal => ({ ...book, shelfNames: ['Sci-Fi'] });
+    const ranked = rankRecommendations([
+      candidate({
+        title: 'The Left Hand of Darkness',
+        author: 'Ursula K. Le Guin',
+        isbn: '9780441007462',
+        isbns: ['9780441007462'],
+        subjects: ['Science fiction'],
+        fromShelf: 'Sci-Fi',
+      }),
+    ], [onSciFi(dune), onSciFi(hyperion)]);
+    expect(ranked[0].reason).toBe('More from your Sci-Fi shelf');
+    expect(ranked[0].becauseTitles).toEqual(['Dune', 'Hyperion']);
+  });
+
+  it('uses a physical shelf label when that label names the collection', () => {
+    const ranked = rankRecommendations([
+      candidate({
+        title: 'The Murder of Roger Ackroyd',
+        author: 'Agatha Christie',
+        isbn: '9780062073570',
+        isbns: ['9780062073570'],
+        fromShelf: 'Mystery',
+      }),
+    ], [
+      owned({ id: 'orient', title: 'Murder on the Orient Express', author: 'Agatha Christie', isbn: '9780062073501', shelfNames: ['Mystery'] }),
+      owned({ id: 'nile', title: 'Death on the Nile', author: 'Ngaio Marsh', isbn: '9780062073556', shelfNames: ['Mystery'] }),
+    ]);
+    expect(ranked[0].reason).toBe('More from your Mystery shelf');
+    expect(ranked[0].becauseTitles).toEqual(['Murder on the Orient Express', 'Death on the Nile']);
+  });
+
+  it('says which book was lent when that is the only connection', () => {
+    const ranked = rankRecommendations([
+      candidate({ title: 'Dune Messiah', subjects: ['Science fiction'] }),
+    ], [{ ...dune, loanCount: 1 }, hyperion]);
+    expect(ranked[0].reason).toBe("Because you've lent Dune");
+  });
+
+  it('keeps the author count when one of those copies was lent', () => {
+    const ranked = rankRecommendations([
+      candidate({ title: 'Heretics of Dune', isbn: '9780441172726', isbns: ['9780441172726'] }),
+    ], [
+      { ...dune, loanCount: 2 },
+      owned({ id: 'messiah', title: 'Dune Messiah', isbn: '9780441013593' }),
+    ]);
+    expect(ranked[0].reason).toBe('Because you have 2 books by Frank Herbert');
   });
 });
