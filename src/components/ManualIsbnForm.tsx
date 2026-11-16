@@ -106,7 +106,7 @@ const ManualIsbnForm = forwardRef<ManualIsbnFormHandle, ManualIsbnFormProps>(fun
         <button
           type="submit"
           disabled={cleanIsbn(value).length < 10 || disabled || pending}
-          aria-label="Submit ISBN"
+          aria-label="Add ISBN"
           data-testid={uiContracts.scannerManualSubmitTestId}
           className={s.submit}
         >

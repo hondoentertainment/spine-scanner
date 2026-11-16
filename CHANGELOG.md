@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Phone tour and tap targets
+
+- **Welcome tour.** The tour card is a solid surface, so the page behind it does not show through. The step count sits next to Skip instead of on top of it. On a phone the card stays above the tab bar and the home-indicator inset. Skip, Back, and Next are at least 44px. The progress dots stay small and are not buttons.
+- **Tap targets.** The settings gear, Continue with Google, Use email instead, reading-goal fields, and the danger-zone actions are at least 44px.
+- **Add ISBN.** The button that submits a typed ISBN uses the accessible name Add ISBN, which includes the word on the button.
+
 ### Recommended for your shelves
 
 - **From the books you already have.** Home and Library open recommendations built from authors, named shelves, physical shelf labels, and loans. Open Library and Google Books supply the titles. Each card says why, for example "Because you have 4 books by Frank Herbert" or "More from your Sci-Fi shelf". One tap adds it to your to-read list.

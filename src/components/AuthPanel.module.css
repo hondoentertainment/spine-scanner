@@ -7,9 +7,13 @@
 
 /* ---- Settings btn ---- */
 .settingsBtn {
-  padding: 0.4rem 0.6rem;
-  display: flex;
+  box-sizing: border-box;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   border-radius: 9999px;
   color: var(--text-muted);
 }
@@ -194,9 +198,13 @@
 
 /* ---- Collapsed state ---- */
 .signInBtn {
-  padding: 0.4rem 0.85rem;
-  display: flex;
+  box-sizing: border-box;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.55rem 0.9rem;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   font-size: 0.8rem;
   font-weight: 600;

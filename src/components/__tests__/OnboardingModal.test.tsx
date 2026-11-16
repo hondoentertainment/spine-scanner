@@ -125,14 +125,14 @@ describe('OnboardingModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('renders a step indicator (dot) for each step', () => {
+  it('renders a decorative progress dot for each step', () => {
     render(
       <OnboardingModal open steps={DEFAULT_ONBOARDING_STEPS} onClose={vi.fn()} />
     );
-    const tabs = screen.getAllByRole('tab');
-    expect(tabs).toHaveLength(DEFAULT_ONBOARDING_STEPS.length);
-    expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
-    expect(tabs[1]).toHaveAttribute('aria-selected', 'false');
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('tour-progress-dot')).toHaveLength(DEFAULT_ONBOARDING_STEPS.length);
+    const panel = screen.getByRole('dialog', { name: /welcome tour/i }).firstElementChild;
+    expect(panel?.className ?? '').not.toMatch(/\bglass\b/);
   });
 
   it('invokes the per-step CTA when present and then closes', async () => {

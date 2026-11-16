@@ -444,8 +444,12 @@
 }
 
 .textLink {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  min-width: 44px;
   min-height: 44px;
-  padding: 0;
+  padding: 0.5rem 0.25rem;
   background: none;
   color: var(--accent-blue);
   font-size: 0.85rem;
@@ -526,7 +530,9 @@
 }
 
 .textInput {
-  padding: 0.5rem 0.75rem;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0.55rem 0.75rem;
   border-radius: 0.5rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(0, 0, 0, 0.2);
@@ -573,10 +579,14 @@
 }
 
 .dangerOutlineBtn {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.45rem;
-  padding: 0.5rem 0.85rem;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.6rem 0.9rem;
   font-size: 0.82rem;
   font-weight: 600;
   border-radius: 0.55rem;

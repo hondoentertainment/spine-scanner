@@ -71,37 +71,33 @@ export default function OnboardingModal({
       aria-modal="true"
       aria-label="Welcome tour"
     >
-      <div ref={focusTrapRef} className={`glass ${styles.modal}`}>
-        <button
-          type="button"
-          onClick={handleClose}
-          className={styles.skipCorner}
-          aria-label="Skip tour"
-        >
-          <X size={16} aria-hidden="true" />
-          <span>Skip</span>
-        </button>
-
-        <div className={styles.progressRow}>
-          <span className={styles.eyebrow}>
-            <BookMarked size={14} aria-hidden="true" /> Quick tour
-          </span>
-          <span className={styles.progressText}>
-            Step {safeStep + 1} of {steps.length}
-          </span>
+      <div ref={focusTrapRef} className={styles.modal}>
+        <div className={styles.topBar}>
+          <div className={styles.progressCopy}>
+            <span className={styles.eyebrow}>
+              <BookMarked size={14} aria-hidden="true" /> Quick tour
+            </span>
+            <span className={styles.progressText}>
+              Step {safeStep + 1} of {steps.length}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleClose}
+            className={styles.skipCorner}
+            aria-label="Skip tour"
+          >
+            <X size={16} aria-hidden="true" />
+            <span>Skip</span>
+          </button>
         </div>
 
-        <div
-          className={styles.dots}
-          role="tablist"
-          aria-label="Tour progress"
-        >
+        {/* Decorative only. Step text above is the accessible progress. */}
+        <div className={styles.dots} aria-hidden="true">
           {steps.map((s, i) => (
             <span
               key={s.id}
-              role="tab"
-              aria-selected={i === safeStep}
-              aria-label={`Step ${i + 1}: ${s.title}`}
+              data-testid="tour-progress-dot"
               className={`${styles.dot} ${i === safeStep ? styles.dotActive : ''}`}
               style={i === safeStep ? { background: step.accent } : undefined}
             />
