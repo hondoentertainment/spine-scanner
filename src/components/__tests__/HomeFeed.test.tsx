@@ -145,7 +145,7 @@ describe('HomeFeed', () => {
     });
     renderFeed();
     const activity = screen.getByRole('heading', { name: 'Reading activity' });
-    const suggestions = screen.getByRole('region', { name: "Books you don't own yet" });
+    const suggestions = screen.getByRole('region', { name: 'Recommended for your shelves' });
     const goals = screen.getByRole('region', { name: 'Reading goals this year' });
     expect(activity.compareDocumentPosition(suggestions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(suggestions.compareDocumentPosition(goals) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -311,7 +311,7 @@ describe('HomeFeed', () => {
   it('opens shelf recommendations from home', () => {
     useBookStore.setState({ books: [makeBook({ title: 'Dune' })] });
     renderFeed();
-    fireEvent.click(screen.getByRole('button', { name: 'See suggestions' }));
+    fireEvent.click(screen.getByRole('button', { name: 'See recommendations' }));
     expect(navigate).toHaveBeenCalledWith('/recommendations');
   });
 
@@ -352,7 +352,7 @@ describe('HomeFeed', () => {
     });
     useBookStore.setState({ books });
     renderFeed();
-    const unowned = screen.getByLabelText("Books you don't own yet");
+    const unowned = screen.getByLabelText('Recommended for your shelves');
     expect(unowned).toHaveTextContent('Dune Messiah');
     expect(unowned).toHaveTextContent('Because you own Dune');
     expect(unowned).not.toHaveTextContent('Neuromancer');

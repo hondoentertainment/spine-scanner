@@ -70,7 +70,7 @@ const ROUTE_BRANDING_SUBTITLE: Record<string, string> = {
   '/home': 'Your reading feed, library snapshot, and quick paths to scan.',
   '/scan': 'Scan a barcode or type an ISBN.',
   '/library': 'Browse, search, and organize your saved books.',
-  '/recommendations': 'Books you don\'t own yet, based on the ones already on your shelves.',
+  '/recommendations': 'Books you don\'t own yet, recommended from the shelves you already have.',
   '/data': 'Import, export, and back up your library.',
   '/profile': 'Account, cloud sync, import/export, and app preferences.',
 };
@@ -88,7 +88,7 @@ export function getDocumentTitle(pathname: string, publicPage: PublicPage | null
     '/home': `Home · ${APP_TITLE}`,
     '/scan': APP_TITLE,
     '/library': `Library · ${APP_TITLE}`,
-    '/recommendations': `Suggestions · ${APP_TITLE}`,
+    '/recommendations': `Recommended · ${APP_TITLE}`,
     '/data': `Data · ${APP_TITLE}`,
     '/profile': `Profile · ${APP_TITLE}`,
   };

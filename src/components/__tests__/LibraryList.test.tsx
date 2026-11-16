@@ -298,7 +298,7 @@ describe('LibraryList', () => {
     expect(screen.getByText('Wanted')).toBeInTheDocument();
     expect(screen.queryByText('Owned read')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Suggestions' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Recommended for your shelves' }));
     expect(screen.getByText('Suggestions page')).toBeInTheDocument();
   });
 

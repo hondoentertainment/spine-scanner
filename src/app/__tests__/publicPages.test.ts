@@ -28,7 +28,7 @@ describe('public page routing helpers', () => {
   it('builds route titles and the line under the logo', () => {
     expect(getDocumentTitle('/library', null)).toMatch(/Library/);
     expect(getDocumentTitle('/scan', null)).toBe('SpineScanner');
-    expect(getDocumentTitle('/recommendations', null)).toMatch(/Suggestions/);
+    expect(getDocumentTitle('/recommendations', null)).toMatch(/Recommended/);
     expect(getDocumentTitle('/data', null)).toMatch(/Data/);
     expect(getDocumentTitle('/profile', null)).toMatch(/Profile/);
     expect(getDocumentTitle('/home', null)).toMatch(/Home/);

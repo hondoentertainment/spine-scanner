@@ -772,7 +772,9 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
         )}
         {!mvp && (
           <nav className={s.libraryTools} aria-label="Library sections">
-            <button type="button" onClick={() => navigate('/recommendations')}>Suggestions</button>
+            <button type="button" onClick={() => navigate('/recommendations')} aria-label="Recommended for your shelves">
+              Recommended
+            </button>
             <button type="button" onClick={() => { setLibrarySegment('all'); setStatusFilter('to-read'); }}>
               Wishlist
             </button>

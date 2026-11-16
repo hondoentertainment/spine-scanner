@@ -148,6 +148,10 @@
 }
 
 .card {
+  padding: 0;
+}
+
+.book {
   display: grid;
   grid-template-columns: 4.25rem 1fr;
   gap: 0.85rem;
@@ -203,7 +207,7 @@
 }
 
 @media (min-width: 720px) {
-  .card {
+  .book {
     grid-template-columns: 4.25rem 1fr auto;
     align-items: center;
   }
