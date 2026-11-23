@@ -2,8 +2,9 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { useBookStore } from '../store/useBookStore.ts';
 import { useBookLookup } from '../hooks/useBookLookup.ts';
 import { useToast } from './Toast.tsx';
-import { parseCSV, extractISBNs, importFromGoodreadsCSV, importFromStoryGraphCSV } from '../utils/importLogic.ts';
+import { parseCSV, extractISBNs } from '../utils/importLogic.ts';
 import type { ImportResult } from '../utils/importLogic.ts';
+import CatalogImport from './CatalogImport.tsx';
 import { normalizeToIsbn13 } from '../utils/isbnValidation.ts';
 import { isbnExistsInLibrary, isBookPhotoOnly } from '../utils/libraryUtils.ts';
 import { exportToGoodreadsCSV } from '../utils/goodreadsExport.ts';
@@ -23,8 +24,16 @@ interface DataManagementProps {
 type ExportFormat = 'json' | 'html' | 'goodreads' | 'librarything' | 'storygraph';
 type DataTab = 'export' | 'import' | 'maintain';
 
+const IMPORT_HASHES = new Set([
+    '#goodreads-import',
+    '#storygraph-import',
+    '#catalog-import',
+    '#import',
+    '#web-import',
+]);
+
 function tabForHash(hash: string): DataTab {
-    if (hash === '#goodreads-import' || hash === '#import' || hash === '#storygraph-import' || hash === '#web-import') {
+    if (IMPORT_HASHES.has(hash)) {
         return 'import';
     }
     if (hash === '#maintain' || hash === '#refresh-metadata' || hash === '#duplicates') {
@@ -40,9 +49,6 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
 
     const [importing, setImporting] = useState(false);
     const [result, setResult] = useState<ImportResult | null>(null);
-    const [goodreadsMsg, setGoodreadsMsg] = useState<string | null>(null);
-    const [storygraphMsg, setStorygraphMsg] = useState<string | null>(null);
-    const storygraphInputRef = useRef<HTMLInputElement>(null);
 
     const [tab, setTab] = useState<DataTab>(() => tabForHash(window.location.hash));
 
@@ -53,14 +59,16 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
     }, []);
 
     useEffect(() => {
-        if (tab !== 'import' || window.location.hash !== '#goodreads-import') return;
-        document.getElementById('goodreads-import')?.scrollIntoView?.({ block: 'start' });
+        if (tab !== 'import') return;
+        const hash = window.location.hash;
+        if (hash !== '#goodreads-import' && hash !== '#storygraph-import' && hash !== '#catalog-import') return;
+        document.getElementById('catalog-import')?.scrollIntoView?.({ block: 'start' });
     }, [tab]);
 
     const selectTab = (next: DataTab) => {
         setTab(next);
-        const hash = next === 'import' && window.location.hash === '#goodreads-import'
-            ? '#goodreads-import'
+        const hash = next === 'import' && IMPORT_HASHES.has(window.location.hash)
+            ? window.location.hash
             : `#${next}`;
         if (window.location.hash !== hash) {
             window.history.replaceState(null, '', hash);
@@ -173,40 +181,6 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
             toast('Failed to fetch page. Ensure it is a public URL.', 'error');
             setWebImportStep('idle');
         }
-    };
-
-    const handleGoodreadsImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const text = event.target?.result as string;
-            const { imported, skipped } = importFromGoodreadsCSV(text, books);
-            for (const entry of imported) {
-                addBook(entry);
-            }
-            const msg = `Imported ${imported.length} book${imported.length !== 1 ? 's' : ''} (${skipped} duplicate${skipped !== 1 ? 's' : ''} skipped)`;
-            setGoodreadsMsg(msg);
-        };
-        reader.readAsText(file);
-        // reset input so same file can be re-imported
-        e.target.value = '';
-    };
-
-    const handleStoryGraphImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const text = event.target?.result as string;
-            const importResult = importFromStoryGraphCSV(text, books, addBook);
-            const msg = `Added ${importResult.added} book${importResult.added !== 1 ? 's' : ''} from StoryGraph (${importResult.duplicates} duplicate${importResult.duplicates !== 1 ? 's' : ''} skipped)`;
-            setStorygraphMsg(msg);
-            toast(msg, 'success');
-        };
-        reader.readAsText(file);
-        // reset input so same file can be re-imported
-        e.target.value = '';
     };
 
     const handleICSExport = () => {
@@ -613,58 +587,10 @@ const DataManagement: React.FC<DataManagementProps> = ({ onClose }) => {
                 </div>
             </section>
 
-            {/* Goodreads CSV import */}
-            <section className={s.sectionBorder} id="goodreads-import">
-                <h3 className={s.sectionTitle}>
-                    <Upload size={20} style={{ color: '#22c55e' }} /> Import Goodreads CSV
-                </h3>
-                <p className={s.sectionDesc}>
-                    You get the books on your Goodreads shelves: titles, authors, ratings, and the dates you read them.
-                </p>
-                <ol className={s.steps}>
-                    <li>On Goodreads, open My Books, then Import/Export, then Export Library.</li>
-                    <li>Download the CSV.</li>
-                    <li>Drop that file here. We add the books on this device.</li>
-                </ol>
-                <p className={s.sectionDesc}>
-                    The file stays in this browser. It is not sent back to Goodreads. If you later sign in, those books sync with the rest of your library.
-                </p>
-                <div className={s.fileWrap}>
-                    <input type="file" accept=".csv" onChange={handleGoodreadsImport}
-                        aria-label="Import Goodreads CSV export" className={s.fileInput} />
-                    <div className={`glass ${s.fileDrop}`}>
-                        Drop file here or click to browse
-                    </div>
-                </div>
-                {goodreadsMsg && (
-                    <p className={s.goodreadsMsg}>{goodreadsMsg}</p>
-                )}
-            </section>
-
-            {/* StoryGraph CSV import */}
-            <section className={s.sectionBorder}>
-                <h3 className={s.sectionTitle}>
-                    <Upload size={20} style={{ color: '#818cf8' }} /> Import StoryGraph CSV
-                </h3>
-                <p className={s.sectionDesc}>
-                    Import your StoryGraph library export. Go to StoryGraph → Account → Import/Export → Export your library data.
-                </p>
-                <div className={s.fileWrap}>
-                    <input
-                        ref={storygraphInputRef}
-                        type="file"
-                        accept=".csv"
-                        onChange={handleStoryGraphImport}
-                        aria-label="Import StoryGraph CSV export"
-                        className={s.fileInput}
-                    />
-                    <div className={`glass ${s.fileDrop}`}>
-                        Drop file here or click to browse
-                    </div>
-                </div>
-                {storygraphMsg && (
-                    <p className={s.goodreadsMsg}>{storygraphMsg}</p>
-                )}
+            <section className={s.sectionBorder} id="catalog-import" aria-labelledby="catalog-import-title">
+                <span id="goodreads-import" hidden />
+                <span id="storygraph-import" hidden />
+                <CatalogImport />
             </section>
 
             {/* Web import */}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { importFromStoryGraphCSV } from '../importLogic';
+import { importFromStoryGraphCSV } from '../../import/catalogCsv';
 import type { BookEntry } from '../../types';
 
 const STORYGRAPH_HEADER =

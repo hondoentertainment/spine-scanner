@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { exportToGoodreadsCSV } from '../goodreadsExport';
-import { importFromGoodreadsCSV } from '../importLogic';
+import { importFromGoodreadsCSV } from '../../import/catalogCsv';
 import type { BookEntry } from '../../types';
 
 const makeBook = (overrides: Partial<BookEntry> = {}): BookEntry => ({

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Goodreads and StoryGraph import
+
+- **One CSV for both libraries.** Library, Profile, and the empty Home shelf open Import from Goodreads or StoryGraph. The file stays in the browser. Column names decide whether it is a Goodreads or StoryGraph export.
+- **Preview, then import.** Before anything is saved, the page shows how many books are new, how many duplicates match an ISBN or the same title and author, and which rows have a problem. Import writes in batches so a few thousand rows stay responsive. Missing covers can be looked up afterward, one book at a time.
+
 ### Phone tour and tap targets
 
 - **Welcome tour.** The tour card is a solid surface, so the page behind it does not show through. The step count sits next to Skip instead of on top of it. On a phone the card stays above the tab bar and the home-indicator inset. Skip, Back, and Next are at least 44px. The progress dots stay small and are not buttons.

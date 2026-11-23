@@ -16,7 +16,7 @@ import GoogleSignInButton from './GoogleSignInButton.tsx';
 import {
   X, User, Sun, Moon, Monitor, Contrast, LayoutGrid, List, ArrowUpDown, Columns2,
   CheckCircle, Layers, BarChart3, Tag, BookOpen, Clock3, Bookmark, Flame, ScanLine,
-  Database, Share2, Target, Download, Eraser, ScrollText, Bug, ShieldCheck, Trash2, LogOut,
+  Database, Share2, Target, Download, Eraser, ScrollText, Bug, ShieldCheck, Trash2, LogOut, Upload,
 } from 'lucide-react';
 import type { BookEntry, ProfilePreferences } from '../types.ts';
 import { formatLocaleDate, formatLocaleDateTime } from '../utils/formatDate.ts';
@@ -638,6 +638,14 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ onClose, inline = fal
           >
             <Database size={16} aria-hidden />
             Import & export
+          </button>
+          <button
+            type="button"
+            className={s.optBtn}
+            onClick={() => navigate('/data#catalog-import')}
+          >
+            <Upload size={16} aria-hidden />
+            Import from Goodreads or StoryGraph
           </button>
           <button
             type="button"

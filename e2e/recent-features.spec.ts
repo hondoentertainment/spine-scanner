@@ -6,6 +6,7 @@ import { uiContracts } from '../src/testing/uiContracts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const GOODREADS_CSV = join(__dirname, 'fixtures', 'goodreads-sample.csv');
+const STORYGRAPH_CSV = join(__dirname, 'fixtures', 'storygraph-sample.csv');
 
 const BOOK_STORAGE_KEY = 'spine-scanner-storage';
 const PROFILE_STORAGE_KEY = 'spine-scanner-preferences';
@@ -179,31 +180,36 @@ test.describe('Recent feature waves', () => {
    * lookup APIs (it builds entries directly from the CSV with metadataSource='manual'),
    * so no network mocking is needed.
    */
-  test('Goodreads CSV import adds books (Issue #44)', async ({ page }) => {
-    test.setTimeout(30_000);
+  test('Goodreads and StoryGraph CSV import previews, then adds books', async ({ page }) => {
+    test.setTimeout(45_000);
 
     await seedPreferences(page);
 
-    await page.goto('./data');
+    await page.goto('./library');
     await dismissOnboardingIfPresent(page);
-    await expect(page.getByRole('heading', { name: /import & export/i })).toBeVisible();
-    await page.getByRole('tab', { name: 'Import' }).click();
-    await expect(page.getByText(/The file stays in this browser/)).toBeVisible();
+    await page.getByRole('button', { name: 'Import from Goodreads or StoryGraph' }).click();
+    await expect(page.getByRole('heading', { name: 'Import from Goodreads or StoryGraph' })).toBeVisible();
 
-    // The dedicated Goodreads CSV file input is hidden; setInputFiles works on hidden inputs.
-    const fileInput = page.locator('input[type="file"][aria-label="Import Goodreads CSV export"]');
-    await expect(fileInput).toHaveCount(1);
+    const fileInput = page.locator('input[type="file"][aria-label="Import from Goodreads or StoryGraph"]');
     await fileInput.setInputFiles(GOODREADS_CSV);
+    await expect(page.getByText('Detected Goodreads export.')).toBeVisible();
+    await expect(page.getByText('New books')).toBeVisible();
+    await expect(page.getByText('Duplicates skipped')).toBeVisible();
+    await expect(page.getByText('Rows with problems')).toBeVisible();
+    await page.getByRole('button', { name: /Import \d+ books/ }).click();
+    await expect(page.getByText(/Imported \d+ books\. \d+ duplicates skipped/)).toBeVisible({ timeout: 10_000 });
 
-    // Inline result message: "Imported N books (M duplicates skipped)".
-    await expect(page.getByText(/imported \d+ book/i)).toBeVisible({ timeout: 10_000 });
+    await fileInput.setInputFiles(STORYGRAPH_CSV);
+    await expect(page.getByText('Detected StoryGraph export.')).toBeVisible();
+    await page.getByRole('button', { name: /Import \d+ books/ }).click();
+    await expect(page.getByText(/Imported \d+ books\. \d+ duplicates skipped/)).toBeVisible({ timeout: 10_000 });
 
-    // Books should appear in the library after import.
     await page.getByTestId(uiContracts.navTabTestId('library')).click();
     const anyTitle = page
       .getByText('1984', { exact: false })
       .or(page.getByText('Project Hail Mary', { exact: false }))
-      .or(page.getByText('The Pragmatic Programmer', { exact: false }));
+      .or(page.getByText('The Pragmatic Programmer', { exact: false }))
+      .or(page.getByText('Piranesi', { exact: false }));
     await expect(anyTitle.first()).toBeVisible({ timeout: 10_000 });
   });
 

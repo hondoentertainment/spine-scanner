@@ -365,6 +365,7 @@ describe('LibraryList', () => {
     renderLibraryList(<LibraryList />);
 
     expect(screen.getAllByRole('button', { name: 'Import & export' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Import from Goodreads or StoryGraph' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Import & export' }));
     expect(screen.getByTestId('data-route')).toBeInTheDocument();
   });

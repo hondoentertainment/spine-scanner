@@ -51,7 +51,7 @@ describe('DataManagement — missing-cover recovery', () => {
     renderPanel();
     expect(document.getElementById('goodreads-import')).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Import' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText(/You get the books on your Goodreads shelves/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Import from Goodreads or StoryGraph' })).toBeInTheDocument();
     expect(screen.getByText(/The file stays in this browser/)).toBeInTheDocument();
     window.location.hash = '';
   });
@@ -253,37 +253,40 @@ describe('DataManagement — import, export, merge, and danger zone', () => {
     expect(screen.queryByText(/Import Summary/)).not.toBeInTheDocument();
   });
 
-  it('imports a Goodreads CSV and a StoryGraph CSV', async () => {
+  it('previews a Goodreads CSV and a StoryGraph CSV before importing', async () => {
     renderPanel('Import');
+    const input = await screen.findByLabelText('Import from Goodreads or StoryGraph', { selector: 'input' });
     const goodreads = [
       'Book Id,Title,Author,Author l-f,Additional Authors,ISBN,ISBN13,My Rating,Average Rating,Publisher,Binding,Number of Pages,Year Published,Original Publication Year,Date Read,Date Added,Bookshelves,Bookshelves with positions,Exclusive Shelf,My Review,Spoiler,Private Notes,Read Count,Owned Copies',
       '1,GR Book,GR Author,,,,,,="9780141036144",,,,,200,,,,2023-01-01,,,read,,,,,,,',
     ].join('\n');
-    fireEvent.change(screen.getByLabelText('Import Goodreads CSV export'), {
+    fireEvent.change(input, {
       target: { files: [new File([goodreads], 'goodreads.csv', { type: 'text/csv' })] },
     });
-    await waitFor(() => {
-      expect(screen.getByText(/Imported \d+ book/)).toBeInTheDocument();
-    });
+    expect(await screen.findByText('Detected Goodreads export.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Import 1 book' }));
+    expect((await screen.findAllByText(/Imported 1 book/)).length).toBeGreaterThan(0);
+    expect(useBookStore.getState().books.map((book) => book.title)).toEqual(['GR Book']);
 
     const storygraph = [
       'Title,Authors,ISBN/UID,Format,Type,Read Status,Star Rating,Review,Read Count,Dates Read,Edition Language,Average Rating,Genres,Moods,Pace,Characters,Series,Page Count,Publication Information,Tags,Owned Copies',
       '"SG Book","SG Author","9780544003415",physical,fiction,read,,,0,"",English,4.0,"","","","","",100,"","",0',
     ].join('\n');
-    fireEvent.change(screen.getByLabelText('Import StoryGraph CSV export'), {
+    fireEvent.change(screen.getByLabelText('Import from Goodreads or StoryGraph', { selector: 'input' }), {
       target: { files: [new File([storygraph], 'storygraph.csv', { type: 'text/csv' })] },
     });
+    expect(await screen.findByText('Detected StoryGraph export.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Import 1 book' }));
     await waitFor(() => {
-      expect(screen.getAllByText(/Added 1 book from StoryGraph/).length).toBeGreaterThan(0);
+      expect(useBookStore.getState().books.map((book) => book.title)).toContain('SG Book');
     });
-    expect(screen.getAllByText('Drop file here or click to browse').length).toBeGreaterThan(1);
   });
 
-  it('does nothing when Goodreads or StoryGraph inputs are empty', () => {
+  it('does nothing when the catalog file input is cleared', async () => {
     renderPanel('Import');
-    fireEvent.change(screen.getByLabelText('Import Goodreads CSV export'), { target: { files: [] } });
-    fireEvent.change(screen.getByLabelText('Import StoryGraph CSV export'), { target: { files: [] } });
-    expect(screen.queryByText(/Imported/)).not.toBeInTheDocument();
+    const input = await screen.findByLabelText('Import from Goodreads or StoryGraph', { selector: 'input' });
+    fireEvent.change(input, { target: { files: [] } });
+    expect(screen.queryByText(/Detected/)).not.toBeInTheDocument();
   });
 
   it('fetches ISBNs from a public page and confirms the import', async () => {

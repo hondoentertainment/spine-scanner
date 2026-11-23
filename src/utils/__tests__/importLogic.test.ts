@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseCSV, extractISBNs, validateFileName, importFromGoodreadsCSV } from '../importLogic';
+import { parseCSV, extractISBNs, validateFileName } from '../importLogic';
+import { importFromGoodreadsCSV } from '../../import/catalogCsv';
 import type { BookEntry } from '../../types';
 
 describe('parseCSV', () => {
@@ -277,16 +278,17 @@ describe('importFromGoodreadsCSV', () => {
     expect(skipped).toBe(1);
   });
 
-  it('missing ISBN: skips a row with blank ISBN13 and ISBN', () => {
+  it('missing ISBN: keeps a titled row and skips a later title+author duplicate', () => {
     const csv = buildCSV([
-      baseRow({ ISBN13: '', ISBN: '' }),
-      baseRow({ Title: 'Valid Book', ISBN13: '="9789999999993"', ISBN: '' }),
+      baseRow({ Title: 'No ISBN Yet', Author: 'Ada Lovelace', ISBN13: '', ISBN: '' }),
+      baseRow({ Title: 'Valid Book', Author: 'Grace Hopper', ISBN13: '="9789999999993"', ISBN: '' }),
+      baseRow({ Title: '  no isbn yet ', Author: 'Ada Lovelace', ISBN13: '', ISBN: '' }),
     ]);
 
     const { imported, skipped } = importFromGoodreadsCSV(csv, []);
 
-    expect(imported).toHaveLength(1);
+    expect(imported.map((book) => book.title)).toEqual(['No ISBN Yet', 'Valid Book']);
+    expect(imported[0].isbn).toBe('');
     expect(skipped).toBe(1);
-    expect(imported[0].title).toBe('Valid Book');
   });
 });

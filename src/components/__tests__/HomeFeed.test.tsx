@@ -92,8 +92,8 @@ describe('HomeFeed', () => {
     renderFeed();
     fireEvent.click(screen.getByRole('button', { name: 'Type an ISBN' }));
     expect(navigate).toHaveBeenCalledWith('/scan?focus=isbn');
-    fireEvent.click(screen.getByRole('button', { name: 'Import from Goodreads' }));
-    expect(navigate).toHaveBeenCalledWith('/data#goodreads-import');
+    fireEvent.click(screen.getByRole('button', { name: 'Import from Goodreads or StoryGraph' }));
+    expect(navigate).toHaveBeenCalledWith('/data#catalog-import');
   });
 
   it('navigates from hero actions', () => {

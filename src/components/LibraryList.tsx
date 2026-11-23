@@ -779,6 +779,11 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
               Wishlist
             </button>
             <button type="button" onClick={() => navigate('/data')}>Import & export</button>
+            {!emptyLibrary && (
+              <button type="button" onClick={() => navigate('/data#catalog-import')}>
+                Import from Goodreads or StoryGraph
+              </button>
+            )}
           </nav>
         )}
       </div>
@@ -897,14 +902,23 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
             {selectionMode ? 'Done selecting' : 'Select books'}
           </button>
           {mvp && !emptyLibrary && (
-            <button
-              type="button"
-              className={`glass ${s.manageBtn}`}
-              onClick={() => navigate('/data')}
-            >
-              <Settings size={16} />
-              Import & export
-            </button>
+            <>
+              <button
+                type="button"
+                className={`glass ${s.manageBtn}`}
+                onClick={() => navigate('/data')}
+              >
+                <Settings size={16} />
+                Import & export
+              </button>
+              <button
+                type="button"
+                className={`glass ${s.manageBtn}`}
+                onClick={() => navigate('/data#catalog-import')}
+              >
+                Import from Goodreads or StoryGraph
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -1412,6 +1426,9 @@ export default function LibraryList({ onStartScanning, initialOpenIsbn, onOpenCo
                 Import & export
               </button>
             )}
+            <button type="button" className={`glass ${s.secondaryAction}`} onClick={() => navigate('/data#catalog-import')}>
+              Import from Goodreads or StoryGraph
+            </button>
           </div>
         </div>
       )}

@@ -364,6 +364,8 @@ describe('ProfileSettings', () => {
     renderProfile();
     fireEvent.click(screen.getByRole('button', { name: /Import & export/ }));
     expect(navigate).toHaveBeenCalledWith('/data');
+    fireEvent.click(screen.getByRole('button', { name: 'Import from Goodreads or StoryGraph' }));
+    expect(navigate).toHaveBeenCalledWith('/data#catalog-import');
     fireEvent.click(screen.getByRole('button', { name: /Download my data/ }));
     expect(await screen.findByText('Account data downloaded')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Download diagnostics/ }));

@@ -201,8 +201,8 @@ export default function HomeFeed() {
             <button type="button" className={`glass ${s.secondary}`} onClick={() => navigate('/scan?focus=isbn')}>
               Type an ISBN
             </button>
-            <button type="button" className={`glass ${s.secondary}`} onClick={() => navigate('/data#goodreads-import')}>
-              Import from Goodreads
+            <button type="button" className={`glass ${s.secondary}`} onClick={() => navigate('/data#catalog-import')}>
+              Import from Goodreads or StoryGraph
             </button>
           </div>
         </section>
