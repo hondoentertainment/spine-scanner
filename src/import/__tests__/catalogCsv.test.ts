@@ -147,6 +147,27 @@ describe('catalog duplicate detection', () => {
     );
   });
 
+  it('keeps distinct non-Latin titles instead of collapsing them to one key', () => {
+    const csv = [
+      'Title,Authors,ISBN/UID,Read Status',
+      '吾輩は猫である,夏目漱石,9784101010014,read',
+      '坊っちゃん,夏目漱石,9784101010038,read',
+      'Преступление и наказание,Фёдор Достоевский,9780140449136,read',
+      '吾輩は猫である,夏目漱石!,,read',
+    ].join('\n');
+    const result = previewCatalogCsv(csv, []);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.preview.toImport.map((book) => book.title)).toEqual([
+      '吾輩は猫である',
+      '坊っちゃん',
+      'Преступление и наказание',
+    ]);
+    expect(result.preview.duplicateCount).toBe(1);
+    expect(titleAuthorKey('吾輩は猫である', '夏目漱石')).toBe(titleAuthorKey('吾輩は猫である', '夏目漱石!'));
+    expect(titleAuthorKey('吾輩は猫である', '夏目漱石')).not.toBe(titleAuthorKey('坊っちゃん', '夏目漱石'));
+  });
+
   it('does not treat two blank ISBNs as the same book', () => {
     const csv = [
       'Title,Author,ISBN13,My Rating,Exclusive Shelf',
